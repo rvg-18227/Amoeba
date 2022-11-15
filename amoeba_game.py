@@ -405,13 +405,13 @@ class AmoebaGame:
             check[a][b] = 1
 
             if (a, (b - 1) % constants.map_dim) in result and check[a][(b - 1) % constants.map_dim] == 0:
-                stack.append((a, b - 1))
+                stack.append((a, (b - 1) % constants.map_dim))
             if (a, (b + 1) % constants.map_dim) in result and check[a][(b + 1) % constants.map_dim] == 0:
-                stack.append((a, b + 1))
+                stack.append((a, (b + 1) % constants.map_dim))
             if ((a - 1) % constants.map_dim, b) in result and check[(a - 1) % constants.map_dim][b] == 0:
-                stack.append((a - 1, b))
+                stack.append(((a - 1) % constants.map_dim, b))
             if ((a + 1) % constants.map_dim, b) in result and check[(a + 1) % constants.map_dim][b] == 0:
-                stack.append((a + 1, b))
+                stack.append(((a + 1) % constants.map_dim, b))
 
         return (amoeba == check).all()
 
