@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 from remi import start
 from amoeba_app import AmoebaApp
+from amoeba_state import AmoebaState
 import constants
 from utils import *
 from glob import glob
@@ -25,7 +26,7 @@ class AmoebaGame:
     def __init__(self, args):
         self.start_time = time.time()
         self.amoeba_app = None
-        self.use_gui = not args.no_gui
+        self.use_gui = False
         self.use_vid = not args.no_vid
         self.do_logging = not args.disable_logging
         if not self.use_gui:
@@ -90,6 +91,8 @@ class AmoebaGame:
         self.bacteria = []
         self.map_state = np.zeros((constants.map_dim, constants.map_dim), dtype=int)
 
+        self.after_last_move = None
+        self.player_byte = 0
         self.history = []
 
         self.initialize(args.size)
@@ -197,6 +200,9 @@ class AmoebaGame:
 
         self.history.append(self.get_state())
 
+        periphery, eatable_bacteria, movable_cells, amoeba = self.get_periphery_info(True)
+        self.after_last_move = AmoebaState(self.amoeba_size, amoeba, periphery, eatable_bacteria, movable_cells)
+
     def find_indices(self, value):
         result = np.where(self.map_state == value)
         return list(zip(result[0], result[1]))
@@ -220,17 +226,15 @@ class AmoebaGame:
     def play_turn(self):
         self.bacteria_move()
         periphery, eatable_bacteria, movable_cells, amoeba = self.get_periphery_info(True)
+        before_state = AmoebaState(self.amoeba_size, amoeba, periphery, eatable_bacteria, movable_cells)
         returned_action = self.player.move(
-            current_size=self.amoeba_size,
-            amoeba_map=amoeba,
-            periphery=periphery,
-            bacteria=eatable_bacteria,
-            movable_cells=movable_cells
+            last_percept=self.after_last_move,
+            current_percept=before_state,
+            info=self.player_byte
         )
         self.eat_bacteria(eatable_bacteria)
-        info = 0
         if self.check_action(returned_action):
-            retract, move, info = returned_action
+            retract, move, self.player_byte = returned_action
             if self.check_move(retract, move, periphery):
                 print("Move Accepted!")
                 self.logger.debug("Received move from {}".format(self.player_name))
@@ -244,17 +248,7 @@ class AmoebaGame:
 
         self.add_bacteria()
         periphery, eatable_bacteria, movable_cells, amoeba = self.get_periphery_info(False)
-        try:
-            self.player.after_move(
-                current_size=self.amoeba_size,
-                amoeba_map=amoeba,
-                periphery=periphery,
-                bacteria=eatable_bacteria,
-                movable_cells=movable_cells,
-                info=info
-            )
-        except Exception:
-            pass
+        self.after_last_move = AmoebaState(self.amoeba_size, amoeba, periphery, eatable_bacteria, movable_cells)
 
         self.history.append(self.get_state())
 
@@ -455,7 +449,7 @@ class AmoebaGame:
             plt.title("Turn {} - (m = {}, A = {}, d = {})".format(i, self.metabolism, self.start_size, self.density))
             ax = plt.gca()
 
-            cmap = colors.ListedColormap(["#666666", "#666666", "#90EE90", "#02FFFF"])
+            cmap = colors.ListedColormap(["#000000", "#666666", "#90EE90", "#02FFFF"])
             bounds = [-1, 0, 1, 2, 3]
             norm = colors.BoundaryNorm(bounds, cmap.N)
             x, y = np.meshgrid(list(range(100)), list(range(100)))
@@ -466,7 +460,7 @@ class AmoebaGame:
                 cmap=cmap,
                 norm=norm,
             )
-
+            '''
             for x, y in state['bacteria']:
                 plt.plot(
                     x + 0.5,
@@ -476,7 +470,7 @@ class AmoebaGame:
                     markersize=1,
                     markeredgecolor="black",
                 )
-
+            '''
             ax.set_xticklabels([])
             ax.set_yticklabels([])
             ax.xaxis.set_ticks_position("none")

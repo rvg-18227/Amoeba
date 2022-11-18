@@ -1,4 +1,10 @@
 *.mp4
 *.png
+*.pkl
 log/
+**/__pycache__/
+players/__pycache__/
 res/render/
+.DS_Store
+.idea/
+.vscode/

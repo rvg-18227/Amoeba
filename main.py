@@ -6,9 +6,9 @@ if __name__ == '__main__':
     parser.add_argument("--metabolism", "-m", type=float, default=1.0, help="Value between 0 and 1 (including 1) that "
                                                                             "indicates what proportion of the amoeba "
                                                                             "is allowed to retract in one turn")
-    parser.add_argument("--size", "-A", type=int, default=25, help="length of a side of the initial amoeba square "
+    parser.add_argument("--size", "-A", type=int, default=15, help="length of a side of the initial amoeba square "
                                                                    "(min=3, max=50")
-    parser.add_argument("--density", "-d", type=float, default=0.5, help="Density of bacteria on the map")
+    parser.add_argument("--density", "-d", type=float, default=0.3, help="Density of bacteria on the map")
     parser.add_argument("--seed", "-s", type=int, default=2, help="Seed used by random number generator, specify 0 to "
                                                                   "use no seed and have different random behavior on "
                                                                   "each launch")

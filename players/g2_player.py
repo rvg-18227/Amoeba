@@ -2,6 +2,7 @@ import os
 import pickle
 import numpy as np
 import logging
+from amoeba_state import AmoebaState
 
 
 class Player:
@@ -38,45 +39,31 @@ class Player:
         self.goal_size = goal_size
         self.current_size = goal_size / 4
 
-    def move(self, current_size, amoeba_map, periphery, bacteria, movable_cells) -> (list, list, int):
+    def move(self, last_percept, current_percept, info) -> (list, list, int):
         """Function which retrieves the current state of the amoeba map and returns an amoeba movement
 
             Args:
-                current_size (int): current size of the amoeba
-                amoeba_map (numpy array): 2D array that represents the state of the board known to the amoeba
-                periphery (List[Tuple[int, int]]: list of cells on the periphery of the amoeba
-                bacteria (List[Tuple[int, int]]: list of bacteria known to the amoeba
-                movable_cells (List[Tuple[int, int]]: list of movable positions given the current amoeba state
-
+                last_percept (AmoebaState): contains state information after the previous move
+                current_percept(AmoebaState): contains current state information
+                info (int): byte (ranging from 0 to 256) to convey information from previous turn
             Returns:
                 Tuple[List[Tuple[int, int]], List[Tuple[int, int]], int]: This function returns three variables:
                     1. A list of cells on the periphery that the amoeba retracts
                     2. A list of positions the retracted cells have moved to
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
-        self.current_size = current_size
-        mini = min(5, len(periphery) // 2)
-        for i, j in bacteria:
-            amoeba_map[i][j] = 1
+        self.current_size = current_percept.current_size
+        mini = min(5, len(current_percept.periphery) // 2)
+        for i, j in current_percept.bacteria:
+            current_percept.amoeba_map[i][j] = 1
 
-        retract = [tuple(i) for i in self.rng.choice(periphery, replace=False, size=mini)]
-        movable = self.find_movable_cells(retract, periphery, amoeba_map, bacteria, mini)
+        retract = [tuple(i) for i in self.rng.choice(current_percept.periphery, replace=False, size=mini)]
+        movable = self.find_movable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
+                                          current_percept.bacteria, mini)
 
         info = 0
 
         return retract, movable, info
-
-    def after_move(self, current_size, amoeba_map, periphery, bacteria, movable_cells, info):
-        """Function which retrieves the current state of the amoeba map after an amoeba movement (no return)
-
-            Args:
-                current_size (int): current size of the amoeba
-                amoeba_map (numpy array): 2D array that represents the state of the board known to the amoeba
-                periphery (List[Tuple[int, int]]: list of cells on the periphery of the amoeba
-                bacteria (List[Tuple[int, int]]: list of bacteria known to the amoeba
-                movable_cells (List[Tuple[int, int]]: list of movable positions given the current amoeba state
-                info (int): byte (ranging from 0 to 256) to convey information pre-movement
-        """
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
         movable = []
