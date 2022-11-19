@@ -4,7 +4,7 @@
 log/
 **/__pycache__/
 players/__pycache__/
-res/render/
+render/
 .DS_Store
 .idea/
 .vscode/

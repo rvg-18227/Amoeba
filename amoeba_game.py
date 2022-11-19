@@ -5,8 +5,6 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 from matplotlib import colors
-from remi import start
-from amoeba_app import AmoebaApp
 from amoeba_state import AmoebaState
 import constants
 from utils import *
@@ -25,14 +23,19 @@ from players.g8_player import Player as G8_Player
 class AmoebaGame:
     def __init__(self, args):
         self.start_time = time.time()
-        self.amoeba_app = None
-        self.use_gui = False
+        self.use_gui = not args.no_gui
         self.use_vid = not args.no_vid
         self.do_logging = not args.disable_logging
         if not self.use_gui:
             self.use_timeout = not args.disable_timeout
         else:
             self.use_timeout = False
+
+            os.makedirs("render", exist_ok=True)
+
+            old_files = glob("render/*.png")
+            for f in old_files:
+                os.remove(f)
 
         self.logger = logging.getLogger(__name__)
         # create file handler which logs even debug messages
@@ -102,29 +105,18 @@ class AmoebaGame:
 
         print("\nTime taken: {}\n".format(self.end_time - self.start_time))
 
-        if self.use_vid or self.use_gui:
-            print("Rendering Frames...")
-            self.frame_rendering()
-            final_time = time.time()
-            print("\nTime taken to render frames: {}\n".format(final_time - self.end_time))
-
         if self.use_vid:
+            if not self.use_gui:
+                print("Rendering Frames...")
+                self.frame_rendering_post()
+                final_time = time.time()
+                print("\nTime taken to render frames: {}\n".format(final_time - self.end_time))
             print("Creating Video...\n")
             os.system(
-                "convert -delay 5 -loop 0 $(ls -1 res/render/*.png | sort -V) -quality 95 {}.mp4".format(args.vid_name))
+                "convert -delay 5 -loop 0 $(ls -1 render/*.png | sort -V) -quality 95 {}.mp4".format(args.vid_name))
 
         if self.use_gui:
-            print("Opening Web UI...\n")
-            config = dict()
-            config["address"] = args.address
-            config["start_browser"] = not args.no_browser
-            config["update_interval"] = 0.5
-            config["userdata"] = (self, self.logger)
-            if args.port != -1:
-                config["port"] = args.port
-            start(AmoebaApp, **config)
-        else:
-            self.logger.debug("No GUI flag specified")
+            plt.show()
 
     def add_player(self, player_in):
         if player_in in constants.possible_players:
@@ -198,7 +190,10 @@ class AmoebaGame:
         for i, j in self.bacteria:
             self.map_state[i][j] = -1
 
-        self.history.append(self.get_state())
+        if self.use_gui:
+            self.frame_rendering()
+        elif self.use_vid:
+            self.history.append(self.get_state())
 
         periphery, eatable_bacteria, movable_cells, amoeba = self.get_periphery_info(True)
         self.after_last_move = AmoebaState(self.amoeba_size, amoeba, periphery, eatable_bacteria, movable_cells)
@@ -247,10 +242,14 @@ class AmoebaGame:
             self.logger.info("Invalid move from {} as it doesn't follow the return format".format(self.player_name))
 
         self.add_bacteria()
+
+        if self.use_gui:
+            self.frame_rendering()
+        elif self.use_vid:
+            self.history.append(self.get_state())
+
         periphery, eatable_bacteria, movable_cells, amoeba = self.get_periphery_info(False)
         self.after_last_move = AmoebaState(self.amoeba_size, amoeba, periphery, eatable_bacteria, movable_cells)
-
-        self.history.append(self.get_state())
 
     def bacteria_move(self):
         for i, (x, y) in enumerate(self.bacteria):
@@ -438,9 +437,68 @@ class AmoebaGame:
         return return_dict
 
     def frame_rendering(self):
-        os.makedirs("res/render", exist_ok=True)
+        plt.clf()
+        plt.title(
+            "Turn {} - (m = {}, A = {}, d = {})".format(self.turns, self.metabolism, self.start_size, self.density))
+        ax = plt.gca()
 
-        old_files = glob("res/render/*.png")
+        cmap = colors.ListedColormap(["#000000", "#666666", "#90EE90", "#02FFFF"])
+        bounds = [-1, 0, 1, 2, 3]
+        norm = colors.BoundaryNorm(bounds, cmap.N)
+        x, y = np.meshgrid(list(range(100)), list(range(100)))
+        plt.pcolormesh(
+            x + 0.5,
+            y + 0.5,
+            np.transpose(self.map_state),
+            cmap=cmap,
+            norm=norm,
+        )
+        '''
+        for x, y in state['bacteria']:
+            plt.plot(
+                x + 0.5,
+                y + 0.5,
+                color="black",
+                marker="o",
+                markersize=1,
+                markeredgecolor="black",
+            )
+        '''
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.xaxis.set_ticks_position("none")
+        ax.yaxis.set_ticks_position("none")
+
+        ax.set_aspect(1)
+        ax.set_xlim([0, 100])
+        ax.set_ylim([0, 100])
+        ax.invert_yaxis()
+
+        msg = "In progress..."
+        if self.amoeba_size >= self.goal_size:
+            msg = "Goal size achieved!"
+        elif self.turns == self.max_turns:
+            msg = "Goal size not achieved."
+        elif self.turns == 0:
+            msg = "Starting state."
+
+        cell_values = [["{}/{}".format(self.amoeba_size, self.goal_size)], [msg]]
+
+        plt.table(
+            cellText=cell_values,
+            cellLoc='center',
+            rowLabels=['Amoeba Size', 'Game State'],
+            colLabels=[self.player_name],
+        )
+        plt.savefig("render/{}.png".format(self.turns))
+
+        if self.use_gui:
+            plt.pause(0.025)
+
+    def frame_rendering_post(self):
+        os.makedirs("render", exist_ok=True)
+
+        old_files = glob("render/*.png")
         for f in old_files:
             os.remove(f)
 
@@ -498,7 +556,4 @@ class AmoebaGame:
                 colLabels=[self.player_name],
             )
 
-            plt.savefig("res/render/{}.png".format(i))
-
-    def set_app(self, amoeba_app):
-        self.amoeba_app = amoeba_app
+            plt.savefig("render/{}.png".format(i))
