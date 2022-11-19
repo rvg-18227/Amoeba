@@ -195,7 +195,7 @@ class AmoebaGame:
         elif self.use_vid:
             self.history.append(self.get_state())
 
-        periphery, eatable_bacteria, movable_cells, amoeba = self.get_periphery_info(True)
+        periphery, eatable_bacteria, movable_cells, amoeba = self.get_periphery_info(False)
         self.after_last_move = AmoebaState(self.amoeba_size, amoeba, periphery, eatable_bacteria, movable_cells)
 
     def find_indices(self, value):
