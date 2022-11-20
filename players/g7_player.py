@@ -3,7 +3,7 @@ import pickle
 import numpy as np
 import logging
 from amoeba_state import AmoebaState
-
+from copy import deepcopy
 
 class Player:
     def __init__(self, rng: np.random.Generator, logger: logging.Logger, metabolism: float, goal_size: int,
@@ -57,13 +57,76 @@ class Player:
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
 
-        retract = [tuple(i) for i in self.rng.choice(current_percept.periphery, replace=False, size=mini)]
-        movable = self.find_movable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
-                                          current_percept.bacteria, mini)
-
+        # retract = [tuple(i) for i in self.rng.choice(current_percept.periphery, replace=False, size=mini)]
+        retract = self.retractable_farm_cells(current_percept.periphery, current_percept.amoeba_map)
+        movable = self.moveable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
+                                          current_percept.bacteria)
+        movable = sorted([cell for cell in movable if cell[0] != 49 and cell[0] != 51 and cell[0] != 50], key=lambda x: self._dist_to_center(x[0], x[1]))
+        movable = movable[:len(retract)]
         info = 0
+        print("movable", movable)
+        print("retract", retract)
 
         return retract, movable, info
+
+    def _dist_to_center(self, x, y):
+        return (x - 50) ** 2 + (y - 50) ** 2
+
+    def get_neighbors(self, x, y, amoeba_map):
+        neighbors = [(x - 1, y), (x + 1, y), (x, y + 1), (x, y - 1)]
+        return [n for n in neighbors if amoeba_map[n[0]][n[1]] != 0]
+
+    def _breaks_amoeba(self, x, y, periphery, amoeba_map):
+        # check that all amoeba cells are connected
+        queue = [periphery[0] if periphery[0][0] != x and periphery[0][1] != y else periphery[1]]
+        copy_amoeba_map = deepcopy(amoeba_map)
+        copy_amoeba_map[x][y] = 0
+        visited = set()
+        while queue:
+            x, y = queue.pop(0)
+            if (x, y) in visited:
+                continue
+            visited.add((x, y))
+            neighbors = self.get_neighbors(x, y, copy_amoeba_map)
+            queue.extend(neighbors)
+        return len(visited - set([(i, j) for i, row in enumerate(copy_amoeba_map) for j, cell in enumerate(row) if cell != 0])) > 0 or len(visited) != len(set([(i, j) for i, row in enumerate(copy_amoeba_map) for j, cell in enumerate(row) if cell != 0]))
+        
+    def _is_internal(self, x, y, periphery, amoeba_map):
+        north = [(x, i) in periphery for i in range(y+1, 101)]
+        south = [(x, i) in periphery for i in range(y-1, -1, -1)]
+        east = [(i, y) in periphery for i in range(x+1, 101)]
+        west = [(i, y) in periphery for i in range(x-1, -1, -1)]
+        return all([any(north), any(south), any(east), any(west)]) and not self._breaks_amoeba(x, y,  periphery, amoeba_map)
+
+    def retractable_farm_cells(self, periphery, amoeba_map):
+        copy_amoeba_map = deepcopy(amoeba_map)
+        possible_incision_points = [(x, y) for x, y in periphery if (x == 49 or x == 51 or x == 50) and y != 50]
+        incision_points = []
+        internal_points = []
+
+        for x, y in possible_incision_points:
+            if self._breaks_amoeba(x, y, periphery, copy_amoeba_map):
+                continue
+            copy_amoeba_map[x][y] = 0
+            incision_points.append((x, y))
+
+        for x, y in periphery:
+            if self._is_internal(x, y, periphery, copy_amoeba_map) and y != 50:
+                copy_amoeba_map[x][y] = 0
+                internal_points.append((x, y))
+
+        internal_points = sorted(internal_points, key=lambda x: self._dist_to_center(x[0], x[1]))
+        return incision_points + internal_points
+
+    def moveable_cells(self, retract, periphery, amoeba_map, bacteria):
+        movable = []
+        new_periphery = list(set(periphery).difference(set(retract)))
+        for i, j in new_periphery:
+            nbr = self.find_movable_neighbor(i, j, amoeba_map, bacteria)
+            for x, y in nbr:
+                if (x, y) not in movable:
+                    movable.append((x, y))
+        return movable
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
         movable = []
