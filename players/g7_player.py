@@ -64,9 +64,6 @@ class Player:
         movable = sorted([cell for cell in movable if cell[0] != 49 and cell[0] != 51 and cell[0] != 50], key=lambda x: self._dist_to_center(x[0], x[1]))
         movable = movable[:len(retract)]
         info = 0
-        print("movable", movable)
-        print("retract", retract)
-
         return retract, movable, info
 
     def _dist_to_center(self, x, y):
@@ -109,7 +106,7 @@ class Player:
                 continue
             copy_amoeba_map[x][y] = 0
             incision_points.append((x, y))
-
+        periphery = sorted(periphery, key=lambda x: self._dist_to_center(x[0], x[1]))
         for x, y in periphery:
             if self._is_internal(x, y, periphery, copy_amoeba_map) and y != 50:
                 copy_amoeba_map[x][y] = 0
