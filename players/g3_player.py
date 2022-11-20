@@ -1,3 +1,4 @@
+from abc import abstractmethod, ABC
 import logging
 
 import numpy as np
@@ -60,6 +61,42 @@ def find_movable_cells(
 
 
 #------------------------------------------------------------------------------
+#  Movement Strategy
+#------------------------------------------------------------------------------
+
+class Strategy(ABC):
+
+    @abstractmethod
+    def move(self, state: AmoebaState, memory: int) -> tuple[list[cell], list[cell], int]:
+        pass
+
+class RandomWalk(Strategy):
+    def __init__(self, rng: np.random.Generator):
+        self.rng = rng
+
+    def move(self, state: AmoebaState, memory: int) -> tuple[list[cell], list[cell], int]:
+        mini = min(5, len(state.periphery) // 2)
+        retract = [
+            tuple(i)
+            for i in self.rng.choice(
+                state.periphery, replace=False, size=mini
+            )
+        ]
+
+        movable = find_movable_cells(
+            retract, state.periphery, state.amoeba_map, state.bacteria, mini)
+
+        info = 0
+
+        return retract, movable, info
+
+class BucketAttack(Strategy):
+
+    def move(self, state: AmoebaState, memory: int) -> tuple[list[cell], list[cell], int]:
+        pass
+
+
+#------------------------------------------------------------------------------
 #  Group 3 Ameoba
 #------------------------------------------------------------------------------
 
@@ -89,6 +126,11 @@ class Player:
         self.goal_size = goal_size
         self.current_size = goal_size / 4
 
+        self.strategies = dict(
+            random_walk=RandomWalk(rng),
+            bucket_attack=BucketAttack()
+        )
+
     def move(
         self,
         last_percept: AmoebaState,
@@ -110,22 +152,9 @@ class Player:
             3. A byte of information (values range from 0 to 255) that the
                amoeba can use
         """
-        self.current_size = current_percept.current_size
-        mini = min(5, len(current_percept.periphery) // 2)
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
+            current_percept.current_size += 1
+        self.current_size = current_percept.current_size
 
-        retract = [
-            tuple(i)
-            for i in self.rng.choice(
-                current_percept.periphery, replace=False, size=mini
-            )
-        ]
-
-        movable = find_movable_cells(
-            retract, current_percept.periphery,
-            current_percept.amoeba_map, current_percept.bacteria, mini)
-
-        info = 0
-
-        return retract, movable, info
+        return self.strategies['random_walk'].move(current_percept, info)
