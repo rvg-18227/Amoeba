@@ -1,37 +1,32 @@
-import os
-import pickle
-import numpy as np
 import logging
+
+import numpy as np
+
 from amoeba_state import AmoebaState
 
 
+cell = tuple[int, int]
+
+
 class Player:
-    def __init__(self, rng: np.random.Generator, logger: logging.Logger, metabolism: float, goal_size: int,
-                 precomp_dir: str) -> None:
+    def __init__(
+        self,
+        rng: np.random.Generator,
+        logger: logging.Logger,
+        metabolism: float,
+        goal_size: int,
+        precomp_dir: str
+    ) -> None:
         """Initialise the player with the basic amoeba information
 
-            Args:
-                rng (np.random.Generator): numpy random number generator, use this for same player behavior across run
-                logger (logging.Logger): logger use this like logger.info("message")
-                metabolism (float): the percentage of amoeba cells, that can move
-                goal_size (int): the size the amoeba must reach
-                precomp_dir (str): Directory path to store/load pre-computation
+        Args:
+            rng: numpy random number generator, use this for same player
+                 behavior across run
+            logger: logger use this like logger.info("message")
+            metabolism: the percentage of amoeba cells, that can move
+            goal_size: the size the amoeba must reach
+            precomp_dir: Directory path to store/load pre-computation
         """
-
-        # precomp_path = os.path.join(precomp_dir, "{}.pkl".format(map_path))
-
-        # # precompute check
-        # if os.path.isfile(precomp_path):
-        #     # Getting back the objects:
-        #     with open(precomp_path, "rb") as f:
-        #         self.obj0, self.obj1, self.obj2 = pickle.load(f)
-        # else:
-        #     # Compute objects to store
-        #     self.obj0, self.obj1, self.obj2 = _
-
-        #     # Dump the objects
-        #     with open(precomp_path, 'wb') as f:
-        #         pickle.dump([self.obj0, self.obj1, self.obj2], f)
 
         self.rng = rng
         self.logger = logger
@@ -39,27 +34,42 @@ class Player:
         self.goal_size = goal_size
         self.current_size = goal_size / 4
 
-    def move(self, last_percept, current_percept, info) -> (list, list, int):
-        """Function which retrieves the current state of the amoeba map and returns an amoeba movement
+    def move(
+        self,
+        last_percept: AmoebaState,
+        current_percept: AmoebaState,
+        info: int
+    ) -> tuple[list[cell], list[cell], int]:
+        """Computes and returns an amoeba movement given the current state of
+        the amoeba map.
 
-            Args:
-                last_percept (AmoebaState): contains state information after the previous move
-                current_percept(AmoebaState): contains current state information
-                info (int): byte (ranging from 0 to 256) to convey information from previous turn
-            Returns:
-                Tuple[List[Tuple[int, int]], List[Tuple[int, int]], int]: This function returns three variables:
-                    1. A list of cells on the periphery that the amoeba retracts
-                    2. A list of positions the retracted cells have moved to
-                    3. A byte of information (values range from 0 to 255) that the amoeba can use
+        Args:
+            last_percept: contains state information after the previous move
+            current_percept: contains current state information
+            info: a byte (ranging from 0 to 256) to convey information from
+                  the previous turn
+
+        Returns:
+            1. A list of cells on the periphery that the amoeba retracts
+            2. A list of cells the retracted cells have moved to
+            3. A byte of information (values range from 0 to 255) that the
+               amoeba can use
         """
         self.current_size = current_percept.current_size
         mini = min(5, len(current_percept.periphery) // 2)
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
 
-        retract = [tuple(i) for i in self.rng.choice(current_percept.periphery, replace=False, size=mini)]
-        movable = self.find_movable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
-                                          current_percept.bacteria, mini)
+        retract = [
+            tuple(i)
+            for i in self.rng.choice(
+                current_percept.periphery, replace=False, size=mini
+            )
+        ]
+
+        movable = self.find_movable_cells(
+            retract, current_percept.periphery,
+            current_percept.amoeba_map, current_percept.bacteria, mini)
 
         info = 0
 
