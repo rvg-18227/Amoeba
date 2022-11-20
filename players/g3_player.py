@@ -5,8 +5,63 @@ import numpy as np
 from amoeba_state import AmoebaState
 
 
+#------------------------------------------------------------------------------
+#  Types
+#------------------------------------------------------------------------------
+
 cell = tuple[int, int]
 
+
+#------------------------------------------------------------------------------
+#  Helpers
+#------------------------------------------------------------------------------
+
+def find_movable_neighbor(
+    x: int,
+    y: int,
+    amoeba_map: np.ndarray,
+    bacteria: list[cell]
+) -> list[cell]:
+
+    if (x, y) in bacteria:
+        return []
+
+    out = []
+    for x2, y2 in [
+        # index of 4 neighboring cells
+        (x, (y-1) % 100),
+        (x, (y+1) % 100),
+        ((x-1) % 100, y),
+        ((x+1) % 100, y)
+    ]:
+        if amoeba_map[x2][y2] == 0:
+            out.append((x2, y2))
+
+    return out
+
+def find_movable_cells(
+    retract: list[cell],
+    periphery: list[cell],
+    amoeba_map: np.ndarray,
+    bacteria: list[cell],
+    mini: int
+) -> list[cell]:
+
+    movable = set()
+    new_periphery = list(set(periphery) - set(retract))
+    for i, j in new_periphery:
+        nbr = find_movable_neighbor(i, j, amoeba_map, bacteria)
+        for cell in nbr:
+            movable.add(cell)
+
+    movable_list = list(movable) + retract
+
+    return movable_list[:mini]
+
+
+#------------------------------------------------------------------------------
+#  Group 3 Ameoba
+#------------------------------------------------------------------------------
 
 class Player:
     def __init__(
@@ -67,37 +122,10 @@ class Player:
             )
         ]
 
-        movable = self.find_movable_cells(
+        movable = find_movable_cells(
             retract, current_percept.periphery,
             current_percept.amoeba_map, current_percept.bacteria, mini)
 
         info = 0
 
         return retract, movable, info
-
-    def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
-        movable = []
-        new_periphery = list(set(periphery).difference(set(retract)))
-        for i, j in new_periphery:
-            nbr = self.find_movable_neighbor(i, j, amoeba_map, bacteria)
-            for x, y in nbr:
-                if (x, y) not in movable:
-                    movable.append((x, y))
-
-        movable += retract
-
-        return movable[:mini]
-
-    def find_movable_neighbor(self, x, y, amoeba_map, bacteria):
-        out = []
-        if (x, y) not in bacteria:
-            if amoeba_map[x][(y - 1) % 100] == 0:
-                out.append((x, (y - 1) % 100))
-            if amoeba_map[x][(y + 1) % 100] == 0:
-                out.append((x, (y + 1) % 100))
-            if amoeba_map[(x - 1) % 100][y] == 0:
-                out.append(((x - 1) % 100, y))
-            if amoeba_map[(x + 1) % 100][y] == 0:
-                out.append(((x + 1) % 100, y))
-
-        return out
