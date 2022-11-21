@@ -52,7 +52,7 @@ class Player:
                     2. A list of positions the retracted cells have moved to
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
-        self.logger.info('-----------------')
+        self.logger.info(f'----------------Turn {info}-----------------')
         self.current_size = current_percept.current_size
         split, split_pt = self.split_amoeba(current_percept.amoeba_map)
 
@@ -74,7 +74,7 @@ class Player:
         move_num = min(mini, len(retract), len(moves))
         self.logger.info(f'retract: \n{retract}')
         self.logger.info(f'moves: \n{moves}')
-        return retract[:move_num], moves[:move_num], 0
+        return retract[:move_num], moves[:move_num], info+1
 
     def get_branch_tips(self, retract, movable, periphery, amoeba_map, split, split_pt):
         retract = np.array(retract)
