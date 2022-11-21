@@ -158,27 +158,39 @@ class BucketAttack(Strategy):
         # 2. find all cells we can move onto once we retract all cells in step 1
         # 3. find and return the overlap between cells in step 2 and target cells
         #    unoccupied by our Ameoba
-
+        
         retractable_cells = set(curr_state.periphery) - target
         occupiable_cells = find_movable_cells(
             list(retractable_cells), curr_state.periphery, curr_state.amoeba_map,
-            curr_state.bacteria, len(retractable_cells)
-        )
+            curr_state.bacteria, -1 #mini truncated the list returned #len(retractable_cells)
+        ) 
 
         ameoba_cells = list(zip(*np.where(curr_state.amoeba_map == 1)))
         unoccupied_target_cells = target - set(ameoba_cells)
 
         to_occupy = set(occupiable_cells).intersection(unoccupied_target_cells)
-
         return list(retractable_cells)[:len(to_occupy)], list(to_occupy), memory
+
+    #does COG need to be one of the ameoba cells?
+    def _get_cog(
+        self,
+        curr_state: AmoebaState,
+    ) -> tuple[int, int]:
+        """Compute center of gravity of current Ameoba"""
+        ameoba_cells = np.array(list(zip(*np.where(curr_state.amoeba_map == 1))))
+        cog = (round(np.average(ameoba_cells[:,0])),round(np.average(ameoba_cells[:,1])))
+        return cog
 
     def move(
         self, state: AmoebaState, memory: int
     ) -> tuple[list[cell], list[cell], int]:
 
         # TODO: compute ameoba's center of gravity, and xmax
-        size = 9
-        cog = (50, 50)
+        #size = 9
+        #cog = (50, 50)
+        size = (state.current_size)
+        cog = self._get_cog(state)
+        print(cog)
         xmax = 51
 
         target_cells = self._get_target_cells(size, cog, xmax)
@@ -246,7 +258,8 @@ class Player:
             current_percept.current_size += 1
         self.current_size = current_percept.current_size
 
-        return self.strategies['random_walk'].move(current_percept, info)
+        #return self.strategies['random_walk'].move(current_percept, info)
+        return self.strategies['bucket_attack'].move(current_percept, info)
 
 
 #------------------------------------------------------------------------------
@@ -284,6 +297,8 @@ def Test_BucketAttack():
     movable_cells = find_movable_cells([], periphery, ameoba_map, [], 12)
 
     curr_state = AmoebaState(9, ameoba_map, periphery, [], movable_cells)
+    cog = bucket_attack._get_cog(curr_state)
+    print(f"cog: {cog}")
     to_retract, to_occupy, _ = bucket_attack.move(curr_state, 0)
 
     print()
