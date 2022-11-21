@@ -53,6 +53,8 @@ class Player:
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
         self.current_size = current_percept.current_size
+        split = self.split_amoeba(current_percept.amoeba_map)
+
         mini = min(5, len(current_percept.periphery) * self.metabolism)
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
@@ -91,3 +93,23 @@ class Player:
                 out.append(((x + 1) % 100, y))
 
         return out
+
+    def split_amoeba(self, amoeba_map) -> bool:
+        split = False
+        amoeba_begin = False
+        amoeba_end = False
+
+        for i in range(100):
+            curr_column = amoeba_map[:, i]
+            value = np.max(curr_column)
+            if value == 1:
+                if not amoeba_begin:
+                    amoeba_begin = True
+                elif amoeba_end:
+                    split = True
+                    break
+            elif value == 0:
+                if amoeba_begin:
+                    amoeba_end = True
+
+        return split
