@@ -29,15 +29,13 @@ def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[]) -> None:
     map = np.zeros((constants.map_dim, constants.map_dim), dtype=np.int8)
     for x in range(constants.map_dim):
         for y in range(constants.map_dim):
+            # transpose map for visualization as we add cells
             if retracts_map[x, y] == 1:
-                map[x, y] = -1
+                map[y, x] = -1
             elif extends_map[x, y] == 1:
-                map[x, y] = 2
+                map[y, x] = 2
             elif amoeba_map[x, y] == 1:
-                map[x, y] = 1
-                
-            # Transpose map for visualization
-            map[y, x] = map[x, y]
+                map[y, x] = 1
     
     plt.rcParams["figure.figsize"] = (10, 10)
     plt.pcolormesh(map, edgecolors='k', linewidth=1)
@@ -97,13 +95,20 @@ class Player:
         center_x = constants.map_dim // 2
         center_y = constants.map_dim // 2
         
-        backbone_size = size // 3 * 2 + 2
-        teeth_size = size - backbone_size
+        backbone_size = ((size // 5) * 2) + 2
+        teeth_size = size - (backbone_size * 2)
+        
+        # print("size: {}, backbone_size: {}, teeth_size: {}".format(size, backbone_size, teeth_size))
         
         formation[center_x, center_y] = 1
-        for i in range(1, (backbone_size - 1) // 2 + 1):
+        formation[center_x - 1, center_y] = 1
+        for i in range(1, ((backbone_size - 1) // 2) + 1):
+            # first layer of backbone
             formation[center_x, center_y + i] = 1
             formation[center_x, center_y - i] = 1
+            # second layer of backbone
+            formation[center_x - 1, center_y + i] = 1
+            formation[center_x - 1, center_y - i] = 1
         for i in range(1, teeth_size + 1, 2):
             formation[center_x + 1, center_y + i] = 1
             formation[center_x + 1, center_y - i] = 1
