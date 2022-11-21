@@ -56,17 +56,11 @@ class Player:
         split, split_pt = self.split_amoeba(current_percept.amoeba_map)
 
         mini = min(5, int(self.current_size*self.metabolism))
-
-        num_cells = 2
-        moveable_backend = self.sample_backend(current_percept.amoeba_map, num_cells, split)
         
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
 
-        
-        
-        
-        retract = [tuple(i) for i in self.rng.choice(current_percept.periphery, replace=False, size=mini)]
+        retract = self.sample_backend(current_percept.amoeba_map, mini, split)
         movable = self.find_movable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
                                           current_percept.bacteria)
         moves = get_branch_tips(retract, movable, current_percept.amoeba_map, split, split_pt=None)
@@ -96,7 +90,7 @@ class Player:
             temp_move = (row, curr_col[i])
             for col in range(rightmost_val, curr_col[i]-1, -1):
                 if amoeba_map[row, col] == 0 and amoeba_map[row-1, col] == 1 and amoeba_map[row+1, col] == 1:
-                    # check if new location and connect prev row and next row
+                    # check if new location connects prev row and next row
                     temp_move = (row, col)
                     break
             moves.append(temp_move)
@@ -104,6 +98,7 @@ class Player:
         rightmost_cells = rightmost_cells[rightmost_cells[:, 0]%2==1] # keep only odd rows
         if rightmost_cells.shape[0] == 0:
             return moves
+
         rightmost_cells = rightmost_cells[(-rightmost_cells[:, 1]).argsort()] # sort cells by col
         rightmost_cells = rightmost_cells[np.unique(rightmost_cells[:, 0], return_index=True)[1]] # keep rightmost cell for each row
         target_col = rightmost_cells.max(axis=1)
