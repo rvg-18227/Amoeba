@@ -56,9 +56,16 @@ class Player:
         split, split_pt = self.split_amoeba(current_percept.amoeba_map)
 
         mini = min(5, int(self.current_size*self.metabolism))
+
+        num_cells = 2
+        moveable_backend = self.sample_backend(current_percept.amoeba_map, num_cells, split)
+        
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
 
+        
+        
+        
         retract = [tuple(i) for i in self.rng.choice(current_percept.periphery, replace=False, size=mini)]
         movable = self.find_movable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
                                           current_percept.bacteria)
@@ -159,3 +166,53 @@ class Player:
                     amoeba_end = True
 
         return split, split_col
+
+    def sample_column(self, column, num_cells):
+        """Function that sample a column of the amoeba map
+
+        Args:
+            column (np.ndarray): 1D numpy array of the column
+            num_cells (int): number of cells to sample
+
+        Returns:
+            move_cells: list of cells to move
+        """
+        move_cells = []
+        # prioritize even row
+        for i in range(column.shape[0]):
+            if len(move_cells) == num_cells:
+                break
+            if column[i] == 1 and i % 2 == 0:
+                move_cells.append(i)
+        # append odd row
+        for i in range(column.shape[0]):
+            if len(move_cells) == num_cells:
+                break
+            if column[i] == 1 and i % 2 != 0:
+                move_cells.append(i)
+        return move_cells
+        
+    
+    def sample_backend(self, amoeba_map, num_cells, split=False) -> list:
+        """Function that smaple the backend of the amoeba
+        
+        Args:
+            amoeba_map (np.ndarray): 2D numpy array of the current amoeba map
+            num_cells (int): number of cells to sample
+            split (bool): whether the amoeba has split or not
+        Returns:
+            move_cells: list of cells to move
+        """
+        if split:
+            return []
+        else:
+            move_cells = []
+            for i in range(0, 100):
+                if num_cells == 0:
+                    break
+                curr_column = amoeba_map[:, i]
+                if np.max(curr_column) == 1:
+                    additional_cells = self.sample_column(curr_column, num_cells)
+                    move_cells += [(i, j) for j in additional_cells]
+                    num_cells -=  len(additional_cells)
+            return move_cells
