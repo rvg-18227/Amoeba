@@ -53,7 +53,7 @@ class Player:
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
         self.current_size = current_percept.current_size
-        mini = min(5, len(current_percept.periphery) // 2)
+        mini = min(5, len(current_percept.periphery) * self.metabolism)
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
 
