@@ -316,8 +316,11 @@ class Player:
         
         if memory_fields[MemoryFields.Initialized]:
             curr_backbone_col = min(x for x, _ in map_to_coords(self.amoeba_map))
+            vertical_shift = curr_backbone_col % 2
             offset = (curr_backbone_col + 1) - (constants.map_dim // 2)
             next_tooth = np.roll(self.generate_tooth_formation(self.current_size), offset + 1, 0)
+            # Shift up/down by 1 every other column
+            next_tooth = np.roll(next_tooth, vertical_shift, 1)
             retracts, moves = self.get_morph_moves(next_tooth)
             print(retracts,  moves)
 
