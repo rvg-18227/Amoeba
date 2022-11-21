@@ -62,18 +62,60 @@ class Player:
         
         farm_is_moving = False
         ys = self.get_y_of_sweep(current_percept.amoeba_map)
-        farm_is_moving = len(ys) <= 2 and self.center_is_hollowed(current_percept.amoeba_map)
-        ys = ys if len(ys) <= 2 else [50]
-        if len(ys) == 1 and ys[0] == 50:
-            ys.append(40)#TODO get top of amoeba)
+        farm_is_moving = self.center_is_hollowed(current_percept.amoeba_map)
+        print(farm_is_moving)
+        print(ys)
+        if not farm_is_moving:
+            ys = [50, 51]
+        ys = ys[:2]
+
+        ys = [50, 51]
+        farm_is_moving = False
+
         retract = self.retractable_farm_cells(current_percept.periphery, current_percept.amoeba_map, ys)
+        if farm_is_moving:
+            y_retracts = self.retractable_y_down(ys, current_percept.periphery, current_percept.amoeba_map)
+            retract = y_retracts + [move for move in retract if move not in y_retracts]
+
         movable = self.moveable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
                                           current_percept.bacteria)
         movable = sorted([cell for cell in movable if not self._is_internal(cell[0], cell[1], current_percept.periphery, current_percept.amoeba_map)], key=lambda x: self._dist_to_center(x[0], x[1]))
-        # print("retract", retract)
+        if farm_is_moving:
+            y_moves = self.move_y_down(ys, current_percept.periphery, current_percept.amoeba_map, self.moveable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
+                                          current_percept.bacteria))
+            movable = y_moves + [move for move in movable if move not in y_moves]
+            print(y_moves)
+            print(movable)
         movable = movable[:len(retract)]
         info = 0
+
         return retract, movable, info
+
+    def retractable_y_down(self, ys, periphery, amoeba_map):
+        copy_amoeba_map = deepcopy(amoeba_map)
+        retract = []
+        ideal_ys = [y+1 for y in ys]
+        for (x, y) in periphery:
+            if y not in ideal_ys and self._is_internal(x, y, periphery, copy_amoeba_map):
+                copy_amoeba_map[x][y] = 0
+                retract.append((x, y))
+
+        return retract
+
+    def move_y_down(self, ys, periphery, amoeba_map, movable):
+        to_move = []
+        ideal_ys = [y+1 for y in ys]
+
+        # for (x, y) in movable:
+        #     if y in ideal_ys and amoeba_map[x][y-1] == 1:
+        #         to_move.append((x, y))
+
+        for y in ideal_ys:
+            for x in range(100):
+                if amoeba_map[x][y] == 0 and (x, y) in movable:
+                    to_move.append((x, y))
+
+        return to_move
 
     def _dist_to_center(self, x, y):
         return (x - 50) ** 2 + (y - 50) ** 2
@@ -84,19 +126,25 @@ class Player:
 
     def _breaks_amoeba(self, x, y, periphery, amoeba_map):
         # check that all amoeba cells are connected
-        queue = [periphery[0] if periphery[0][0] != x and periphery[0][1] != y else periphery[1]]
+        isolated_neighbors = self.get_neighbors(x, y, amoeba_map)
+        queue = [isolated_neighbors[0]]
         copy_amoeba_map = deepcopy(amoeba_map)
         copy_amoeba_map[x][y] = 0
         visited = set()
+        to_visit_isolated_connections = set(isolated_neighbors)
         while len(queue) > 0:
             cur_x, cur_y = queue.pop(0)
-            if(amoeba_map[cur_x][cur_y] == 0):
-                print(cur_x, cur_y)
+            # if(copy_amoeba_map[cur_x][cur_y] == 0):
+            #     print(cur_x, cur_y) #TODO: fix, this still prints
             if (cur_x, cur_y) in visited:
                 continue
+            if (cur_x, cur_y) in to_visit_isolated_connections:
+                to_visit_isolated_connections.remove((cur_x, cur_y))
             visited.add((cur_x, cur_y))
             neighbors = self.get_neighbors(cur_x, cur_y, copy_amoeba_map)
             queue.extend(neighbors)
+            if len(to_visit_isolated_connections) == 0:
+                return False
 
         return len(visited - set([(i, j) for i, row in enumerate(copy_amoeba_map) for j, cell in enumerate(row) if cell != 0])) > 0 or len(visited) != len(set([(i, j) for i, row in enumerate(copy_amoeba_map) for j, cell in enumerate(row) if cell != 0]))
         
@@ -132,13 +180,13 @@ class Player:
         return incision_points + internal_points
 
     def center_is_hollowed(self, amoeba_map):
-        cutoff_percent = 0.7
+        n_rows = 2
         x_start = 50 - self.starting_width // 2
         x_end = 50 + self.starting_width // 2
         y_start = 50 - self.starting_width // 2
         y_end = 50 + self.starting_width // 2
         total_filled = sum([sum(row[x_start:x_end]) for row in amoeba_map[y_start:y_end]])
-        return total_filled <= (self.starting_width ** 2) * cutoff_percent
+        return total_filled <= self.starting_width * n_rows + (self.starting_width*0.5)
 
     def get_y_of_sweep(self, amoeba_map):
         # only start checking when orig size is cleared out (except 3 lines percent)
@@ -152,11 +200,10 @@ class Player:
         x_end = 50 + self.starting_width // 2
         ys = []
         for y in range(0, 100):
-            if amoeba_map[50][y] == 1:
+            if amoeba_map[50][y] == 1 or amoeba_map[49][y] == 1 or amoeba_map[51][y] == 1:
                 ys.append(y)
-            # if sum([amoeba_map[x][y] for x in range(x_start, x_end)]) == self.starting_width:
-            #     print(y)
-                # ys.append(y)
+            # if sum([amoeba_map[x][y] for x in range(x_start, x_end)]) == x_end - x_start:
+            #     ys.append(y)
         return ys
 
     def moveable_cells(self, retract, periphery, amoeba_map, bacteria):
