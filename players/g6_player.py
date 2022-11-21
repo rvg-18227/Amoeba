@@ -57,7 +57,7 @@ class Player:
 
         mini = min(5, int(self.current_size*self.metabolism))
 
-        num_cells = 5
+        num_cells = 2
         moveable_cells_backend = self.sample_backend(current_percept.amoeba_map, num_cells, split)
         
         for i, j in current_percept.bacteria:
@@ -203,16 +203,14 @@ class Player:
         Returns:
             move_cells: list of cells to move
         """
+        # TODO potential improvement: sample from i-1 column that contain movable cells
         def find_move_cells(start, num_cells, amoeba_map):
             move_cells = []
             for i in range(start, 100):
-                if num_cells == 0:
-                    break
                 curr_column = amoeba_map[:, i]
                 if np.max(curr_column) == 1:
-                    additional_cells = self.sample_column(curr_column, num_cells)
-                    move_cells += [(j, i) for j in additional_cells]
-                    num_cells -=  len(additional_cells)
+                    move_cells = [(j, i) for j in self.sample_column(curr_column, num_cells)]
+                    break
             return move_cells
         
         start = 0
