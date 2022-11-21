@@ -1,8 +1,10 @@
 from abc import abstractmethod, ABC
+from enum import Enum
 import logging
 import math
 import os
 import sys
+from typing import Optional
 
 import numpy as np
 
@@ -15,6 +17,9 @@ from amoeba_state import AmoebaState
 #------------------------------------------------------------------------------
 
 cell = tuple[int, int]
+
+class State(Enum):
+    empty, ameoba, bacteria = range(3)
 
 
 #------------------------------------------------------------------------------
@@ -39,7 +44,7 @@ def find_movable_neighbor(
         ((x-1) % 100, y),
         ((x+1) % 100, y)
     ]:
-        if amoeba_map[x2][y2] == 0:
+        if amoeba_map[x2][y2] == State.empty.value:
             out.append((x2, y2))
 
     return out
@@ -49,7 +54,7 @@ def find_movable_cells(
     periphery: list[cell],
     amoeba_map: np.ndarray,
     bacteria: list[cell],
-    mini: int
+    n: Optional[int] = None
 ) -> list[cell]:
 
     movable = set()
@@ -61,7 +66,10 @@ def find_movable_cells(
 
     movable_list = list(movable) + retract
 
-    return movable_list[:mini]
+    return (
+        movable_list[:n] if n is not None
+        else movable_list
+    )
 
 
 #------------------------------------------------------------------------------
@@ -94,7 +102,8 @@ class RandomWalk(Strategy):
         ]
 
         movable = find_movable_cells(
-            retract, state.periphery, state.amoeba_map, state.bacteria, mini)
+            retract, state.periphery, state.amoeba_map, state.bacteria, n=mini
+        )
 
         info = 0
 
@@ -127,13 +136,22 @@ class BucketAttack(Strategy):
         arm_bottom = (y_cog - 3 * math.ceil((arm_cells_cnt - 1) / 2))
         arm_cell_ys = np.linspace(arm_bottom, arm_top, arm_cells_cnt, True, dtype=int)
 
+        # TODO: statically using xmax=51 can form a haircomb when A=3
+        # actually using xmax, self._reshape returns moves that cause
+        # separation, need to debug why, might be worth writing helpers
+        # to plot the target_cells, retract_cells, and to_occupy_cells
+        #
+        # Note that by using xmax as the x-value of wall cells, and
+        # xmax + 1 as the x-value of arm_cells will automatically cause
+        # the ameoba to shift right, but unsure why it's not working right
+        # now :(
         wall_cells = [
-            ( (xmax - 1) % 100, y % 100 )
+            ( xmax % 100, y % 100 )
             for y in wall_cell_ys
         ]
 
         arm_cells = [
-            ( xmax % 100, y % 100 )
+            ( (xmax + 1) % 100, y % 100 )
             for y in arm_cell_ys
         ]
 
@@ -161,11 +179,11 @@ class BucketAttack(Strategy):
         
         retractable_cells = set(curr_state.periphery) - target
         occupiable_cells = find_movable_cells(
-            list(retractable_cells), curr_state.periphery, curr_state.amoeba_map,
-            curr_state.bacteria, -1 #mini truncated the list returned #len(retractable_cells)
+            list(retractable_cells),
+            curr_state.periphery, curr_state.amoeba_map, curr_state.bacteria
         ) 
 
-        ameoba_cells = list(zip(*np.where(curr_state.amoeba_map == 1)))
+        ameoba_cells = list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value)))
         unoccupied_target_cells = target - set(ameoba_cells)
 
         to_occupy = set(occupiable_cells).intersection(unoccupied_target_cells)
@@ -177,21 +195,23 @@ class BucketAttack(Strategy):
         curr_state: AmoebaState,
     ) -> tuple[int, int]:
         """Compute center of gravity of current Ameoba"""
-        ameoba_cells = np.array(list(zip(*np.where(curr_state.amoeba_map == 1))))
+        ameoba_cells = np.array(list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value))))
         cog = (round(np.average(ameoba_cells[:,0])),round(np.average(ameoba_cells[:,1])))
         return cog
+    
+    def _get_xmax(self, curr_state: AmoebaState) -> int:
+        """Returns the x-value of the rightmost Ameoba cell."""
+        ameoba_xs, _ = np.where(curr_state.amoeba_map == State.ameoba.value)
+
+        return max(ameoba_xs)
 
     def move(
         self, state: AmoebaState, memory: int
     ) -> tuple[list[cell], list[cell], int]:
 
-        # TODO: compute ameoba's center of gravity, and xmax
-        #size = 9
-        #cog = (50, 50)
         size = (state.current_size)
         cog = self._get_cog(state)
-        print(cog)
-        xmax = 51
+        xmax = self._get_xmax(state)
 
         target_cells = self._get_target_cells(size, cog, xmax)
         return self._reshape(state, memory, set(target_cells))
@@ -253,13 +273,18 @@ class Player:
             3. A byte of information (values range from 0 to 255) that the
                amoeba can use
         """
+        # known bacteria to the ameoba will be eaten before our next move
+        # update ameoba_map and current_size to reflect this
         for i, j in current_percept.bacteria:
-            current_percept.amoeba_map[i][j] = 1
+            current_percept.amoeba_map[i][j] = State.bacteria.value
             current_percept.current_size += 1
         self.current_size = current_percept.current_size
 
-        #return self.strategies['random_walk'].move(current_percept, info)
-        return self.strategies['bucket_attack'].move(current_percept, info)
+        # TODO: dynamically select a strategy, possible factors:
+        # current_size, metabolism, etc
+        strategy = "bucket_attack"
+
+        return self.strategies[strategy].move(current_percept, info)
 
 
 #------------------------------------------------------------------------------
@@ -294,7 +319,7 @@ def Test_BucketAttack():
         (50, 49),           (50, 51),
         (51, 49), (51, 50), (51, 51)
     ]
-    movable_cells = find_movable_cells([], periphery, ameoba_map, [], 12)
+    movable_cells = find_movable_cells([], periphery, ameoba_map, [])
 
     curr_state = AmoebaState(9, ameoba_map, periphery, [], movable_cells)
     cog = bucket_attack._get_cog(curr_state)
