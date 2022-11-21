@@ -199,17 +199,15 @@ class Player:
         Returns:
             move_cells: list of cells to move
         """
+        # TODO potential improvement: sample from i-1 column that contain movable cells
         def find_move_cells(start, num_cells, amoeba_map):
-            move_cells = []
             for i in range(start, 100):
-                if num_cells == 0:
-                    break
                 curr_column = amoeba_map[:, i]
                 if np.max(curr_column) == 1:
-                    additional_cells = self.sample_column(curr_column, num_cells)
-                    move_cells += [(j, i) for j in additional_cells]
-                    num_cells -=  len(additional_cells)
-            return move_cells
+                    sample_column_idx = i
+                    break
+            sample_column = amoeba_map[:, sample_column_idx]
+            return [(j, i) for j in self.sample_column(sample_column, num_cells)]
         
         start = 0
         if split:
