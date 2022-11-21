@@ -7,6 +7,9 @@ from typing import Tuple, List
 import numpy.typing as npt
 import constants
 import matplotlib.pyplot as plt
+from enum import Enum
+
+turn = 0
 
 
 # ---------------------------------------------------------------------------- #
@@ -41,12 +44,60 @@ def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[]) -> None:
     plt.pcolormesh(map, edgecolors='k', linewidth=1)
     ax = plt.gca()
     ax.set_aspect('equal')
+    # plt.savefig(f"debug/{turn}.png")
     plt.show()
  
+# ---------------------------------------------------------------------------- #
+#                                Memory Bit Mask                               #
+# ---------------------------------------------------------------------------- #
+
+class MemoryFields(Enum):
+    Initialized = 0
+    Translating = 1
+
+def read_memory(memory: int) -> dict[MemoryFields, bool]:
+    out = {}
+    for field in MemoryFields:
+        value = True if (memory & (1 << field.value)) >> field.value else False
+        out[field] = value
+    return out
+
+def change_memory_field(memory: int, field: MemoryFields, value: bool) -> int:
+    bit = 1 if value else 0
+    mask = 1 << field.value
+    # Unset the bit, then or in the new bit
+    return (memory & ~mask) | ((bit << field.value) & mask)
+
+if __name__ == "__main__":
+    memory = 0
+    fields = read_memory(memory)
+    assert(fields[MemoryFields.Initialized] == False)
+    assert(fields[MemoryFields.Translating] == False)
+
+    memory = change_memory_field(memory, MemoryFields.Initialized, True)
+    fields = read_memory(memory)
+    assert(fields[MemoryFields.Initialized] == True)
+    assert(fields[MemoryFields.Translating] == False)
+
+    memory = change_memory_field(memory, MemoryFields.Translating, True)
+    fields = read_memory(memory)
+    assert(fields[MemoryFields.Initialized] == True)
+    assert(fields[MemoryFields.Translating] == True)
+
+    memory = change_memory_field(memory, MemoryFields.Translating, False)
+    fields = read_memory(memory)
+    assert(fields[MemoryFields.Initialized] == True)
+    assert(fields[MemoryFields.Translating] == False)
+
+    memory = change_memory_field(memory, MemoryFields.Initialized, False)
+    fields = read_memory(memory)
+    assert(fields[MemoryFields.Initialized] == False)
+    assert(fields[MemoryFields.Translating] == False)
+
  
- # ---------------------------------------------------------------------------- #
- #                               Main Player Class                              #
- # ---------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------- #
+#                               Main Player Class                              #
+# ---------------------------------------------------------------------------- #
 
 class Player:
     def __init__(self, rng: np.random.Generator, logger: logging.Logger, metabolism: float, goal_size: int,
@@ -86,7 +137,7 @@ class Player:
         self.current_size: int = None
         self.amoeba_map: npt.NDArray = None
         self.bacteria_cells: List[Tuple[int, int]] = None
-        self.rectractable_cells: List[Tuple[int, int]] = None
+        self.retractable_cells: List[Tuple[int, int]] = None
         self.extendable_cells: List[Tuple[int, int]] = None
         self.num_available_moves: int = None
         
@@ -112,6 +163,9 @@ class Player:
         for i in range(1, teeth_size + 1, 2):
             formation[center_x + 1, center_y + i] = 1
             formation[center_x + 1, center_y - i] = 1
+        for i in range(1, teeth_size + 1, 2):
+            formation[center_x + 2, center_y + i] = 1
+            formation[center_x + 2, center_y - i] = 1
 
         # show_amoeba_map(formation)
         return formation
@@ -125,9 +179,12 @@ class Player:
         current_points = map_to_coords(self.amoeba_map)
         desired_points = map_to_coords(desired_amoeba)
         
-        potential_retracts = [p for p in list(set(current_points).difference(set(desired_points))) if p in self.rectractable_cells]
+        potential_retracts = [p for p in list(set(current_points).difference(set(desired_points))) if p in self.retractable_cells]
         potential_extends = [p for p in list(set(desired_points).difference(set(current_points))) if p in self.extendable_cells]
         
+        print("Potential Retracts", potential_retracts)
+        print("Potential Extends", potential_extends)
+
         # Ensure we can morph given our available moves
         if len(potential_retracts) > self.num_available_moves:
             return [], []
@@ -176,11 +233,11 @@ class Player:
 
     # Adapted from amoeba_game code
     def check_move(self, retracts: List[Tuple[int, int]], extends: List[Tuple[int, int]]) -> bool:
-        if not set(retracts).issubset(set(self.rectractable_cells)):
+        if not set(retracts).issubset(set(self.retractable_cells)):
             return False
 
         movable = retracts[:]
-        new_periphery = list(set(self.rectractable_cells).difference(set(retracts)))
+        new_periphery = list(set(self.retractable_cells).difference(set(retracts)))
         for i, j in new_periphery:
             nbr = self.find_movable_neighbor(i, j, self.amoeba_map, self.bacteria_cells)
             for x, y in nbr:
@@ -224,7 +281,7 @@ class Player:
     def store_current_percept(self, current_percept: AmoebaState) -> None:
         self.current_size = current_percept.current_size
         self.amoeba_map = current_percept.amoeba_map
-        self.rectractable_cells = current_percept.periphery
+        self.retractable_cells = current_percept.periphery
         self.bacteria_cells = current_percept.bacteria
         self.extendable_cells = current_percept.movable_cells
         self.num_available_moves = int(np.ceil(self.metabolism * current_percept.current_size))
@@ -242,8 +299,26 @@ class Player:
                     2. A list of positions the retracted cells have moved to
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
+        global turn
+        turn += 1
+
         self.store_current_percept(current_percept)
 
-        retracts, moves = self.get_morph_moves(self.generate_tooth_formation(self.current_size))
+        retracts = []
+        moves = []
+
+        memory_fields = read_memory(info)
+        if not memory_fields[MemoryFields.Initialized]:
+            retracts, moves = self.get_morph_moves(self.generate_tooth_formation(self.current_size))
+            if len(moves) == 0:
+                info = change_memory_field(info, MemoryFields.Initialized, True)
+                memory_fields = read_memory(info)
+        
+        if memory_fields[MemoryFields.Initialized]:
+            curr_backbone_col = min(x for x, _ in map_to_coords(self.amoeba_map))
+            offset = (curr_backbone_col + 1) - (constants.map_dim // 2)
+            next_tooth = np.roll(self.generate_tooth_formation(self.current_size), offset + 1, 0)
+            retracts, moves = self.get_morph_moves(next_tooth)
+            print(retracts,  moves)
 
         return retracts, moves, info
