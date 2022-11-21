@@ -97,13 +97,18 @@ class Player:
         moves = []
         for i in range(len(prioritize_rows)):
             row = prioritize_rows[i]
+            prev_row = bool(np.where(amoeba_map[row-1, :]==1)[0].shape[0])
+            next_row = bool(np.where(amoeba_map[row+1, :]==1)[0].shape[0])
             temp_move = (row, curr_col[i])
             for col in range(rightmost_val, curr_col[i]-1, -1):
-                if amoeba_map[row, col] == 0 and (amoeba_map[row-1, col] == 1 or amoeba_map[row+1, col] == 1):
+                if amoeba_map[row, col] == 0 and \
+                    (not prev_row or amoeba_map[row-1, col] == 1) and \
+                    (not next_row or amoeba_map[row+1, col] == 1):
                     # check if new location connects prev row and next row
                     temp_move = (row, col)
                     break
             moves.append(temp_move)
+        self.logger.info(f'prioritized rows:{prioritize_rows}, moves: {moves}')
 
         rightmost_cells = rightmost_cells[rightmost_cells[:, 0]%2==1] # keep only odd rows
         if rightmost_cells.shape[0] == 0:
