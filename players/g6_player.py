@@ -52,6 +52,7 @@ class Player:
                     2. A list of positions the retracted cells have moved to
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
+        self.logger.info('-----------------')
         self.current_size = current_percept.current_size
         split, split_pt = self.split_amoeba(current_percept.amoeba_map)
 
@@ -61,14 +62,21 @@ class Player:
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
 
+        amoeba_loc = np.stack(np.where(current_percept.amoeba_map==1)).T
+        amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
+        self.logger.info(f'amoeba: \n{amoeba_loc}')
+
         movable = self.find_movable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
                                           current_percept.bacteria)
-        moves = self.get_branch_tips(retract, movable, current_percept.amoeba_map, split, split_pt=None)
+        moves = self.get_branch_tips(retract, movable, current_percept.periphery, 
+                                        current_percept.amoeba_map, split, split_pt=None)
 
-        move_num = min(mini, len(retract), len(movable))
+        move_num = min(mini, len(retract), len(moves))
+        self.logger.info(f'retract: \n{retract}')
+        self.logger.info(f'moves: \n{moves}')
         return retract[:move_num], moves[:move_num], 0
 
-    def get_branch_tips(self, retract, movable, amoeba_map, split, split_pt):
+    def get_branch_tips(self, retract, movable, periphery, amoeba_map, split, split_pt):
         retract = np.array(retract)
         retract_even = retract[retract[:, 0]%2==0]
         retract_even[:, 1] += 1 # check cell next to the even retraction cell
@@ -80,17 +88,18 @@ class Player:
                 prioritize_rows.append(retract_even[i, 0])
                 curr_col.append(retract_even[i, 1]-1)
 
-        movable_cells = np.array(movable)
-        rightmost_cells = movable_cells[movable_cells[:, 1]<=split_pt] if split else movable_cells
-        rightmost_val = movable_cells[:, 1].max()
+        periphery = np.array(periphery)
+        movable = set(movable)
+        self.logger.info(f'periphery: \n{periphery}')
+        rightmost_cells = periphery[periphery[:, 1]<=split_pt] if split else periphery
+        rightmost_val = rightmost_cells[:, 1].max()
 
         moves = []
-        print(retract, prioritize_rows)
         for i in range(len(prioritize_rows)):
             row = prioritize_rows[i]
             temp_move = (row, curr_col[i])
             for col in range(rightmost_val, curr_col[i]-1, -1):
-                if amoeba_map[row, col] == 0 and amoeba_map[row-1, col] == 1 and amoeba_map[row+1, col] == 1:
+                if amoeba_map[row, col] == 0 and (amoeba_map[row-1, col] == 1 or amoeba_map[row+1, col] == 1):
                     # check if new location connects prev row and next row
                     temp_move = (row, col)
                     break
@@ -100,16 +109,20 @@ class Player:
         if rightmost_cells.shape[0] == 0:
             return moves
 
+        self.logger.info(f'rightmost all: \n{rightmost_cells}')
         rightmost_cells = rightmost_cells[(-rightmost_cells[:, 1]).argsort()] # sort cells by col
         rightmost_cells = rightmost_cells[np.unique(rightmost_cells[:, 0], return_index=True)[1]] # keep rightmost cell for each row
         target_col = rightmost_cells[:, 1].max()
         left_col = rightmost_cells[:, 1].min()
         if left_col == target_col:
             target_col += 1
+        self.logger.info(f'rightmost unique: \n{rightmost_cells}')
         for i in range(rightmost_cells.shape[0]):
             col = rightmost_cells[i, 1]
             if col < target_col:
-                moves.append((rightmost_cells[i, 0], col+1))
+                move = (rightmost_cells[i, 0], col+1)
+                if move in movable:
+                    moves.append((rightmost_cells[i, 0], col+1))
 
         return moves
 
@@ -123,7 +136,7 @@ class Player:
                 if (x, y) not in movable:
                     movable.append((x, y))
 
-        movable += retract
+        #movable += retract
 
         return movable
 
