@@ -80,9 +80,9 @@ class Player:
         new_periphery = list(set(periphery).difference(set(retract)))
         for i, j in new_periphery:
             nbr = self.find_movable_neighbor(i, j, amoeba_map, bacteria)
-            print(nbr)
+            # print(nbr)
             for x, y in nbr:
-                if (x, y) not in movable:
+                if (x, y) not in movable and (x > 50 and y < 50):
                     movable.append((x, y))
 
         movable += retract
