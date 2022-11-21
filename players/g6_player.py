@@ -53,21 +53,65 @@ class Player:
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
         self.current_size = current_percept.current_size
-        split = self.split_amoeba(current_percept.amoeba_map)
+        split, split_pt = self.split_amoeba(current_percept.amoeba_map)
 
-        mini = min(5, len(current_percept.periphery) * self.metabolism)
+        mini = min(5, int(self.current_size*self.metabolism))
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
 
         retract = [tuple(i) for i in self.rng.choice(current_percept.periphery, replace=False, size=mini)]
         movable = self.find_movable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
-                                          current_percept.bacteria, mini)
+                                          current_percept.bacteria)
+        moves = get_branch_tips(retract, movable, current_percept.amoeba_map, split, split_pt=None)
 
-        info = 0
+        move_num = min(mini, len(retract), len(movable))
+        return retract[:move_num], moves[:move_num], 0
 
-        return retract, movable, info
+    def get_branch_tips(self, retract, movable, amoeba_map, split, split_pt):
+        retract = np.array(retract)
+        retract_even = retract[retract[:, 0]%2==0]
+        retract_even[:, 1] += 1 # check cell next to the even retraction cell
+        prioritize_rows = []
+        curr_col = []
+        for row in range(retract_even.shape[0]):
+            if amoeba_map[retract_even[row]] == 0:
+                # no cell next to even retraction cell
+                prioritize_rows.append(row)
+                curr_col.append(retract_even[row, 1]-1)
 
-    def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
+        movable_cells = np.array(movable)
+        rightmost_cells = movable_cells[movable_cells[:, 1]<=split_pt] if split else movable_cells
+        rightmost_val = movable_cells.max(axis=1)
+
+        moves = []
+        for i in len(prioritize_rows):
+            row = prioritize_rows[i]
+            temp_move = (row, curr_col[i])
+            for col in range(rightmost_val, curr_col[i]-1, -1):
+                if amoeba_map[row, col] == 0 and amoeba_map[row-1, col] == 1 and amoeba_map[row+1, col] == 1:
+                    # check if new location and connect prev row and next row
+                    temp_move = (row, col)
+                    break
+            moves.append(temp_move)
+
+        rightmost_cells = rightmost_cells[rightmost_cells[:, 0]%2==1] # keep only odd rows
+        if rightmost_cells.shape[0] == 0:
+            return moves
+        rightmost_cells = rightmost_cells[(-rightmost_cells[:, 1]).argsort()] # sort cells by col
+        rightmost_cells = rightmost_cells[np.unique(rightmost_cells[:, 0], return_index=True)[1]] # keep rightmost cell for each row
+        target_col = rightmost_cells.max(axis=1)
+        left_col = rightmost_cells.min(axis=1)
+        if left_col == target_col:
+            target_col += 1
+        for i in range(rightmost_cells.shape[0]):
+            col = rightmost_cells[i, 1]
+            if col < target_col:
+                moves.append((rightmost_cells[i, 0], col+1))
+
+        return moves
+
+
+    def find_movable_cells(self, retract, periphery, amoeba_map, bacteria):
         movable = []
         new_periphery = list(set(periphery).difference(set(retract)))
         for i, j in new_periphery:
@@ -78,7 +122,7 @@ class Player:
 
         movable += retract
 
-        return movable[:mini]
+        return movable
 
     def find_movable_neighbor(self, x, y, amoeba_map, bacteria):
         out = []
@@ -98,6 +142,7 @@ class Player:
         split = False
         amoeba_begin = False
         amoeba_end = False
+        split_col = 0
 
         for i in range(100):
             curr_column = amoeba_map[:, i]
@@ -107,9 +152,10 @@ class Player:
                     amoeba_begin = True
                 elif amoeba_end:
                     split = True
+                    split_col = i - 1
                     break
             elif value == 0:
                 if amoeba_begin:
                     amoeba_end = True
 
-        return split
+        return split, split_col
