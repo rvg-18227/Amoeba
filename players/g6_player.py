@@ -55,8 +55,8 @@ class Player:
         self.current_size = current_percept.current_size
         split = self.split_amoeba(current_percept.amoeba_map)
 
-        num_cells = 2
-        moveable_backend = self.sample_backend(current_percept.amoeba_map, num_cells, split)
+        num_cells = 5
+        moveable_cells_backend = self.sample_backend(current_percept.amoeba_map, num_cells, split)
         
         mini = min(5, len(current_percept.periphery) * self.metabolism)
         for i, j in current_percept.bacteria:
@@ -158,18 +158,27 @@ class Player:
         Returns:
             move_cells: list of cells to move
         """
-        if split:
-            return []
-        else:
+        def find_move_cells(start, num_cells, amoeba_map):
             move_cells = []
-            for i in range(0, 100):
+            for i in range(start, 100):
                 if num_cells == 0:
                     break
                 curr_column = amoeba_map[:, i]
                 if np.max(curr_column) == 1:
                     additional_cells = self.sample_column(curr_column, num_cells)
-                    move_cells += [(i, j) for j in additional_cells]
+                    move_cells += [(j, i) for j in additional_cells]
                     num_cells -=  len(additional_cells)
             return move_cells
+        
+        start = 0
+        if split:
+            start = None
+            # move pass the first chunk of amoeba
+            for i in range(0, 100):
+                curr_column = amoeba_map[:, i]
+                if np.max(curr_column) == 0:
+                    start = i
+                    break
+        return find_move_cells(start, num_cells, amoeba_map)
                     
                     
