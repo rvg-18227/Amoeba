@@ -15,6 +15,13 @@ from amoeba_state import AmoebaState
 
 
 #------------------------------------------------------------------------------
+#  Miscellaneous
+#------------------------------------------------------------------------------
+
+debug = 0
+
+
+#------------------------------------------------------------------------------
 #  Types
 #------------------------------------------------------------------------------
 
@@ -32,6 +39,9 @@ def visualize_reshape(
     target: list[cell], ameoba: list[cell],
     occupiable: list[cell], retractable: list[cell],
     retract: list[cell], extend: list[cell]):
+
+    if not debug:
+        return
 
     fig, (ax1, ax2) = plt.subplots(1, 2)
 
@@ -93,7 +103,7 @@ def visualize_reshape(
         loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=4, fancybox=True, shadow=True)
     fig.tight_layout()
     plt.show()
-    plt.close()
+    plt.close(fig)
     plt.figure(1)
 
 
@@ -339,7 +349,8 @@ class BucketAttack(Strategy):
         cog = self._get_cog(state)
         xmax = self._get_xmax(state)
 
-        target_cells = self._get_target_cells(size, cog, xmax)
+        # TODO: disable moving for now by using xmax - 1
+        target_cells = self._get_target_cells(size, cog, xmax - 1)
         return self._reshape(state, memory, set(target_cells))
 
 
