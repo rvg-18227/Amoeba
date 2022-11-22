@@ -225,6 +225,20 @@ class RandomWalk(Strategy):
         return retract, movable, info
 
 class BucketAttack(Strategy):
+    
+    def _spread_vertically(self, y_center: int, cnt: int, step=1) -> np.ndarray:
+        """Returns a list of y-values by spreading around y_center.
+        
+        kwarg @step is used to determine the distance between spread points.
+        e.g. step = 1 => spreaded pts are immediately next to one another
+             step = 3 => distance between each consecutive pair of spreaded pts
+                         is 2.
+        """
+        y_top    = (y_center + step * math.floor((cnt - 1) / 2))
+        y_bottom = (y_center - step * math.ceil((cnt - 1) / 2))
+        y_spreads = np.linspace(y_bottom, y_top, cnt, True, dtype=int)
+
+        return y_spreads
 
     def _get_target_cells(self, size: int, cog: cell, xmax: int) -> list[cell]:
         """Returns the cells of the target shape by centering vertically on
@@ -234,51 +248,24 @@ class BucketAttack(Strategy):
         @size: current size of ameoba
         @cog: ameoba's center of gravity
         """
-        # TODO:
-        # from(yunlan): I think I've confused x and y coords, the target shape
-        # actually has buckets facing downwards... To fix later
 
+        _, y_cog = cog
         buckets = math.floor((size - 3) / 7)
+
         arm_cells_cnt = 1 + buckets
         wall_cells_cnt = size - arm_cells_cnt
         inner_wall_cells_cnt = math.ceil(wall_cells_cnt / 2)
         outer_wall_cells_cnt = math.floor(wall_cells_cnt / 2)
 
-        _, y_cog = cog
-        inner_wall_top    = (y_cog + math.floor((inner_wall_cells_cnt - 1) / 2))
-        inner_wall_bottom = (y_cog - math.ceil((inner_wall_cells_cnt - 1) / 2))
-        inner_wall_cell_ys = np.linspace(inner_wall_bottom, inner_wall_top, inner_wall_cells_cnt, True, dtype=int)
+        inner_wall_cell_ys = self._spread_vertically(y_cog, inner_wall_cells_cnt)
+        outer_wall_cell_ys = self._spread_vertically(y_cog, outer_wall_cells_cnt)
+        arm_cell_ys = self._spread_vertically(y_cog, arm_cells_cnt, step=3)
 
-        outer_wall_top    = (y_cog + math.floor((outer_wall_cells_cnt - 1) / 2))
-        outer_wall_bottom = (y_cog - math.ceil((outer_wall_cells_cnt - 1) / 2))
-        outer_wall_cell_ys = np.linspace(outer_wall_bottom, outer_wall_top, outer_wall_cells_cnt, True, dtype=int)
-
-        arm_top    = (y_cog + 3 * math.floor((arm_cells_cnt - 1) / 2))
-        arm_bottom = (y_cog - 3 * math.ceil((arm_cells_cnt - 1) / 2))
-        arm_cell_ys = np.linspace(arm_bottom, arm_top, arm_cells_cnt, True, dtype=int)
-
-        # TODO: statically using xmax=51 can form a haircomb when A=3
-        # actually using xmax, self._reshape returns moves that cause
-        # separation, need to debug why, might be worth writing helpers
-        # to plot the target_cells, retract_cells, and to_occupy_cells
-        #
-        # Note that by using xmax as the x-value of wall cells, and
-        # xmax + 1 as the x-value of arm_cells will automatically cause
-        # the ameoba to shift right, but unsure why it's not working right
-        # now :(
-        wall_cells = [
-            ( xmax % 100, y % 100 )
-            for y in inner_wall_cell_ys
-        ] + [
-            ( (xmax - 1) % 100, y % 100 )
-            for y in outer_wall_cell_ys
-        ]
-
-
-        arm_cells = [
-            ( (xmax + 1) % 100, y % 100 )
-            for y in arm_cell_ys
-        ]
+        wall_cells = (
+            [ ( xmax % 100,       y % 100 ) for y in inner_wall_cell_ys ] +
+            [ ( (xmax - 1) % 100, y % 100 ) for y in outer_wall_cell_ys ]
+        )
+        arm_cells = [ ( (xmax + 1) % 100, y % 100 ) for y in arm_cell_ys ]
 
         return wall_cells + arm_cells
 
