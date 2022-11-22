@@ -6,6 +6,8 @@ import os
 import sys
 from typing import Optional
 
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 import numpy as np
 
 sys.path.append(os.getcwd())
@@ -20,6 +22,79 @@ cell = tuple[int, int]
 
 class State(Enum):
     empty, ameoba, bacteria = range(3)
+
+
+#------------------------------------------------------------------------------
+#  Debug Helpers
+#------------------------------------------------------------------------------
+
+def visualize_reshape(
+    target: list[cell], ameoba: list[cell],
+    occupiable: list[cell], retractable: list[cell],
+    retract: list[cell], extend: list[cell]):
+
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+
+    # common: ameoba & target
+    for x, y in ameoba:
+        ax1.plot(x, y, 'g.')
+        ax2.plot(x, y, 'g.')
+
+    for x, y in target:
+        ax1.plot(x, y, 'r.')
+        ax2.plot(x, y, 'r.')
+
+    # subplot 1: occupiable & retractable
+    for x, y in occupiable:
+        size = (mpl.rcParams['lines.markersize'] + 1.5) ** 2
+        ax1.scatter(x, y, facecolors='none', edgecolors='tab:purple', s=size)
+
+    for x, y in retractable:
+        size = (mpl.rcParams['lines.markersize'] + 4) ** 2
+        ax1.scatter(x, y, facecolors='none', edgecolors='forestgreen', marker='s', s=size)
+
+    # subplot 2: retract & extend
+    for x, y in retract:
+        size = (mpl.rcParams['lines.markersize'] + 4) ** 2
+        ax2.scatter(x, y, facecolors='none', edgecolors='forestgreen', marker='s', s=size)
+
+    for x, y in extend:
+        size = (mpl.rcParams['lines.markersize'] + 1.5) ** 2
+        ax2.scatter(x, y, facecolors='none', edgecolors='tab:purple', s=size)
+
+    # markers
+    mlines = mpl.lines
+    red_dot = mlines.Line2D(
+        [], [], color='g', marker='.', linestyle='None', markersize=5, label='ameoba')
+    green_dot = mlines.Line2D(
+        [], [], color='r', marker='.', linestyle='None', markersize=5, label='target')
+
+    purpule_circle = mlines.Line2D(
+        [], [], color='tab:purple', marker='o', linestyle='None',
+        markerfacecolor='none', markersize=5, label='occupiable')
+    green_square = mlines.Line2D(
+        [], [], color='forestgreen', marker='s', linestyle='None',
+        markerfacecolor='none', markersize=5, label='retractable'
+    )
+
+    green_square = mlines.Line2D(
+        [], [], color='forestgreen', marker='s', linestyle='None',
+        markerfacecolor='none', markersize=5, label='retract')
+    purpule_circle = mlines.Line2D(
+        [], [], color='tab:purple', marker='o', linestyle='None',
+        markerfacecolor='none', markersize=5, label='extend')
+
+    # plotting
+    ax1.legend(
+        handles=[red_dot, green_dot, purpule_circle, green_square],
+        loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=4, fancybox=True, shadow=True)
+    ax2.legend(
+        handles=[red_dot, green_dot, purpule_circle, green_square],
+        loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=4, fancybox=True, shadow=True)
+    fig.tight_layout()
+    plt.show()
+    plt.close()
+    plt.figure(1)
 
 
 #------------------------------------------------------------------------------
@@ -123,14 +198,20 @@ class BucketAttack(Strategy):
         # from(yunlan): I think I've confused x and y coords, the target shape
         # actually has buckets facing downwards... To fix later
 
-        buckets = math.floor((size - 2) / 4)
+        buckets = math.floor((size - 3) / 7)
         arm_cells_cnt = 1 + buckets
         wall_cells_cnt = size - arm_cells_cnt
+        inner_wall_cells_cnt = math.ceil(wall_cells_cnt / 2)
+        outer_wall_cells_cnt = math.floor(wall_cells_cnt / 2)
 
         _, y_cog = cog
-        wall_top    = (y_cog + math.floor((wall_cells_cnt - 1) / 2))
-        wall_bottom = (y_cog - math.ceil((wall_cells_cnt - 1) / 2))
-        wall_cell_ys = np.linspace(wall_bottom, wall_top, wall_cells_cnt, True, dtype=int)
+        inner_wall_top    = (y_cog + math.floor((inner_wall_cells_cnt - 1) / 2))
+        inner_wall_bottom = (y_cog - math.ceil((inner_wall_cells_cnt - 1) / 2))
+        inner_wall_cell_ys = np.linspace(inner_wall_bottom, inner_wall_top, inner_wall_cells_cnt, True, dtype=int)
+
+        outer_wall_top    = (y_cog + math.floor((outer_wall_cells_cnt - 1) / 2))
+        outer_wall_bottom = (y_cog - math.ceil((outer_wall_cells_cnt - 1) / 2))
+        outer_wall_cell_ys = np.linspace(outer_wall_bottom, outer_wall_top, outer_wall_cells_cnt, True, dtype=int)
 
         arm_top    = (y_cog + 3 * math.floor((arm_cells_cnt - 1) / 2))
         arm_bottom = (y_cog - 3 * math.ceil((arm_cells_cnt - 1) / 2))
@@ -147,8 +228,12 @@ class BucketAttack(Strategy):
         # now :(
         wall_cells = [
             ( xmax % 100, y % 100 )
-            for y in wall_cell_ys
+            for y in inner_wall_cell_ys
+        ] + [
+            ( (xmax - 1) % 100, y % 100 )
+            for y in outer_wall_cell_ys
         ]
+
 
         arm_cells = [
             ( (xmax + 1) % 100, y % 100 )
@@ -185,9 +270,19 @@ class BucketAttack(Strategy):
 
         ameoba_cells = list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value)))
         unoccupied_target_cells = target - set(ameoba_cells)
-
         to_occupy = set(occupiable_cells).intersection(unoccupied_target_cells)
-        return list(retractable_cells)[:len(to_occupy)], list(to_occupy), memory
+
+        retract = list(retractable_cells)[:len(to_occupy)]
+        extend = list(to_occupy)
+
+        # debug
+        visualize_reshape(
+            list(target), ameoba_cells,
+            occupiable_cells, list(retractable_cells),
+            retract, extend
+        )
+
+        return retract, extend, memory
 
     #does COG need to be one of the ameoba cells?
     def _get_cog(
