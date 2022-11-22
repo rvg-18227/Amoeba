@@ -195,7 +195,7 @@ class Strategy(ABC):
 
     @abstractmethod
     def move(
-        self, state: AmoebaState, memory: int
+        self, prev_state: AmoebaState, state: AmoebaState, memory: int
     ) -> tuple[list[cell], list[cell], int]:
 
         pass
@@ -205,7 +205,7 @@ class RandomWalk(Strategy):
         self.rng = rng
 
     def move(
-        self, state: AmoebaState, memory: int
+        self, prev_state: AmoebaState, state: AmoebaState, memory: int
     ) -> tuple[list[cell], list[cell], int]:
 
         mini = min(5, len(state.periphery) // 2)
@@ -226,7 +226,13 @@ class RandomWalk(Strategy):
 
 class BucketAttack(Strategy):
     
-    def _spread_vertically(self, y_center: int, cnt: int, step=1) -> np.ndarray:
+    def _spread_vertically(
+        self,
+        y_center: int,
+        upper_cnt: int,
+        lower_cnt: int,
+        step=1
+    ) -> np.ndarray:
         """Returns a list of y-values by spreading around y_center.
         
         kwarg @step is used to determine the distance between spread points.
@@ -234,8 +240,9 @@ class BucketAttack(Strategy):
              step = 3 => distance between each consecutive pair of spreaded pts
                          is 2.
         """
-        y_top    = (y_center + step * math.floor((cnt - 1) / 2))
-        y_bottom = (y_center - step * math.ceil((cnt - 1) / 2))
+        cnt = upper_cnt + 1 + lower_cnt
+        y_top    = y_center + step * upper_cnt
+        y_bottom = y_center - step * lower_cnt
         y_spreads = np.linspace(y_bottom, y_top, cnt, True, dtype=int)
 
         return y_spreads
@@ -250,16 +257,22 @@ class BucketAttack(Strategy):
         """
 
         _, y_cog = cog
-        buckets = math.floor((size - 3) / 7)
+        buckets, orphans = divmod(size - 3, 7)
+        upper_buckets, lower_buckets = math.ceil(buckets / 2), math.floor(buckets / 2)
 
-        arm_cells_cnt = 1 + buckets
-        wall_cells_cnt = size - arm_cells_cnt
-        inner_wall_cells_cnt = math.ceil(wall_cells_cnt / 2)
-        outer_wall_cells_cnt = math.floor(wall_cells_cnt / 2)
-
-        inner_wall_cell_ys = self._spread_vertically(y_cog, inner_wall_cells_cnt)
-        outer_wall_cell_ys = self._spread_vertically(y_cog, outer_wall_cells_cnt)
-        arm_cell_ys = self._spread_vertically(y_cog, arm_cells_cnt, step=3)
+        inner_wall_cell_ys = self._spread_vertically(
+            y_cog,
+            3 * upper_buckets,
+            3 * lower_buckets
+        )
+        outer_wall_cell_ys = self._spread_vertically(
+            y_cog,
+            3 * upper_buckets,
+            3 * lower_buckets + orphans
+        )
+        arm_cell_ys = self._spread_vertically(
+            y_cog, upper_buckets, lower_buckets , step=3
+        )
 
         wall_cells = (
             [ ( xmax % 100,       y % 100 ) for y in inner_wall_cell_ys ] +
@@ -328,16 +341,29 @@ class BucketAttack(Strategy):
 
         return max(ameoba_xs)
 
+    def _in_shape(self, curr_state: AmoebaState) -> bool:
+        xmax = self._get_xmax(curr_state)
+        arms_expected = 1 + math.floor((curr_state.current_size - 3) / 7)
+        arms_got = len(np.where(curr_state.amoeba_map[xmax,:] == State.ameoba.value)[0])
+
+        return arms_got >= arms_expected
+
     def move(
-        self, state: AmoebaState, memory: int
+        self, prev_state: AmoebaState, state: AmoebaState, memory: int
     ) -> tuple[list[cell], list[cell], int]:
 
         size = (state.current_size)
-        cog = self._get_cog(state)
-        xmax = self._get_xmax(state)
 
-        # TODO: disable moving for now by using xmax - 1
-        target_cells = self._get_target_cells(size, cog, xmax - 1)
+        # TODO: maybe not always shifting horizontally?
+        # cog = self._get_cog(state if np.any(prev_state.amoeba_map) else prev_state)
+        cog  = (50, 50)
+
+        # x-value of bucket arms
+        arm_xval = self._get_xmax(state)
+        if not self._in_shape(state):
+            arm_xval -= 1
+
+        target_cells = self._get_target_cells(size, cog, arm_xval)
         return self._reshape(state, memory, set(target_cells))
 
 
@@ -408,7 +434,7 @@ class Player:
         # current_size, metabolism, etc
         strategy = "bucket_attack"
 
-        return self.strategies[strategy].move(current_percept, info)
+        return self.strategies[strategy].move(last_percept, current_percept, info)
 
 
 #------------------------------------------------------------------------------
