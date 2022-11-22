@@ -19,6 +19,7 @@ from amoeba_state import AmoebaState
 #------------------------------------------------------------------------------
 
 debug = 0
+debug_fig = None
 
 
 #------------------------------------------------------------------------------
@@ -43,7 +44,17 @@ def visualize_reshape(
     if not debug:
         return
 
-    fig, (ax1, ax2) = plt.subplots(1, 2)
+    # make sure we only create one plot for debugging
+    # before creating a new one, clear the old one for redrawing
+    global debug_fig
+    if debug_fig is None:
+        debug_fig = plt.subplots(1, 2)
+    else:
+        fig, _ = debug_fig
+        fig.clear()
+        debug_fig = fig, fig.subplots(1, 2)
+    
+    fig, (ax1, ax2) = debug_fig
 
     # common: ameoba & target
     for x, y in target:
@@ -102,8 +113,6 @@ def visualize_reshape(
         handles=[red_dot, green_dot, purpule_circle2, green_square2],
         loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=4, fancybox=True, shadow=True)
     fig.tight_layout()
-    plt.show()
-    plt.close(fig)
     plt.figure(1)
 
 
