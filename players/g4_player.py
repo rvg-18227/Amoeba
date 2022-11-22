@@ -208,6 +208,50 @@ class Strategy(ABC):
     ) -> tuple[list[cell], list[cell], int]:
 
         pass
+    
+    def _reshape(
+        self,
+        curr_state: AmoebaState,
+        memory: int,
+        target: set[cell]
+    ) -> tuple[list[cell], list[cell], int]:
+        """Computes cells to retract and cells to move onto in a best effort way
+        to morphy the ameoba into the target shape.
+
+        @curr_state: current state known to the Ameoba, its periphery, etc
+        @memory: 1 byte memory of ameoba
+        @target: target shape - represented by a list of cells - to morph
+                 ameoba into
+        """
+        # simple heuristic:
+        # 1. find all cells we can retract and doesn't overlap with the target
+        # 2. find all cells we can move onto once we retract all cells in step 1
+        # 3. find and return the overlap between cells in step 2 and target cells
+        #    unoccupied by our Ameoba
+        
+        retractable_cells = set(curr_state.periphery) - target
+        occupiable_cells = find_movable_cells(
+            list(retractable_cells),
+            curr_state.periphery, curr_state.amoeba_map, curr_state.bacteria
+        ) 
+
+        ameoba_cells = list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value)))
+        unoccupied_target_cells = target - set(ameoba_cells)
+        to_occupy = set(occupiable_cells).intersection(unoccupied_target_cells)
+
+        k = min(len(to_occupy), len(retractable_cells))
+        retract = retract_k(k, list(retractable_cells), curr_state.amoeba_map)
+        extend = list(to_occupy)[:k]
+
+        # debug
+        visualize_reshape(
+            list(target), ameoba_cells,
+            occupiable_cells, list(retractable_cells),
+            retract, extend
+        )
+
+        return retract, extend, memory
+
 
 class RandomWalk(Strategy):
     def __init__(self, rng: np.random.Generator):
@@ -262,7 +306,7 @@ class BucketAttack(Strategy):
         on the column of Ameoba's rightmost cell.
 
         @size: current size of ameoba
-        @cog: ameoba's center of gravity
+        @cog: center of gravity for the target shape (only y-value used currently)
         """
 
         _, y_cog = cog
@@ -291,57 +335,11 @@ class BucketAttack(Strategy):
 
         return wall_cells + arm_cells
 
-    def _reshape(
-        self,
-        curr_state: AmoebaState,
-        memory: int,
-        target: set[cell]
-    ) -> tuple[list[cell], list[cell], int]:
-        """Computes cells to retract and cells to move onto in a best effort way
-        to morphy the ameoba into the target shape.
-
-        @curr_state: current state known to the Ameoba, its periphery, etc
-        @memory: 1 byte memory of ameoba
-        @target: target shape - represented by a list of cells - to morph
-                 ameoba into
-        """
-        # simple heuristic:
-        # 1. find all cells we can retract and doesn't overlap with the target
-        # 2. find all cells we can move onto once we retract all cells in step 1
-        # 3. find and return the overlap between cells in step 2 and target cells
-        #    unoccupied by our Ameoba
-        
-        retractable_cells = set(curr_state.periphery) - target
-        occupiable_cells = find_movable_cells(
-            list(retractable_cells),
-            curr_state.periphery, curr_state.amoeba_map, curr_state.bacteria
-        ) 
-
-        ameoba_cells = list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value)))
-        unoccupied_target_cells = target - set(ameoba_cells)
-        to_occupy = set(occupiable_cells).intersection(unoccupied_target_cells)
-
-        k = min(len(to_occupy), len(retractable_cells))
-        retract = retract_k(k, list(retractable_cells), curr_state.amoeba_map)
-        extend = list(to_occupy)[:k]
-
-        # debug
-        visualize_reshape(
-            list(target), ameoba_cells,
-            occupiable_cells, list(retractable_cells),
-            retract, extend
-        )
-
-        return retract, extend, memory
-
-    #does COG need to be one of the ameoba cells?
-    def _get_cog(
-        self,
-        curr_state: AmoebaState,
-    ) -> tuple[int, int]:
-        """Compute center of gravity of current Ameoba"""
+    def _get_cog(self, curr_state: AmoebaState) -> tuple[int, int]:
+        """Compute center of gravity of current Ameoba."""
         ameoba_cells = np.array(list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value))))
         cog = (round(np.average(ameoba_cells[:,0])),round(np.average(ameoba_cells[:,1])))
+
         return cog
     
     def _get_xmax(self, curr_state: AmoebaState) -> int:
@@ -369,6 +367,21 @@ class BucketAttack(Strategy):
         return xmax
 
     def _in_shape(self, curr_state: AmoebaState) -> bool:
+        """Returns a bool indicating if our bucket arms are in shape.
+        
+        In our implementation, *no memory bit* is needed to store information
+        of whether we have gotten into "comb" shape or not, all thanks to
+        this function/heuristic.
+
+        If we have an expected number of bucket arms, it's safe for us to
+        keep marching forward, since having bucket arms in formation would
+        allow us to keep capturing bacteria on our way while adjusting
+        formation.
+
+        Otherwise, we need to wait for the bucket arms to get into shape, so
+        that we don't risk moving and not able to eat any bacteria along the
+        way.
+        """
         xmax = self._get_xmax(curr_state)
         arms_expected = 1 + math.floor((curr_state.current_size - 3) / 7)
         arms_got = len(np.where(curr_state.amoeba_map[xmax,:] == State.ameoba.value)[0])
@@ -469,6 +482,9 @@ class Player:
 #------------------------------------------------------------------------------
 
 def Test_BucketAttack():
+    # NOTE(from yunlan): We are using two-layer wall now, so this test case is
+    # no longer accurate, and WILL FAIL. Too lazy to write a new test case, so
+    # leaving this for now.
     bucket_attack = BucketAttack()
     cases = [
         dict(size=9, cog=(50,50), xmax=51,
