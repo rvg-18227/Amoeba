@@ -202,6 +202,9 @@ def retract_k(k: int, choices: list[cell], amoeba_map: np.ndarray) -> list[cell]
 
 class Strategy(ABC):
 
+    def __init__(self, metabolism: float) -> None:
+        self.metabolism = metabolism
+
     @abstractmethod
     def move(
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
@@ -239,7 +242,10 @@ class Strategy(ABC):
         unoccupied_target_cells = target - set(ameoba_cells)
         to_occupy = set(occupiable_cells).intersection(unoccupied_target_cells)
 
-        k = min(len(to_occupy), len(retractable_cells))
+        k = min(
+            int(self.metabolism * curr_state.current_size), # max retractable cells
+            len(to_occupy), len(retractable_cells)
+        )
         retract = retract_k(k, list(retractable_cells), curr_state.amoeba_map)
         extend = list(to_occupy)[:k]
 
@@ -254,7 +260,8 @@ class Strategy(ABC):
 
 
 class RandomWalk(Strategy):
-    def __init__(self, rng: np.random.Generator):
+    def __init__(self, metabolism: float, rng: np.random.Generator) -> None:
+        super().__init__(metabolism)
         self.rng = rng
 
     def move(
@@ -438,8 +445,8 @@ class Player:
         self.current_size = goal_size / 4
 
         self.strategies = dict(
-            random_walk=RandomWalk(rng),
-            bucket_attack=BucketAttack()
+            random_walk=RandomWalk(metabolism, rng),
+            bucket_attack=BucketAttack(metabolism)
         )
 
     def move(
