@@ -36,13 +36,13 @@ def visualize_reshape(
     fig, (ax1, ax2) = plt.subplots(1, 2)
 
     # common: ameoba & target
-    for x, y in ameoba:
-        ax1.plot(x, y, 'g.')
-        ax2.plot(x, y, 'g.')
-
     for x, y in target:
         ax1.plot(x, y, 'r.')
         ax2.plot(x, y, 'r.')
+
+    for x, y in ameoba:
+        ax1.plot(x, y, 'g.')
+        ax2.plot(x, y, 'g.')
 
     # subplot 1: occupiable & retractable
     for x, y in occupiable:
@@ -77,10 +77,10 @@ def visualize_reshape(
         markerfacecolor='none', markersize=5, label='retractable'
     )
 
-    green_square = mlines.Line2D(
+    green_square2 = mlines.Line2D(
         [], [], color='forestgreen', marker='s', linestyle='None',
         markerfacecolor='none', markersize=5, label='retract')
-    purpule_circle = mlines.Line2D(
+    purpule_circle2 = mlines.Line2D(
         [], [], color='tab:purple', marker='o', linestyle='None',
         markerfacecolor='none', markersize=5, label='extend')
 
@@ -89,7 +89,7 @@ def visualize_reshape(
         handles=[red_dot, green_dot, purpule_circle, green_square],
         loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=4, fancybox=True, shadow=True)
     ax2.legend(
-        handles=[red_dot, green_dot, purpule_circle, green_square],
+        handles=[red_dot, green_dot, purpule_circle2, green_square2],
         loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=4, fancybox=True, shadow=True)
     fig.tight_layout()
     plt.show()
@@ -145,6 +145,36 @@ def find_movable_cells(
         movable_list[:n] if n is not None
         else movable_list
     )
+
+def retract_k(k: int, choices: list[cell], amoeba_map: np.ndarray) -> list[cell]:
+    """Select k cells to retract from choices (list of retractable cells) that
+    ensures the ameoba will stay connected after retraction."""
+    if k >= len(choices):
+        return choices
+
+    def exposure(cell) -> int:
+        x, y = cell
+        exposure = 0
+
+        for xn, yn in [
+            # index of 4 neighboring cells
+            (x, (y-1) % 100),
+            (x, (y+1) % 100),
+            ((x-1) % 100, y),
+            ((x+1) % 100, y)
+        ]:
+            if amoeba_map[xn][yn] == State.empty.value:
+                exposure += 1
+
+        return exposure
+
+    sorted_choices = sorted(
+        [(cell, exposure(cell)) for cell in choices],
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    return [cell for cell, _ in sorted_choices[:k]]
 
 
 #------------------------------------------------------------------------------
@@ -272,8 +302,9 @@ class BucketAttack(Strategy):
         unoccupied_target_cells = target - set(ameoba_cells)
         to_occupy = set(occupiable_cells).intersection(unoccupied_target_cells)
 
-        retract = list(retractable_cells)[:len(to_occupy)]
-        extend = list(to_occupy)
+        k = min(len(to_occupy), len(retractable_cells))
+        retract = retract_k(k, list(retractable_cells), curr_state.amoeba_map)
+        extend = list(to_occupy)[:k]
 
         # debug
         visualize_reshape(
