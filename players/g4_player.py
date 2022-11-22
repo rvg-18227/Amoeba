@@ -336,10 +336,28 @@ class BucketAttack(Strategy):
         return cog
     
     def _get_xmax(self, curr_state: AmoebaState) -> int:
-        """Returns the x-value of the rightmost Ameoba cell."""
-        ameoba_xs, _ = np.where(curr_state.amoeba_map == State.ameoba.value)
+        """Returns the x-value of the "rightmost" Ameoba cell.
+        
+        Note: when the ameoba's bucket arm moves from x=99 to the right, the x-value
+        will wrap around to 0. In this case, xmax is 0 since that's where the bucket
+        arms are. Below is a graphical illustration:
 
-        return max(ameoba_xs)
+                       x=0     ...     x = 98  x = 99
+                        .                 .      .
+                                          .      .
+                                          .      .
+                        .                 .      .
+                      (xmax)
+        """
+        ameoba_xs, _ = np.where(curr_state.amoeba_map == State.ameoba.value)
+        xmin, xmax = min(ameoba_xs), max(ameoba_xs)
+
+        # TODO: 5 is a magic number that should work... This is hacky though.
+        if xmax == 99 and xmin < 5:
+            xs = ameoba_xs[ameoba_xs <= 5]
+            return max(xs)
+
+        return xmax
 
     def _in_shape(self, curr_state: AmoebaState) -> bool:
         xmax = self._get_xmax(curr_state)
