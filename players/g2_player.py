@@ -8,6 +8,7 @@ import numpy.typing as npt
 import constants
 import matplotlib.pyplot as plt
 from enum import Enum
+import math
 
 turn = 0
 
@@ -141,19 +142,19 @@ class Player:
         self.extendable_cells: List[Tuple[int, int]] = None
         self.num_available_moves: int = None
         
-    def generate_tooth_formation(self, size: int) -> npt.NDArray:
+    def generate_comb_formation(self, size: int) -> npt.NDArray:
         formation = np.zeros((constants.map_dim, constants.map_dim), dtype=np.int8)
         center_x = constants.map_dim // 2
         center_y = constants.map_dim // 2
         
-        backbone_size = ((size // 5) * 2) + 2
+        backbone_size = (size // 5) * 2
         teeth_size = size - (backbone_size * 2)
-        
+                
         # print("size: {}, backbone_size: {}, teeth_size: {}".format(size, backbone_size, teeth_size))
         
         formation[center_x, center_y] = 1
         formation[center_x - 1, center_y] = 1
-        for i in range(1, ((backbone_size - 1) // 2) + 1):
+        for i in range(1, round((backbone_size - 1) / 2 + 0.1) + 1):
             # first layer of backbone
             formation[center_x, center_y + i] = 1
             formation[center_x, center_y - i] = 1
@@ -163,9 +164,6 @@ class Player:
         for i in range(1, teeth_size + 1, 2):
             formation[center_x + 1, center_y + i] = 1
             formation[center_x + 1, center_y - i] = 1
-        for i in range(1, teeth_size + 1, 2):
-            formation[center_x + 2, center_y + i] = 1
-            formation[center_x + 2, center_y - i] = 1
 
         # show_amoeba_map(formation)
         return formation
@@ -175,34 +173,53 @@ class Player:
         """ Function which takes a starting amoeba state and a desired amoeba state and generates a set of retracts and extends
             to morph the amoeba shape towards the desired shape.
         """
-
+        
         current_points = map_to_coords(self.amoeba_map)
         desired_points = map_to_coords(desired_amoeba)
         
         potential_retracts = [p for p in list(set(current_points).difference(set(desired_points))) if p in self.retractable_cells]
         potential_extends = [p for p in list(set(desired_points).difference(set(current_points))) if p in self.extendable_cells]
-        
-        print("Potential Retracts", potential_retracts)
-        print("Potential Extends", potential_extends)
-
-        # Ensure we can morph given our available moves
-        if len(potential_retracts) > self.num_available_moves:
-            return [], []
-        
+            
         # Loop through potential extends, searching for a matching retract
         retracts = []
         extends = []
-        for potential_extend in potential_extends:
-            for potential_retract in potential_retracts:
-                if self.check_move(retracts + [potential_retract], extends + [potential_extend]):
-                    # matching retract found, add the extend and retract to our lists
-                    retracts.append(potential_retract)
-                    potential_retracts.remove(potential_retract)
-                    extends.append(potential_extend)
-                    potential_extends.remove(potential_extend)
-                    break
+        for potential_extend in [p for p in potential_extends]:
+            # Ensure we only move as much as possible given our current metabolism
+            if len(extends) >= self.num_available_moves:
+                break
+            
+            matching_retracts = [p for p in potential_retracts if self.check_move(retracts + [p], extends + [potential_extend])]
+            matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))
+            
+            # Matching retract found, add the extend and retract to our lists
+            if len(matching_retracts):
+                retracts.append(matching_retracts[-1])
+                potential_retracts.remove(matching_retracts[-1])
+                extends.append(potential_extend)
+                potential_extends.remove(potential_extend)
                 
-        # show_amoeba_map(self.amoeba_map, retracts, extends)
+        # If we have moves remaining, try and get closer to the desired formation
+        # if len(extends) < self.num_available_moves and len(potential_retracts):
+        #     desired_extends = [p for p in list(set(desired_points).difference(set(current_points))) if p not in self.extendable_cells]
+        #     unused_extends = [p for p in self.extendable_cells if p not in extends]
+            
+        #     for potential_retract in [p for p in potential_retracts]:
+        #         for desired_extend in desired_extends:
+        #             curr_dist = math.dist(potential_retract, desired_extend)
+                    
+        #             matching_extends = [p for p in unused_extends if self.check_move(retracts + [potential_retract], extends + [p])]
+        #             matching_extends.sort(key=lambda p: math.dist(p, desired_extend))
+                    
+        #             if len(matching_extends) and  math.dist(potential_retract, matching_extends[0]) < curr_dist:
+        #                 # show_amoeba_map(self.amoeba_map, [potential_retract], [matching_extends[0]])
+        #                 retracts.append(potential_retract)
+        #                 potential_retracts.remove(potential_retract)
+        #                 extends.append(matching_extends[0])
+        #                 unused_extends.remove(matching_extends[0]) 
+        #                 break
+                    
+                
+        show_amoeba_map(self.amoeba_map, retracts, extends)
         return retracts, extends
         
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
@@ -309,7 +326,7 @@ class Player:
 
         memory_fields = read_memory(info)
         if not memory_fields[MemoryFields.Initialized]:
-            retracts, moves = self.get_morph_moves(self.generate_tooth_formation(self.current_size))
+            retracts, moves = self.get_morph_moves(self.generate_comb_formation(self.current_size))
             if len(moves) == 0:
                 info = change_memory_field(info, MemoryFields.Initialized, True)
                 memory_fields = read_memory(info)
@@ -318,10 +335,9 @@ class Player:
             curr_backbone_col = min(x for x, _ in map_to_coords(self.amoeba_map))
             vertical_shift = curr_backbone_col % 2
             offset = (curr_backbone_col + 1) - (constants.map_dim // 2)
-            next_tooth = np.roll(self.generate_tooth_formation(self.current_size), offset + 1, 0)
+            next_comb = np.roll(self.generate_comb_formation(self.current_size), offset + 1, 0)
             # Shift up/down by 1 every other column
-            next_tooth = np.roll(next_tooth, vertical_shift, 1)
-            retracts, moves = self.get_morph_moves(next_tooth)
-            print(retracts,  moves)
+            next_comb = np.roll(next_comb, vertical_shift, 1)
+            retracts, moves = self.get_morph_moves(next_comb)
 
         return retracts, moves, info
