@@ -141,15 +141,29 @@ class RakeFormation(Formation):
 
     def get_next_formation_points(self, state):
         nCells = sum([sum(row) for row in state.amoeba_map])
+        amoebaMap = state.amoeba_map
         if self.phase == 0:
             return self._get_starting_formation(nCells)
-        # calculate x
-        # calculate yOffset
-        # return _get_formation(x, yOffset, state)
-        # TODO: merge with another get_formation if metabolism is lower than n moved
         elif self.phase == 1:
-            return self._get_formation(50, 50, state, nCells)
+            xOffset, yOffset = self._get_current_xy(amoebaMap)
+            print(xOffset)
+            return self._get_formation(xOffset+1, yOffset, state, nCells)
         raise NotImplementedError
+
+    def _get_current_xy(self, amoebaMap):
+        '''
+        Returns the current x and y offsets of the amoeba
+        Assumes already in starting formation or moving
+
+        :param amoebaMap: The amoeba map
+        :return: A tuple of the current x and y
+        '''
+        #TODO: make this more accurate
+        xOffset = min([i for i, row in enumerate(amoebaMap) if sum(row) > 0])
+        firstOneIdx = [list(row).index(1) for row in amoebaMap if sum(row) > 0]
+        yOffset = min(firstOneIdx)
+
+        return xOffset, yOffset
 
     def _get_formation(self, x, yOffset, state, nCells):
         '''
@@ -161,7 +175,16 @@ class RakeFormation(Formation):
         :param nCells: The number of cells
         :return: A list of the formation points
         '''
-        raise NotImplementedError
+        nChunks = nCells // 7
+        formation = []
+        for i in range(nChunks):
+            formation += self._generate_chunk(x, yOffset)
+            yOffset += 3
+    
+        # Add extra cells
+        formation += self._generate_chunk(x, yOffset)[:nCells % 7]
+
+        return formation
 
     def _get_starting_formation(self, nCells):
         '''
@@ -273,15 +296,14 @@ class Player:
         # update byte of info
         BACTERIA_RATIO = 0.001 #TODO, maybe based on size of total amoeba and size of periphery??
         percent_bacteria = nAdjacentBacteria / len(current_percept.periphery)
-        print("percent_bacteria", percent_bacteria)
+        # print("percent_bacteria", percent_bacteria)
         count += 1 if percent_bacteria > BACTERIA_RATIO else -1
         count = max(0, count)
         count = min(7, count)
-        print("count", count)
 
         # if high density, use space filling curve
-        if count == 7:
-            self.formation == SpaceCurveFormation()
+        # if count >= 6:
+        #     self.formation == SpaceCurveFormation()
 
         self.formation.update(phase)
         goalFormation = self.formation.get_next_formation_points(current_percept)
@@ -299,6 +321,9 @@ class Player:
 
         info = self.encode_info(phase, count, info)
 
+        print("retract", retract)
+        print("movable", movable)
+        print("phase", phase)
         return retract, movable, info
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria):
@@ -376,7 +401,7 @@ class TestAmoeba():
                 self.amoeba_map[i][j] = 1
 def show_formation_test():
     formation = RakeFormation()
-    formation.update(0)
+    formation.update(1)
     points = formation.get_next_formation_points(TestAmoeba())
     x, y = zip(*points)
     plt.scatter(x, y)
