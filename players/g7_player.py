@@ -5,12 +5,55 @@ import logging
 from matplotlib import pyplot as plt
 from copy import deepcopy
 
+# ---------------------------------------------------------------------------- #
+#                               Helper Functions                               #
+# ---------------------------------------------------------------------------- #
 
 def wrap_point(x, y):
     '''
     Wrap the point around the grid
     '''
     return (x % 100, y % 100)
+
+def get_neighbors(x, y, amoeba_map):
+    neighbors = [wrap_point(x - 1, y), wrap_point(x + 1, y), wrap_point(x, y + 1), wrap_point(x, y - 1)]
+    return [n for n in neighbors if amoeba_map[n[0]][n[1]] == 1]
+
+def breaks_amoeba(point, amoeba_map):
+    '''
+    Returns whether or not the given point breaks the amoeba
+
+    :param point: The point to check
+    :param amoeba_map: The amoeba map
+    :return: True if the point breaks the amoeba, False otherwise
+    '''
+    x, y = point
+    # check that all amoeba cells are connected
+    isolated_neighbors = get_neighbors(x, y, amoeba_map)
+    queue = [isolated_neighbors[0]] #todso heapq??
+    copy_amoeba_map = deepcopy(amoeba_map)
+    copy_amoeba_map[x][y] = 0
+    visited = set()
+    to_visit_isolated_connections = set(isolated_neighbors)
+    while len(queue) > 0:
+        cur_x, cur_y = queue.pop(0)
+        # if(copy_amoeba_map[cur_x][cur_y] == 0):
+        #     print(cur_x, cur_y) #TODO: fix, this still prints
+        if (cur_x, cur_y) in visited:
+            continue
+        if (cur_x, cur_y) in to_visit_isolated_connections:
+            to_visit_isolated_connections.remove((cur_x, cur_y))
+        visited.add((cur_x, cur_y))
+        neighbors = get_neighbors(cur_x, cur_y, copy_amoeba_map)
+        queue.extend(neighbors)
+        if len(to_visit_isolated_connections) == 0:
+            return False
+
+    return len(visited - set([(i, j) for i, row in enumerate(copy_amoeba_map) for j, cell in enumerate(row) if cell != 0])) > 0 or len(visited) != len(set([(i, j) for i, row in enumerate(copy_amoeba_map) for j, cell in enumerate(row) if cell != 0]))
+
+# ---------------------------------------------------------------------------- #
+#                               Formation Classes                              #
+# ---------------------------------------------------------------------------- #
 
 class Formation:
     def __init__(self):
@@ -57,22 +100,26 @@ class Formation:
                 toMove.append(point)
         return toMove
 
-    def get_n_moves(self, allRetracable, pointsToMoveTo, state):
+    def get_n_moves(self, allRetracable, pointsToMoveTo, state, n_cells_can_move):
         ''' 
         Returns the points to retract and move so that len(pointsToMoveTo) == len(pointsToRetract)
 
         :param allRetracable: A list of all points that can be retracted
         :param pointsToMoveTo: A list of all points that need to be moved to
         :param state: The current state
+        :param n_cells_can_move: The number of cells that can move based on the metabolism
         :return: A tuple of the points to retract and the points to move to
         '''
         #TODO: do this smartly
         amoebaMapCopy = deepcopy(state.amoeba_map)
         allValidRetracable = []
         for i, point in enumerate(allRetracable):
-            if not self._breaks_amoeba(point, amoebaMapCopy):
+            if not breaks_amoeba(point, amoebaMapCopy):
                 allValidRetracable.append(point)
                 amoebaMapCopy[point[0]][point[1]] = 0
+
+        allValidRetracable = allValidRetracable[:n_cells_can_move]
+        pointsToMoveTo = pointsToMoveTo[:n_cells_can_move]
 
         if len(allValidRetracable) > len(pointsToMoveTo):
             return allValidRetracable[:len(pointsToMoveTo)], pointsToMoveTo
@@ -88,6 +135,11 @@ class Formation:
         :param state: The current state
         :return: A list of the next formation points
         '''
+        raise NotImplementedError("Must be implemented by subclass")
+
+class RakeFormation(Formation):
+
+    def get_next_formation_points(self, state):
         nCells = sum([sum(row) for row in state.amoeba_map])
         if self.phase == 0:
             return self._get_starting_formation(nCells)
@@ -148,42 +200,15 @@ class Formation:
         '''
         chunk = [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (0, 2), (1, 2)]
         return [(x + xOffset, y + yOffset) for x, y in chunk]
-        
-    def _get_neighbors(self, x, y, amoeba_map):
-        neighbors = [wrap_point(x - 1, y), wrap_point(x + 1, y), wrap_point(x, y + 1), wrap_point(x, y - 1)]
-        return [n for n in neighbors if amoeba_map[n[0]][n[1]] == 1]
 
-    def _breaks_amoeba(self, point, amoeba_map):
-        '''
-        Returns whether or not the given point breaks the amoeba
+class SpaceCurveFormation(Formation):
 
-        :param point: The point to check
-        :param amoeba_map: The amoeba map
-        :return: True if the point breaks the amoeba, False otherwise
-        '''
-        x, y = point
-        # check that all amoeba cells are connected
-        isolated_neighbors = self._get_neighbors(x, y, amoeba_map)
-        queue = [isolated_neighbors[0]] #todso heapq??
-        copy_amoeba_map = deepcopy(amoeba_map)
-        copy_amoeba_map[x][y] = 0
-        visited = set()
-        to_visit_isolated_connections = set(isolated_neighbors)
-        while len(queue) > 0:
-            cur_x, cur_y = queue.pop(0)
-            # if(copy_amoeba_map[cur_x][cur_y] == 0):
-            #     print(cur_x, cur_y) #TODO: fix, this still prints
-            if (cur_x, cur_y) in visited:
-                continue
-            if (cur_x, cur_y) in to_visit_isolated_connections:
-                to_visit_isolated_connections.remove((cur_x, cur_y))
-            visited.add((cur_x, cur_y))
-            neighbors = self._get_neighbors(cur_x, cur_y, copy_amoeba_map)
-            queue.extend(neighbors)
-            if len(to_visit_isolated_connections) == 0:
-                return False
+    def get_next_formation_points(self, state):
+        raise NotImplementedError
 
-        return len(visited - set([(i, j) for i, row in enumerate(copy_amoeba_map) for j, cell in enumerate(row) if cell != 0])) > 0 or len(visited) != len(set([(i, j) for i, row in enumerate(copy_amoeba_map) for j, cell in enumerate(row) if cell != 0]))
+# ---------------------------------------------------------------------------- #
+#                               Main Player Class                              #
+# ---------------------------------------------------------------------------- #
 
 class Player:
     def __init__(self, rng: np.random.Generator, logger: logging.Logger, metabolism: float, goal_size: int,
@@ -219,7 +244,7 @@ class Player:
         self.goal_size = goal_size
         self.current_size = goal_size / 4
 
-        self.formation = Formation()
+        self.formation = RakeFormation()
 
 
     def move(self, last_percept, current_percept, info) -> (list, list, int):
@@ -236,21 +261,27 @@ class Player:
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
         self.current_size = current_percept.current_size
-        mini = min(5, len(current_percept.periphery) // 2) #TODO change
+        n_cells_can_move = int(self.metabolism * self.current_size)
+        
 
         nAdjacentBacteria = 0
         for i, j in current_percept.bacteria:
             nAdjacentBacteria += 1
             current_percept.amoeba_map[i][j] = 1
-        # print("nAdjacentBacteria: ", nAdjacentBacteria)
 
         phase, count, info = self.decode_info(info)
         # update byte of info
-        BACTERIA_RATIO = 0.5
+        BACTERIA_RATIO = 0.001 #TODO, maybe based on size of total amoeba and size of periphery??
         percent_bacteria = nAdjacentBacteria / len(current_percept.periphery)
+        print("percent_bacteria", percent_bacteria)
         count += 1 if percent_bacteria > BACTERIA_RATIO else -1
         count = max(0, count)
         count = min(7, count)
+        print("count", count)
+
+        # if high density, use space filling curve
+        if count == 7:
+            self.formation == SpaceCurveFormation()
 
         self.formation.update(phase)
         goalFormation = self.formation.get_next_formation_points(current_percept)
@@ -260,7 +291,7 @@ class Player:
         allMovable = self.find_movable_cells(allRetractable, current_percept.periphery, current_percept.amoeba_map, current_percept.bacteria)
         toMove = self.formation.get_moveable_points(allMovable, goalFormation, current_percept)
 
-        retract, movable = self.formation.get_n_moves(allRetractable, toMove, current_percept)
+        retract, movable = self.formation.get_n_moves(allRetractable, toMove, current_percept, n_cells_can_move)
         
         if len(retract) == 0 and len(movable) == 0 and phase == 0:
             phase = 1
@@ -344,7 +375,7 @@ class TestAmoeba():
             for j in range(startY, startY + self.size):
                 self.amoeba_map[i][j] = 1
 def show_formation_test():
-    formation = Formation()
+    formation = RakeFormation()
     formation.update(0)
     points = formation.get_next_formation_points(TestAmoeba())
     x, y = zip(*points)
