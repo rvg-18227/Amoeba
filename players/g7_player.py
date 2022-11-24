@@ -147,12 +147,19 @@ class RakeFormation(Formation):
         #TODO: change ordering of retractable points, maybe based on distance to center of formation?
         if self.phase == 0:#go forward
             xOffset, yOffset = self._get_current_xy(amoebaMap)
+            #TODO start moving when basically ready, also for phase 1 can move when only additions are new cells
             return self._get_formation(xOffset+1, yOffset, state, nCells)
         elif self.phase == 1:# move down (teeth), not implemented!!!!!
             xOffset, yOffset = self._get_current_xy(amoebaMap)
             #TODO: merge with next move for those that are already in position?
             # for each x, if they all in the right place, move to the next x
             return self._get_formation(xOffset+1, yOffset, state, nCells)
+
+        # Can have 4 phases (we use 2 bits of info)
+        # Phase 0: get into formation/go forward
+        # Phase 1: move down (teeth)
+        # Phase 2: 2 lines, move inwards
+        # Phase 3: 2 lines move outwards
         raise NotImplementedError
 
     def _get_current_xy(self, amoebaMap):
@@ -203,6 +210,13 @@ class RakeFormation(Formation):
         # Add extra cells
         formation += self._generate_chunk(x, yOffset)[:nCells % 7]
 
+        #TODO: when wrap all the way around
+        # generate secondary line
+        # |-| moving in and out?
+
+        # when even more cells: todo
+        # need to handle up to 100x100 cells?
+        #maybe at certain point, just move switch to space filling curve
         return formation
 
     def _generate_chunk(self, xOffset, yOffset):
@@ -295,6 +309,10 @@ class Player:
         count += 1 if percent_bacteria > BACTERIA_RATIO else -1
         count = max(0, count)
         count = min(7, count)
+        #TODO: maybe once count at 7, just always use SpaceCurveFormation?
+        # maybe just use 1 bit based on initial bacteria ratio?
+        # all bacteria instantly run away
+        # when is SFC better (0.3? 0.1?)?
 
         # if high density, use space filling curve
         # if count >= 6:
