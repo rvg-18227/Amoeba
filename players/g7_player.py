@@ -78,7 +78,7 @@ class Formation:
         amoebaMap = state.amoeba_map
         periphery = state.periphery
         for point in periphery:
-            if point not in goalFormation: #TODO: and no break??
+            if point not in goalFormation:
                 canRetract.append(point)
 
         return canRetract
@@ -143,10 +143,12 @@ class RakeFormation(Formation):
         nCells = sum([sum(row) for row in state.amoeba_map])
         amoebaMap = state.amoeba_map
         #TODO what to do when wrap all the way around?? phase 2, 3, 4...
+        #TODO: change ordering of moveable points
+        #TODO: change ordering of retractable points, maybe based on distance to center of formation?
         if self.phase == 0:#go forward
             xOffset, yOffset = self._get_current_xy(amoebaMap)
             return self._get_formation(xOffset+1, yOffset, state, nCells)
-        elif self.phase == 1:#move down todo
+        elif self.phase == 1:# move down (teeth), not implemented!!!!!
             xOffset, yOffset = self._get_current_xy(amoebaMap)
             #TODO: merge with next move for those that are already in position?
             # for each x, if they all in the right place, move to the next x
