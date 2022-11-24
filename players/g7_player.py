@@ -142,11 +142,14 @@ class RakeFormation(Formation):
     def get_next_formation_points(self, state):
         nCells = sum([sum(row) for row in state.amoeba_map])
         amoebaMap = state.amoeba_map
-        if self.phase == 0:
-            return self._get_starting_formation(nCells)
-        elif self.phase == 1:
+        #TODO what to do when wrap all the way around?? phase 2, 3, 4...
+        if self.phase == 0:#go forward
             xOffset, yOffset = self._get_current_xy(amoebaMap)
-            print(xOffset)
+            return self._get_formation(xOffset+1, yOffset, state, nCells)
+        elif self.phase == 1:#move down todo
+            xOffset, yOffset = self._get_current_xy(amoebaMap)
+            #TODO: merge with next move for those that are already in position?
+            # for each x, if they all in the right place, move to the next x
             return self._get_formation(xOffset+1, yOffset, state, nCells)
         raise NotImplementedError
 
@@ -159,9 +162,23 @@ class RakeFormation(Formation):
         :return: A tuple of the current x and y
         '''
         #TODO: make this more accurate
-        xOffset = min([i for i, row in enumerate(amoebaMap) if sum(row) > 0])
-        firstOneIdx = [list(row).index(1) for row in amoebaMap if sum(row) > 0]
-        yOffset = min(firstOneIdx)
+        xs_with_cells = [i for i, row in enumerate(amoebaMap) for j, cell in enumerate(row) if cell != 0]
+        xOffset = min(xs_with_cells)
+        if 99 in xs_with_cells:
+            for i in reversed(range(100)):
+                if i in xs_with_cells:
+                    xOffset = i
+                else:
+                    break
+
+        ys_with_cells = [j for i, row in enumerate(amoebaMap) for j, cell in enumerate(row) if cell != 0]
+        yOffset = min(ys_with_cells)
+        if 99 in ys_with_cells:
+            for i in reversed(range(100)):
+                if i in ys_with_cells:
+                    yOffset = i
+                else:
+                    break
 
         return xOffset, yOffset
 
@@ -186,30 +203,6 @@ class RakeFormation(Formation):
 
         return formation
 
-    def _get_starting_formation(self, nCells):
-        '''
-        Returns the starting formation points units of 7 as shown:      
-        |1|2|3|
-        |4|5|
-        |6|7|
-
-        :param nCells: The number of cells
-        :return: A list of the starting formation points
-        '''
-        nChunks = nCells // 7
-        xOffset = 50
-        yOffset = 50 - (nChunks // 2) * 3
-        formation = []
-        for i in range(nChunks):
-            formation += self._generate_chunk(xOffset, yOffset)
-            yOffset += 3
-    
-        # Add extra cells
-        formation += self._generate_chunk(xOffset, yOffset)[:nCells % 7]
-
-        return formation
-
-
     def _generate_chunk(self, xOffset, yOffset):
         '''
         Generates a chunk of the formation
@@ -222,7 +215,7 @@ class RakeFormation(Formation):
         :return: A list of the chunk points
         '''
         chunk = [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (0, 2), (1, 2)]
-        return [(x + xOffset, y + yOffset) for x, y in chunk]
+        return [wrap_point(x + xOffset, y + yOffset) for x, y in chunk]
 
 class SpaceCurveFormation(Formation):
 
@@ -321,9 +314,7 @@ class Player:
 
         info = self.encode_info(phase, count, info)
 
-        print("retract", retract)
-        print("movable", movable)
-        print("phase", phase)
+        # print("phase", phase)
         return retract, movable, info
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria):
