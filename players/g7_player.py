@@ -8,6 +8,14 @@ from copy import deepcopy
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
 # ---------------------------------------------------------------------------- #
+def wrapped_range(start, end, step=1):
+    '''
+    Returns a range that wraps around the grid
+    '''
+    if start < end:
+        return list(range(start, end, step))
+    else:
+        return list(range(start, 100, step)) + list(range(0, end, step))
 
 def wrap_point(x, y):
     '''
@@ -95,10 +103,30 @@ class Formation:
         toMove = []
         amoebaMap = state.amoeba_map
         periphery = state.periphery
+        # TODO: make this work? moveablePoints.sort(key=lambda point: self._dist_btwn_points(point, self._center_of_formation(goalFormation)))
         for point in moveablePoints:
             if point in goalFormation:
                 toMove.append(point)
         return toMove
+
+    def _dist_btwn_points(self, point1, point2):
+        '''
+        Returns the distance between two points
+
+        :param point1: The first point
+        :param point2: The second point
+        :return: The distance between the two points
+        '''
+        return np.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
+    
+    def _center_of_formation(self, formation):
+        '''
+        Returns the center of the formation
+
+        :param formation: The formation
+        :return: The center of the formation
+        '''
+        return (sum([point[0] for point in formation]) / len(formation), sum([point[1] for point in formation]) / len(formation))
 
     def get_n_moves(self, allRetracable, pointsToMoveTo, state, n_cells_can_move):
         ''' 
@@ -110,8 +138,9 @@ class Formation:
         :param n_cells_can_move: The number of cells that can move based on the metabolism
         :return: A tuple of the points to retract and the points to move to
         '''
-        #TODO: do this smartly
         amoebaMapCopy = deepcopy(state.amoeba_map)
+        moveDups = [point for point in pointsToMoveTo if pointsToMoveTo.count(point) > 1]
+        validPointsToMoveTo = [point for i, point in enumerate(pointsToMoveTo) if point not in moveDups and pointsToMoveTo.index(point) == i]
         allValidRetracable = []
         for i, point in enumerate(allRetracable):
             if not breaks_amoeba(point, amoebaMapCopy):
@@ -119,14 +148,14 @@ class Formation:
                 amoebaMapCopy[point[0]][point[1]] = 0
 
         allValidRetracable = allValidRetracable[:n_cells_can_move]
-        pointsToMoveTo = pointsToMoveTo[:n_cells_can_move]
+        validPointsToMoveTo = validPointsToMoveTo[:n_cells_can_move]
 
-        if len(allValidRetracable) > len(pointsToMoveTo):
-            return allValidRetracable[:len(pointsToMoveTo)], pointsToMoveTo
-        elif len(allValidRetracable) < len(pointsToMoveTo):
-            return allValidRetracable, pointsToMoveTo[:len(allValidRetracable)]
+        if len(allValidRetracable) > len(validPointsToMoveTo):
+            return allValidRetracable[:len(validPointsToMoveTo)], validPointsToMoveTo
+        elif len(allValidRetracable) < len(validPointsToMoveTo):
+            return allValidRetracable, validPointsToMoveTo[:len(allValidRetracable)]
         else:
-            return allValidRetracable, pointsToMoveTo
+            return allValidRetracable, validPointsToMoveTo
 
     def get_next_formation_points(self, state):
         '''
@@ -137,30 +166,64 @@ class Formation:
         '''
         raise NotImplementedError("Must be implemented by subclass")
 
+    def get_phase(self, phase, state, retract, movable):
+        '''
+        Returns the current phase
+        
+        :param phase: The current phase
+        :param state: The current state
+        :param retract: The points to retract
+        :param movable: The points to move to
+        :return: The current phase
+        '''
+        raise NotImplementedError("Must be implemented by subclass")
+
 class RakeFormation(Formation):
 
     def get_next_formation_points(self, state):
         nCells = sum([sum(row) for row in state.amoeba_map])
         amoebaMap = state.amoeba_map
-        #TODO what to do when wrap all the way around?? phase 2, 3, 4...
+
         #TODO: change ordering of moveable points
-        #TODO: change ordering of retractable points, maybe based on distance to center of formation?
+        #TODO: change ordering of retractable points, maybe based on distance to center of formation? mostly matters at the beginning
         if self.phase == 0:#go forward
-            xOffset, yOffset = self._get_current_xy(amoebaMap)
+            xStart, xEnd, yStart, yEnd = self._get_current_xy(amoebaMap)
             #TODO start moving when basically ready, also for phase 1 can move when only additions are new cells
+            xOffset, yOffset = xStart, yStart #self._get_midpoint(yStart, yEnd)
+            if nCells > 7 * 33:
+                return self._get_formation(xOffset+1, yOffset, state, nCells)\
+                    + [(xOffset+i, yOffset) for i in range(1, 6)]\
+                    + self._get_formation(xOffset+6, yOffset, state, nCells)
             return self._get_formation(xOffset+1, yOffset, state, nCells)
         elif self.phase == 1:# move down (teeth), not implemented!!!!!
-            xOffset, yOffset = self._get_current_xy(amoebaMap)
-            #TODO: merge with next move for those that are already in position?
-            # for each x, if they all in the right place, move to the next x
-            return self._get_formation(xOffset+1, yOffset, state, nCells)
+            raise NotImplementedError("Not implemented yet")
+        elif self.phase == 2:
+            xStart, xEnd, yStart, yEnd = self._get_current_xy(amoebaMap)
+            xOffset, yOffset = xStart, yStart #self._get_midpoint(yStart, yEnd)
 
+            return self._get_formation(xStart+1, yOffset, state, nCells)\
+                    + [(i, yOffset) for i in wrapped_range(xStart+1, xEnd-4)]\
+                    + self._get_formation(xEnd-4, yOffset, state, nCells)
+        elif self.phase == 3:
+            xStart, xEnd, yStart, yEnd = self._get_current_xy(amoebaMap)
+            xOffset, yOffset = xStart, yStart #self._get_midpoint(yStart, yEnd)
+
+            return self._get_formation(xStart-1, yOffset, state, nCells)\
+                    + [(i, yOffset) for i in wrapped_range(xStart+1, xEnd-2)]\
+                    + self._get_formation(xEnd-2, yOffset, state, nCells)
+        
         # Can have 4 phases (we use 2 bits of info)
         # Phase 0: get into formation/go forward
         # Phase 1: move down (teeth)
-        # Phase 2: 2 lines, move inwards
-        # Phase 3: 2 lines move outwards
+        # Phase 2: 2 lines, move outwards
+        # Phase 3: 2 lines move inwards
         raise NotImplementedError
+
+    def _get_midpoint(self, start, end):
+        if end < start:
+            #TODO: 44 -> 3 = midpt of (100-44 + 3-0)//2 = 28
+            return (100 - start + end - 0) // 2
+        return (start + end) // 2
 
     def _get_current_xy(self, amoebaMap):
         '''
@@ -168,28 +231,32 @@ class RakeFormation(Formation):
         Assumes already in starting formation or moving
 
         :param amoebaMap: The amoeba map
-        :return: A tuple of the current x and y
+        :return: A tuple of the start and end x and y
         '''
-        #TODO: make this more accurate
-        xs_with_cells = [i for i, row in enumerate(amoebaMap) for j, cell in enumerate(row) if cell != 0]
-        xOffset = min(xs_with_cells)
-        if 99 in xs_with_cells:
-            for i in reversed(range(100)):
-                if i in xs_with_cells:
-                    xOffset = i
-                else:
-                    break
+        cell_xs = [i for i, row in enumerate(amoebaMap) for j, cell in enumerate(row) if cell != 0]
 
-        ys_with_cells = [j for i, row in enumerate(amoebaMap) for j, cell in enumerate(row) if cell != 0]
-        yOffset = min(ys_with_cells)
-        if 99 in ys_with_cells:
-            for i in reversed(range(100)):
-                if i in ys_with_cells:
-                    yOffset = i
-                else:
-                    break
+        contiguousX = []
+        cell_xs = sorted(list(set(cell_xs)))
+        i = min(cell_xs)
+        for x in cell_xs:
+            if x != i:
+                contiguousX = cell_xs[i:] + contiguousX
+                break
+            contiguousX.append(x)
+            i += 1
 
-        return xOffset, yOffset
+        cell_ys = [j for i, row in enumerate(amoebaMap) for j, cell in enumerate(row) if cell != 0]
+        contiguousY = []
+        cell_ys = sorted(list(set(cell_ys)))
+        i = min(cell_ys)
+        for y in cell_ys:
+            if y != i:
+                contiguousY = cell_ys[i:] + contiguousY
+                break
+            contiguousY.append(y)
+            i += 1
+
+        return contiguousX[0], contiguousX[-1], contiguousY[0], contiguousY[-1]
 
     def _get_formation(self, x, yOffset, state, nCells):
         '''
@@ -232,6 +299,18 @@ class RakeFormation(Formation):
         '''
         chunk = [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (0, 2), (1, 2)]
         return [wrap_point(x + xOffset, y + yOffset) for x, y in chunk]
+
+    def get_phase(self, phase, state, retract, movable):
+        nCells = sum([sum(row) for row in state.amoeba_map])
+        xStart, xEnd, yStart, yEnd = self._get_current_xy(state.amoeba_map)
+
+        if nCells > (7 * 33 * 2) + 6 and (phase == 1 or phase == 0):
+            return 2
+        elif phase == 2 and xEnd - xStart <= 6 + 2:
+            return 3
+        elif phase == 3 and  xStart - xEnd <= 4:
+            return 2
+        return phase
 
 class SpaceCurveFormation(Formation):
 
@@ -301,7 +380,7 @@ class Player:
             nAdjacentBacteria += 1
             current_percept.amoeba_map[i][j] = 1
 
-        phase, count, info = self.decode_info(info)
+        phase, count, isMoving, info = self.decode_info(info)
         # update byte of info
         BACTERIA_RATIO = 0.001 #TODO, maybe based on size of total amoeba and size of periphery??
         percent_bacteria = nAdjacentBacteria / len(current_percept.periphery)
@@ -315,7 +394,7 @@ class Player:
         # when is SFC better (0.3? 0.1?)?
 
         # if high density, use space filling curve
-        # if count >= 6:
+        # if count >= 6 or enough cells:
         #     self.formation == SpaceCurveFormation()
 
         self.formation.update(phase)
@@ -328,13 +407,17 @@ class Player:
 
         retract, movable = self.formation.get_n_moves(allRetractable, toMove, current_percept, n_cells_can_move)
         
-        if len(retract) == 0 and len(movable) == 0 and phase == 0:
-            phase = 1
-            return self.move(last_percept, current_percept, self.encode_info(1, count, info))
+        phase = self.formation.get_phase(phase, current_percept, retract, movable)
 
-        info = self.encode_info(phase, count, info)
+        if len(retract) == 0 and len(movable) == 0:
+            return self.move(last_percept, current_percept, self.encode_info(phase, count, 0, info))
+        else:
+            isMoving = 1
 
-        # print("phase", phase)
+        info = self.encode_info(phase, count, isMoving, info)
+
+        print("phase", phase)
+        print("isMoving", isMoving)
         return retract, movable, info
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria):
@@ -372,31 +455,32 @@ class Player:
 
         return out
 
-    def encode_info(self, phase: int, count: int, info: int) -> int:
+    def encode_info(self, phase: int, count: int, isMoving: int, info: int) -> int:
         """Encode the information to be sent
             Args:
                 phase (int): 2 bits for the current phase of the amoeba
                 count (int): 3 bits for the current count of the running density
-                info (int): 3 bits other info, still TODO
+                isMoving (int): 1 bit for whether the amoeba is getting into position or not
+                info (int): 2 bits other info, still TODO
             Returns:
                 int: the encoded information as an int
         """
         assert phase < 4
         info = 0
-        info_str = "{:02b}{:03b}{:03b}".format(phase, count, info)
+        info_str = "{:02b}{:03b}{:01b}{:02b}".format(phase, count, isMoving, info)
 
         return int(info_str, 2)
 
-    def decode_info(self, info: int) -> (int, int, int):
+    def decode_info(self, info: int) -> (int, int, int, int):
         """Decode the information received
             Args:
                 info (int): the information received
             Returns:
-                Tuple[int, int, int]: phase, count, info, the decoded information as a tuple
+                Tuple[int, int, int, int]: phase, count, isMoving, info, the decoded information as a tuple
         """
         info_str = "{0:b}".format(info).zfill(8)
 
-        return int(info_str[0:2], 2), int(info_str[2:5], 2), int(info_str[5:8], 2)
+        return int(info_str[0:2], 2), int(info_str[2:5], 2), int(info_str[5:6], 2), int(info_str[6:8], 2)
 
 
 
