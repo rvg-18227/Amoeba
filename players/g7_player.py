@@ -5,6 +5,7 @@ import logging
 from amoeba_state import AmoebaState
 from copy import deepcopy
 
+
 class Player:
     def __init__(self, rng: np.random.Generator, logger: logging.Logger, metabolism: float, goal_size: int,
                  precomp_dir: str) -> None:
@@ -53,43 +54,98 @@ class Player:
                     2. A list of positions the retracted cells have moved to
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
+        
         self.current_size = current_percept.current_size
         mini = min(5, len(current_percept.periphery) // 2)
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
+            current_percept.current_size += 1
 
-        # retract = [tuple(i) for i in self.rng.choice(current_percept.periphery, replace=False, size=mini)]
+        self.retractable = current_percept.periphery  
         
-        farm_is_moving = False
-        ys = self.get_y_of_sweep(current_percept.amoeba_map)
-        farm_is_moving = self.center_is_hollowed(current_percept.amoeba_map)
-        print(farm_is_moving)
-        print(ys)
-        if not farm_is_moving:
-            ys = [50, 51]
-        ys = ys[:2]
+    
+    def circular_formation_precomputation(self, current_percept):
+        """
+            Goal: Precomputation 
+            1. define a top arc between 135deg and 45 deg, precompute points across
+            2. define a second arc and sweep from 225deg to 315 deg
+            3. define a third arc and sweep from 315deg to 45deg
+            4. define a fourth arc and sweep from 135deg to 225deg
+        """
+        raise NotImplementedError
+    def vertical_point(self, current_percept, retractable):
+        
+        move = []
+        # upward-left move
+        top_reached = self.min_distance_to(0, 0, current_percept.periphery) == (0, 0)
+        while retractable and not top_reached:
+            x, y = retractable[0]
+            x_start, y_start = self.min_distance_to(0, 0, current_percept.periphery)
+            move.append(x_start - 1, y_start - 1)
+            top_reached = x_start - 1 < 1 or y_start -1 < 1
+        
+        # downward-from-left move
 
-        ys = [50, 51]
-        farm_is_moving = False
 
-        retract = self.retractable_farm_cells(current_percept.periphery, current_percept.amoeba_map, ys)
-        if farm_is_moving:
-            y_retracts = self.retractable_y_down(ys, current_percept.periphery, current_percept.amoeba_map)
-            retract = y_retracts + [move for move in retract if move not in y_retracts]
 
-        movable = self.moveable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
-                                          current_percept.bacteria)
-        movable = sorted([cell for cell in movable if not self._is_internal(cell[0], cell[1], current_percept.periphery, current_percept.amoeba_map)], key=lambda x: self._dist_to_center(x[0], x[1]))
-        if farm_is_moving:
-            y_moves = self.move_y_down(ys, current_percept.periphery, current_percept.amoeba_map, self.moveable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
-                                          current_percept.bacteria))
-            movable = y_moves + [move for move in movable if move not in y_moves]
-            print(y_moves)
-            print(movable)
-        movable = movable[:len(retract)]
-        info = 0
 
-        return retract, movable, info
+    def min_distance_to(self, x_target, y_target, periphery):
+        """
+        x_target, y_target:
+            => (0,0) = 0
+            => (0,1)
+        """
+        move_bit = {}
+        min_x, min_y = float('inf'), float('inf')
+        for (x, y) in periphery:
+            distance = abs(x_target - x) + abs(y_target - y)
+            if distance < abs(min_x - x_target) + abs(min_y - y_target):
+                min_x, min_y = x, y
+        return (min_x, min_y)
+    # def immobile_bacteria(self, current_percept):
+    # # To do need to ensure wall bacteria are considered
+    #     immobile_bateria = []
+    #     for (x, y) in current_percept.bacteria:
+    #         movable_nei = self.find_movable_neighbor(x, y, current_percept.amoeba_map, current_percept.bacteria)
+    #         if (x, y) not in movable_nei
+    #         nei_in_periphery = [i in current_percept.periphery for i in movable_nei]
+    #         if len(movable_nei) == 3 and:
+
+    # def find_neighbor_bacteria(self, x, y, current_percept):
+    #     nei_bacteria = []
+    #     for (x, y) in current_percept.bacteria:
+    #         if current_percept.amoeba_map[x][(y - 1) %100] in current_percept.bacteria:
+    #             nei_bacteria.append((x, (y - 1) %100))
+    #         if current_percept.amoeba_map[(x - 1) % 100][y] in current_percept.bacteria:
+    #             nei_bacteria.append(((x - 1) % 100, y))
+    #         if current_percept.amoba_map[x][(y + 1) % 100] in current_percept.bacteria:
+    
+    def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
+        movable = []
+        new_periphery = list(set(periphery).difference(set(retract)))
+        for i, j in new_periphery:
+            nbr = self.find_movable_neighbor(i, j, amoeba_map, bacteria)
+            for x, y in nbr:
+                if (x, y) not in movable:
+                    movable.append((x, y))
+
+        movable += retract
+
+        return movable[:mini]
+
+    def find_movable_neighbor(self, x, y, amoeba_map, bacteria):
+        out = []
+        if (x, y) not in bacteria:
+            if amoeba_map[x][(y - 1) % 100] == 0:
+                out.append((x, (y - 1) % 100))
+            if amoeba_map[x][(y + 1) % 100] == 0:
+                out.append((x, (y + 1) % 100))
+            if amoeba_map[(x - 1) % 100][y] == 0:
+                out.append(((x - 1) % 100, y))
+            if amoeba_map[(x + 1) % 100][y] == 0:
+                out.append(((x + 1) % 100, y))
+
+        return out
 
     def retractable_y_down(self, ys, periphery, amoeba_map):
         copy_amoeba_map = deepcopy(amoeba_map)
@@ -216,29 +272,3 @@ class Player:
                     movable.append((x, y))
         return movable
 
-    def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
-        movable = []
-        new_periphery = list(set(periphery).difference(set(retract)))
-        for i, j in new_periphery:
-            nbr = self.find_movable_neighbor(i, j, amoeba_map, bacteria)
-            for x, y in nbr:
-                if (x, y) not in movable:
-                    movable.append((x, y))
-
-        movable += retract
-
-        return movable[:mini]
-
-    def find_movable_neighbor(self, x, y, amoeba_map, bacteria):
-        out = []
-        if (x, y) not in bacteria:
-            if amoeba_map[x][(y - 1) % 100] == 0:
-                out.append((x, (y - 1) % 100))
-            if amoeba_map[x][(y + 1) % 100] == 0:
-                out.append((x, (y + 1) % 100))
-            if amoeba_map[(x - 1) % 100][y] == 0:
-                out.append(((x - 1) % 100, y))
-            if amoeba_map[(x + 1) % 100][y] == 0:
-                out.append(((x + 1) % 100, y))
-
-        return out
