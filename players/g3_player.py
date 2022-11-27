@@ -39,6 +39,16 @@ class Player:
         self.goal_size = goal_size
         self.current_size = goal_size / 4
 
+        self.turn = 0
+
+    def create_formation(self, last_percept, current_percept, info) -> (list, list, int):
+
+
+
+
+        return retract, movable, info
+
+
     def move(self, last_percept, current_percept, info) -> (list, list, int):
         """Function which retrieves the current state of the amoeba map and returns an amoeba movement
 
@@ -52,28 +62,31 @@ class Player:
                     2. A list of positions the retracted cells have moved to
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
+
+        self.turn += 1
         self.current_size = current_percept.current_size
-        mini = min(5, len(current_percept.periphery) // 2)
-        for i, j in current_percept.bacteria:
-            current_percept.amoeba_map[i][j] = 1
 
-        # retracts 5 -- change this to 3?
-        retract = set()
-        while len(retract) < 5:
-            i = self.rng.choice(current_percept.periphery, replace=False)
-            x = i[0]
-            y = i[1]
-            if x < 50 and y > 50:
-                retract.add(tuple(i))
-        retract = list(retract)
-        #retract = [tuple(i) for i in self.rng.choice(current_percept.periphery, replace=False, size=mini)]
+        if self.turn > 35: # could increase
+            return self.create_formation(last_percept, current_percept, info)
+        else:
+            # move amoeba forward
+            mini = min(5, len(current_percept.periphery) // 2)
+            for i, j in current_percept.bacteria:
+                current_percept.amoeba_map[i][j] = 1
 
-        movable = self.find_movable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
-                                          current_percept.bacteria, mini)
+            retract = set()
+            while len(retract) < 5:
+                i = self.rng.choice(current_percept.periphery, replace=False)
+                x = i[0]
+                y = i[1]
+                if x < 50 and y > 50:
+                    retract.add(tuple(i))
+            retract = list(retract)
 
-        info = 0
-
-        return retract, movable, info
+            movable = self.find_movable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
+                                              current_percept.bacteria, mini)
+            info = 0
+            return retract, movable, info
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
         movable = []
