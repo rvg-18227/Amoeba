@@ -203,7 +203,6 @@ class RakeFormation(Formation):
         nCells = sum([sum(row) for row in state.amoeba_map])
         xStart, xEnd, yStart, yEnd = self._get_current_xy(state.amoeba_map)
         emptyCols = self._get_empty_cols_between(xStart, xEnd, state.amoeba_map)
-        print(len(emptyCols))
         if phase == 0:
             phase = 0
         elif phase == 1:
@@ -257,10 +256,10 @@ class RakeFormation(Formation):
             previousPoints = remove_duplicates(previousPoints)[:nCells]
             totalCorrectPoints = sum([1 for point in previousPoints if point in amoebaPoints])
             # print(xStart, xEnd, yStart, yEnd)
-            print("totalCorrectPoints: ", totalCorrectPoints)
-            print(len(previousPoints))
+            # print("totalCorrectPoints: ", totalCorrectPoints)
+            # print(len(previousPoints))
             if totalCorrectPoints < len(previousPoints)*0.99:#
-                print("Using prev formation")
+                # print("Using prev formation")
                 previousPoints += self.allPoints
                 previousPoints = remove_duplicates(previousPoints)[:nCells]
                 return previousPoints
@@ -282,11 +281,11 @@ class RakeFormation(Formation):
             previousPoints = remove_duplicates(previousPoints)[:nCells]
             totalCorrectPoints = sum([1 for point in previousPoints if point in amoebaPoints])
             # print(xStart, xEnd, yStart, yEnd)
-            print("totalCorrectPoints: ", totalCorrectPoints)
-            print(len(previousPoints))
+            # print("totalCorrectPoints: ", totalCorrectPoints)
+            # print(len(previousPoints))
             if totalCorrectPoints < len(previousPoints)*0.99:
                 #TODO dont include all points in prevPoint and this calculation
-                print("Using prev formation")
+                # print("Using prev formation")
                 previousPoints += self.allPoints
                 previousPoints = remove_duplicates(previousPoints)[:nCells]
                 return previousPoints
@@ -378,13 +377,14 @@ class RakeFormation(Formation):
         :return: list of indices of empty cols
         '''
         nCells = sum([sum(row) for row in amoebaMap])
-        expectedLen = min(100, (3 * (nCells / 7)) % 100)
+        expectedLen = min(100, (3 * min(nCells // 7, 33)) % 100)
         emptyCols = []
 
         for i in wrapped_range(start, end+1):
-            if sum(amoebaMap[i]) <= (3 * expectedLen/4):#TODO: what should this be? smth related to expectedLen?
+            if sum(amoebaMap[i]) <= (3 * expectedLen/4):
                 emptyCols.append(i)
         if len(emptyCols) == 0:
+            print("no empty cols")
             return []
 
         continuousSeqs = {}
@@ -400,6 +400,7 @@ class RakeFormation(Formation):
         longestSeq = []
         maxVal = max(continuousSeqs.values())
         if maxVal <= 1:
+            print("No continuous seqs")
             return []
         idxOfMax = [k for k, v in continuousSeqs.items() if v == maxVal]
         modifiedIdxs = list(reversed(continuousSeqs.keys()))
