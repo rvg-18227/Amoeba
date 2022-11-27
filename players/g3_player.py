@@ -63,12 +63,12 @@ class Player:
     def get_right_row(self, periphery):
         # Credit: G8
         # Gets right row of amoeba to be retracted
-        # For each x coord, we want the one with the lowest x coord
+        # For each y coord, we want the one with the highest x coord
 
         top_row_vals = {} # key: y, value: x
         for (x, y) in periphery:
             if y in top_row_vals:
-                if x < top_row_vals[y]:
+                if x > top_row_vals[y]:
                     top_row_vals[y] = x
             else:
                 top_row_vals[y] = x
@@ -80,19 +80,29 @@ class Player:
         return top_row
 
     def create_formation(self, last_percept, current_percept, info) -> (list, list, int):
-        retract_left = self.get_left_row(current_percept.periphery) # list of tuples
-        retract_right = self.get_right_row(current_percept.periphery)
-
+        retract = self.get_left_row(current_percept.periphery)
         sorted_retract = sorted(retract, key=lambda x: x[1])
-
+        mini = len(sorted_retract)
         movable = self.find_movable_cells(sorted_retract, current_percept.periphery, current_percept.amoeba_map,
-                                          current_percept.bacteria, len(sorted_retract))
-
+                                          current_percept.bacteria, mini)
         sorted_movable_cells = sorted(movable, key=lambda x: x[1])
-
-        # sort?
         return sorted_retract, sorted_movable_cells, info
 
+        '''retract_left = self.get_left_row(current_percept.periphery) # list of tuples
+        retract_right = self.get_right_row(current_percept.periphery)
+
+        sorted_retract_left = sorted(retract_left, key=lambda x: x[1])
+        sorted_retract_right = sorted(retract_right, key=lambda x: x[1])
+
+        movable_left = self.find_movable_cells(sorted_retract_left, current_percept.periphery, current_percept.amoeba_map,
+                                          current_percept.bacteria, len(sorted_retract_left))
+        movable_right = self.find_movable_cells(sorted_retract_right, current_percept.periphery,
+                                               current_percept.amoeba_map,
+                                               current_percept.bacteria, len(sorted_retract_right))
+
+        sorted_movable_cells = movable_left + movable_right #sorted(movable, key=lambda x: x[1])'''
+
+        return sorted_retract, sorted_movable_cells, info
 
     def move(self, last_percept, current_percept, info) -> (list, list, int):
         """Function which retrieves the current state of the amoeba map and returns an amoeba movement
@@ -113,17 +123,13 @@ class Player:
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
 
-        if self.turn >= 0: # could increase
+        if self.turn < 40:
             return self.create_formation(last_percept, current_percept, info)
         else:
             # move amoeba forward
             mini = min(5, len(current_percept.periphery) // 2)
             for i, j in current_percept.bacteria:
                 current_percept.amoeba_map[i][j] = 1
-
-            #retract = self.get_left_row(current_percept.periphery)  # list of tuples
-            #sorted_retractable_cells = sorted(retract, key=lambda x: x[1])
-            #print(sorted_retractable_cells)
 
             retract = set()
             while len(retract) < 5:
@@ -140,12 +146,18 @@ class Player:
             return retract, movable, info
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
+        # sort periphery by y coord
+        '''sorted_periphery = sorted(periphery, key=lambda x: x[1])
+        lowest_y = sorted_periphery[0][1]
+        highest_y = sorted_periphery[-1][1]
+        print(lowest_y, highest_y)'''
+
         movable = []
         new_periphery = list(set(periphery).difference(set(retract)))
         for i, j in new_periphery:
             nbr = self.find_movable_neighbor(i, j, amoeba_map, bacteria)
             for x, y in nbr:
-                if (x, y) not in movable and y < 50 and (x > 45 and x < 55): #and (x > 50 and y < 50):
+                if (x, y) not in movable and y < 52 and (x > 45 and x < 55):
                     movable.append((x, y))
 
         movable += retract
@@ -153,6 +165,7 @@ class Player:
         return movable[:mini]
 
     def find_movable_neighbor(self, x, y, amoeba_map, bacteria):
+        # a cell is on the periphery if it borders (orthogonally) a cell that is not occupied by the amoeba
         out = []
         if (x, y) not in bacteria:
             if amoeba_map[x][(y - 1) % 100] == 0:
