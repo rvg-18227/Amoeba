@@ -157,13 +157,13 @@ class Player:
         self.extendable_cells: List[Tuple[int, int]] = None
         self.num_available_moves: int = None
 
-    def generate_comb_formation(self, size: int) -> npt.NDArray:
+    def generate_comb_formation(self, size: int, tooth_offset: int) -> npt.NDArray:
         formation = np.zeros((constants.map_dim, constants.map_dim), dtype=np.int8)
         center_x = constants.map_dim // 2
         center_y = constants.map_dim // 2
 
-        backbone_size = (size // 5) * 2
-        teeth_size = size - (backbone_size * 2)
+        backbone_size = min((size // 5) * 2, 98)
+        teeth_size = min(size - (backbone_size * 2), 48)
 
         # print("size: {}, backbone_size: {}, teeth_size: {}".format(size, backbone_size, teeth_size))
 
@@ -177,8 +177,8 @@ class Player:
             formation[center_x - 1, center_y + i] = 1
             formation[center_x - 1, center_y - i] = 1
         for i in range(1, teeth_size + 1, 2):
-            formation[center_x + 1, center_y + i] = 1
-            formation[center_x + 1, center_y - i] = 1
+            formation[center_x + 1, center_y + tooth_offset + i] = 1
+            formation[center_x + 1, center_y + tooth_offset - i] = 1
 
         # show_amoeba_map(formation)
         return formation
@@ -212,19 +212,18 @@ class Player:
             if len(extends) >= self.num_available_moves:
                 break
 
-            matching_retracts = [
-                p
-                for p in potential_retracts
-                if self.check_move(retracts + [p], extends + [potential_extend])
-            ]
+            matching_retracts = list(potential_retracts)
             matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))
 
-            # Matching retract found, add the extend and retract to our lists
-            if len(matching_retracts):
-                retracts.append(matching_retracts[-1])
-                potential_retracts.remove(matching_retracts[-1])
-                extends.append(potential_extend)
-                potential_extends.remove(potential_extend)
+            for i in range(len(matching_retracts)):
+                retract = matching_retracts[i]
+                # Matching retract found, add the extend and retract to our lists
+                if self.check_move(retracts + [retract], extends + [potential_extend]):
+                    retracts.append(retract)
+                    potential_retracts.remove(retract)
+                    extends.append(potential_extend)
+                    potential_extends.remove(potential_extend)
+                    break
 
         # If we have moves remaining, try and get closer to the desired formation
         # if len(extends) < self.num_available_moves and len(potential_retracts):
@@ -246,7 +245,7 @@ class Player:
         #                 unused_extends.remove(matching_extends[0])
         #                 break
 
-        show_amoeba_map(self.amoeba_map, retracts, extends)
+        # show_amoeba_map(self.amoeba_map, retracts, extends)
         return retracts, extends
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
@@ -369,7 +368,7 @@ class Player:
         memory_fields = read_memory(info)
         if not memory_fields[MemoryFields.Initialized]:
             retracts, moves = self.get_morph_moves(
-                self.generate_comb_formation(self.current_size)
+                self.generate_comb_formation(self.current_size, 0)
             )
             if len(moves) == 0:
                 info = change_memory_field(info, MemoryFields.Initialized, True)
@@ -380,7 +379,9 @@ class Player:
             vertical_shift = curr_backbone_col % 2
             offset = (curr_backbone_col + 1) - (constants.map_dim // 2)
             next_comb = np.roll(
-                self.generate_comb_formation(self.current_size), offset + 1, 0
+                self.generate_comb_formation(self.current_size, vertical_shift),
+                offset + 1,
+                0,
             )
             # Shift up/down by 1 every other column
             next_comb = np.roll(next_comb, vertical_shift, 1)
