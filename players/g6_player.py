@@ -69,7 +69,7 @@ class Player:
         movable = self.find_movable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
                                           current_percept.bacteria)
         moves = self.get_branch_tips(retract, movable, current_percept.periphery, 
-                                        current_percept.amoeba_map, split, split_pt=None)
+                                        current_percept.amoeba_map, split, split_pt=split_pt)
 
         move_num = min(mini, len(retract), len(moves))
         self.logger.info(f'retract: \n{retract}')
@@ -77,6 +77,9 @@ class Player:
         return retract[:move_num], moves[:move_num], info+1
 
     def get_branch_tips(self, retract, movable, periphery, amoeba_map, split, split_pt):
+        """
+        Get the rightmost tips of the brush branches, prioritizing shorter branches
+        """
         retract = np.array(retract)
         retract_even = retract[retract[:, 0]%2==0]
         retract_even[:, 1] += 1 # check cell next to the even retraction cell
@@ -91,7 +94,13 @@ class Player:
         periphery = np.array(periphery)
         movable = set(movable)
         self.logger.info(f'periphery: \n{periphery}')
-        rightmost_cells = periphery[periphery[:, 1]<=split_pt] if split else periphery
+        if split:
+        	rightmost_cells = periphery[periphery[:, 1]<=split_pt]
+        	nonsplit_rows = set(periphery[:, 0].tolist()) - set(rightmost_cells[:, 0].tolist())
+        	for row in nonsplit_rows:
+        		rightmost_cells = np.concatenate([rightmost_cells, periphery[periphery[:, 0]==row]])
+        else:
+        	rightmost_cells = periphery
         rightmost_val = rightmost_cells[:, 1].max()
 
         moves = []
@@ -125,9 +134,9 @@ class Player:
         for i in range(rightmost_cells.shape[0]):
             col = rightmost_cells[i, 1]
             if col < target_col:
-                move = (rightmost_cells[i, 0], col+1)
+                move = (rightmost_cells[i, 0], (col+1)%100)
                 if move in movable:
-                    moves.append((rightmost_cells[i, 0], col+1))
+                    moves.append(move)
 
         return moves
 
