@@ -61,7 +61,7 @@ class Player:
             current_percept.amoeba_map[i][j] = 1
             current_percept.current_size += 1
 
-        self.retractable = current_percept.periphery  
+        print(self.bottom_quadrant()) 
         
     
     def circular_formation_precomputation(self, current_percept):
@@ -73,6 +73,106 @@ class Player:
             4. define a fourth arc and sweep from 135deg to 225deg
         """
         raise NotImplementedError
+    
+    def top_quadrant(self):
+        """
+            Goal: Precomputation 
+            1. define a top arc between 135deg and 45 deg, precompute points across
+            2. define a second arc and sweep from 225deg to 315 deg
+            3. define a third arc and sweep from 315deg to 45deg
+            4. define a fourth arc and sweep from 135deg to 225deg
+        """
+        quadractic_formation = list()
+        x, y = (50,50)
+        while (0,0) not in quadractic_formation:
+            quadractic_formation.append((x, y))
+            quadractic_formation.append((x - 1, y))
+            x, y = (x - 1, y - 1)
+        quadractic_formation.remove((-1, 0)) # removes (0, -1)
+        x, y = (51, 50)
+        
+        while (99, 1) not in quadractic_formation:
+            quadractic_formation.append((x, y))
+            quadractic_formation.append((x, y - 1))
+            x, y = (x + 1, y - 1)
+            print((x, y))
+        quadractic_formation.append((99, 0))
+
+        # filling row from left to right
+        col = 1
+        for row in range(0, 50):
+            col = col + 1
+            for i in range(col, 100 - col + 1):
+                if (row, i) not in quadractic_formation:
+                    quadractic_formation.append((row, i))
+                else:
+                    break
+        
+        return quadractic_formation
+
+    def rigth_quadrant(self):
+        """
+            Goal: Precomputation 
+            1. define a top arc between 135deg and 45 deg, precompute points across
+            2. define a second arc and sweep from 225deg to 315 deg
+            3. define a third arc and sweep from 315deg to 45deg
+            4. define a fourth arc and sweep from 135deg to 225deg
+        """
+        quadractic_formation = list()
+        x, y = (49, 51)
+        while (0,99) not in quadractic_formation:
+            quadractic_formation.append((x, y))
+            quadractic_formation.append((x - 1, y))
+            x, y = (x - 1, y + 1)
+        
+        x, y = (51, 51)
+        
+        while (99, 99) not in quadractic_formation:
+            quadractic_formation.append((x, y))
+            quadractic_formation.append((x + 1, y))
+            x, y = (x + 1, y + 1)
+        
+        quadractic_formation.pop(-1)
+        
+        # filling row from left to right
+        col = 1
+        for row in range(99, 50, -1):
+            col += 1
+            # print((col, row) in quadractic_formation)
+            # continue
+            for i in range(col, 100 - col + 1):
+                if (i, row) not in quadractic_formation:
+                    quadractic_formation.append((i, row))
+                else:
+                    break
+        
+        return quadractic_formation
+
+    def bottom_quadrant(self):
+        """
+            Goal: Precomputation 
+            1. define a top arc between 135deg and 45 deg, precompute points across
+            2. define a second arc and sweep from 225deg to 315 deg
+            3. define a third arc and sweep from 315deg to 45deg
+            4. define a fourth arc and sweep from 135deg to 225deg
+        """
+        # filling row from left to right
+        
+        quadractic_formation = list()
+        
+        # end_row = 51
+        break_row = 99
+        start_row = 1
+        for col in range(99,51,-1):
+            for row in range(start_row, 99):
+                if row == break_row:
+                    break
+                else:
+                    quadractic_formation.append((col, row))
+            break_row = break_row - 1
+            start_row = start_row + 1
+        return quadractic_formation
+
     def vertical_point(self, current_percept, retractable):
         
         move = []
