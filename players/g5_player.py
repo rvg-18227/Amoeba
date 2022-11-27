@@ -18,7 +18,7 @@ MAX_BASE_LEN = min(MAP_DIM, 50)
 # ********* HELPER FUNCTIONS ********* #
 
 
-# the followign 3 methods are borrowed from G2
+# the following 3 methods are borrowed from G2
 def map_to_coords(amoeba_map: npt.NDArray) -> list[Tuple[int, int]]:
     return list(map(tuple, np.transpose(amoeba_map.nonzero()).tolist()))
 
@@ -198,6 +198,7 @@ class Player:
         # show_amoeba_map(formation)
         return formation
 
+    # copied from G2
     def get_morph_moves(self, desired_amoeba: npt.NDArray) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
         """ Function which takes a starting amoeba state and a desired amoeba state and generates a set of retracts and extends
             to morph the amoeba shape towards the desired shape.
@@ -234,6 +235,7 @@ class Player:
         # show_amoeba_map(self.amoeba_map, retracts, extends)
         return retracts, extends
 
+    # adapted from amoeba game code
     def check_move(self, retracts: List[Tuple[int, int]], extends: List[Tuple[int, int]]) -> bool:
         if not set(retracts).issubset(set(self.retractable_cells)):
             return False
@@ -279,6 +281,7 @@ class Player:
 
         return (amoeba == check).all()
 
+    # copied from G2
     def store_current_percept(self, current_percept: AmoebaState) -> None:
         self.current_size = current_percept.current_size
         self.amoeba_map = current_percept.amoeba_map
