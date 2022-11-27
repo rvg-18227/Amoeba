@@ -320,8 +320,19 @@ class Player:
                 info = mem.get_byte()
                 # memory_fields = read_memory(info)
         if mem.is_rake:
+            # mainly group 2 but tweaked
             # TODO: implement this (moves when the amoeba is a rake)
-            time.sleep(60)
+            comb_start_col = np.argwhere(self.amoeba_map == 1)[0][0]
+            vertical_shift = comb_start_col % 2
+            #print(vertical_shift)
+            offset = (comb_start_col + 1) - 50
+            next_tooth = np.roll(self.generate_tooth_formation(self.current_size), 2, 0)
+            # Shift up/down by 1 every other column
+            #next_tooth = np.roll(next_tooth, vertical_shift, 1)
+            retracts, moves = self.get_morph_moves(next_tooth)
+            print(retracts,  moves)
+            #time.sleep(60)
+
 
         # if memory_fields[MemoryFields.Initialized]:
         # if mem.is_rake:
