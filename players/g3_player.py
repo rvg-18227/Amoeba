@@ -41,12 +41,57 @@ class Player:
 
         self.turn = 0
 
+    def get_left_row(self, periphery):
+        # Credit: G8
+        # Gets left row of amoeba to be retracted
+        # For each y coord, we want the one with the lowest x coord
+
+        top_row_vals = {} # key: y, value: x
+        for (x, y) in periphery:
+            if y in top_row_vals:
+                if x < top_row_vals[y]:
+                    top_row_vals[y] = x
+            else:
+                top_row_vals[y] = x
+
+        top_row = []
+        for key, val in top_row_vals.items():
+            top_row.append((val, key)) # switched
+
+        return top_row
+
+    def get_right_row(self, periphery):
+        # Credit: G8
+        # Gets right row of amoeba to be retracted
+        # For each x coord, we want the one with the lowest x coord
+
+        top_row_vals = {} # key: y, value: x
+        for (x, y) in periphery:
+            if y in top_row_vals:
+                if x < top_row_vals[y]:
+                    top_row_vals[y] = x
+            else:
+                top_row_vals[y] = x
+
+        top_row = []
+        for key, val in top_row_vals.items():
+            top_row.append((val, key)) # switched
+
+        return top_row
+
     def create_formation(self, last_percept, current_percept, info) -> (list, list, int):
+        retract_left = self.get_left_row(current_percept.periphery) # list of tuples
+        retract_right = self.get_right_row(current_percept.periphery)
 
+        sorted_retract = sorted(retract, key=lambda x: x[1])
 
+        movable = self.find_movable_cells(sorted_retract, current_percept.periphery, current_percept.amoeba_map,
+                                          current_percept.bacteria, len(sorted_retract))
 
+        sorted_movable_cells = sorted(movable, key=lambda x: x[1])
 
-        return retract, movable, info
+        # sort?
+        return sorted_retract, sorted_movable_cells, info
 
 
     def move(self, last_percept, current_percept, info) -> (list, list, int):
@@ -65,14 +110,20 @@ class Player:
 
         self.turn += 1
         self.current_size = current_percept.current_size
+        for i, j in current_percept.bacteria:
+            current_percept.amoeba_map[i][j] = 1
 
-        if self.turn > 35: # could increase
+        if self.turn >= 0: # could increase
             return self.create_formation(last_percept, current_percept, info)
         else:
             # move amoeba forward
             mini = min(5, len(current_percept.periphery) // 2)
             for i, j in current_percept.bacteria:
                 current_percept.amoeba_map[i][j] = 1
+
+            #retract = self.get_left_row(current_percept.periphery)  # list of tuples
+            #sorted_retractable_cells = sorted(retract, key=lambda x: x[1])
+            #print(sorted_retractable_cells)
 
             retract = set()
             while len(retract) < 5:
@@ -93,9 +144,8 @@ class Player:
         new_periphery = list(set(periphery).difference(set(retract)))
         for i, j in new_periphery:
             nbr = self.find_movable_neighbor(i, j, amoeba_map, bacteria)
-            # print(nbr)
             for x, y in nbr:
-                if (x, y) not in movable and (x > 50 and y < 50):
+                if (x, y) not in movable and y < 50 and (x > 45 and x < 55): #and (x > 50 and y < 50):
                     movable.append((x, y))
 
         movable += retract
