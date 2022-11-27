@@ -195,8 +195,9 @@ class Formation:
 class RakeFormation(Formation):
     def __init__(self):
         self.allPoints = []
-        for y in range(0, 100):
-            self.allPoints.extend([(x, y) for x in range(100)])
+        for y in range(50):
+            self.allPoints.extend([(x, 50-y) for x in range(100)])
+            self.allPoints.extend([(x, 50+y) for x in range(100)])
 
     def get_phase(self, phase, state, retract, movable):
         nCells = sum([sum(row) for row in state.amoeba_map])
@@ -211,7 +212,7 @@ class RakeFormation(Formation):
             return 2
         elif phase == 2 and len(emptyCols) >= 90:
             return 3
-        elif phase == 3 and  len(emptyCols) <= 3:
+        elif phase == 3 and  len(emptyCols) <= 6:
             return 2
         return phase
 
@@ -252,15 +253,16 @@ class RakeFormation(Formation):
                     + [(i, 50) for i in wrapped_range(xStart, xEnd-2)]\
                     + self._get_formation(xEnd-2, yOffset, state, nCells)\
                     + [(i, 50) for i in wrapped_range(0, 100)]\
-                    + self.allPoints
 
             previousPoints = remove_duplicates(previousPoints)[:nCells]
             totalCorrectPoints = sum([1 for point in previousPoints if point in amoebaPoints])
             # print(xStart, xEnd, yStart, yEnd)
             print("totalCorrectPoints: ", totalCorrectPoints)
-            print(nCells)
-            if totalCorrectPoints < nCells*0.9:#
+            print(len(previousPoints))
+            if totalCorrectPoints < len(previousPoints)*0.99:#
                 print("Using prev formation")
+                previousPoints += self.allPoints
+                previousPoints = remove_duplicates(previousPoints)[:nCells]
                 return previousPoints
             idealPoints = self._get_formation(xStart-1, yOffset, state, nCells)\
                     + [(i, 50) for i in wrapped_range(xStart, xEnd-1)]\
@@ -271,16 +273,22 @@ class RakeFormation(Formation):
         elif self.phase == 3:
             xStart, xEnd, yStart, yEnd = self._get_current_xy(amoebaMap)
             xOffset, yOffset = xStart, yStart #self._get_midpoint(yStart, yEnd)
+
             previousPoints = self._get_formation(xStart, yOffset, state, nCells)\
                     + [(i, 50) for i in wrapped_range(xStart, xEnd-2)]\
                     + self._get_formation(xEnd-2, yOffset, state, nCells)\
                     + [(i, 50) for i in wrapped_range(0, 100)]\
-                    + self.allPoints
 
             previousPoints = remove_duplicates(previousPoints)[:nCells]
             totalCorrectPoints = sum([1 for point in previousPoints if point in amoebaPoints])
-            if totalCorrectPoints < nCells*0.9:#TODO
+            # print(xStart, xEnd, yStart, yEnd)
+            print("totalCorrectPoints: ", totalCorrectPoints)
+            print(len(previousPoints))
+            if totalCorrectPoints < len(previousPoints)*0.99:
+                #TODO dont include all points in prevPoint and this calculation
                 print("Using prev formation")
+                previousPoints += self.allPoints
+                previousPoints = remove_duplicates(previousPoints)[:nCells]
                 return previousPoints
 
             idealPoints = self._get_formation(xStart+1, yOffset, state, nCells)\
@@ -289,6 +297,8 @@ class RakeFormation(Formation):
                     + [(i, 50) for i in wrapped_range(0, 100)]\
                     + self.allPoints
 
+            return idealPoints
+            
             return idealPoints
 
 
