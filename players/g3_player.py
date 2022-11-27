@@ -94,15 +94,19 @@ class Player:
         sorted_retract_left = sorted(retract_left, key=lambda x: x[1])
         sorted_retract_right = sorted(retract_right, key=lambda x: x[1])
 
-        movable_left = self.find_movable_cells(sorted_retract_left, current_percept.periphery, current_percept.amoeba_map,
+        movable = self.find_movable_cells(sorted_retract_left + sorted_retract_right, current_percept.periphery,
+                                               current_percept.amoeba_map,
+                                               current_percept.bacteria, len(sorted_retract_left + sorted_retract_right))
+        sorted_movable_cells = sorted(movable, key=lambda x: x[1])
+        return sorted_retract_left + sorted_retract_right, sorted_movable_cells, info'''
+
+        '''movable_left = self.find_movable_cells(sorted_retract_left, current_percept.periphery, current_percept.amoeba_map,
                                           current_percept.bacteria, len(sorted_retract_left))
         movable_right = self.find_movable_cells(sorted_retract_right, current_percept.periphery,
                                                current_percept.amoeba_map,
                                                current_percept.bacteria, len(sorted_retract_right))
 
         sorted_movable_cells = movable_left + movable_right #sorted(movable, key=lambda x: x[1])'''
-
-        return sorted_retract, sorted_movable_cells, info
 
     def move(self, last_percept, current_percept, info) -> (list, list, int):
         """Function which retrieves the current state of the amoeba map and returns an amoeba movement
