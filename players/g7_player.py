@@ -193,26 +193,32 @@ class Formation:
         raise NotImplementedError("Must be implemented by subclass")
 
 class RakeFormation(Formation):
+    def __init__(self):
+        self.allPoints = []
+        for y in range(0, 100):
+            self.allPoints.extend([(x, y) for x in range(100)])
 
     def get_phase(self, phase, state, retract, movable):
         nCells = sum([sum(row) for row in state.amoeba_map])
         xStart, xEnd, yStart, yEnd = self._get_current_xy(state.amoeba_map)
         emptyCols = self._get_empty_cols_between(xStart, xEnd, state.amoeba_map)
+        print(len(emptyCols))
         if phase == 0:
             phase = 0
         elif phase == 1:
             phase = 0
         if nCells > 466+6 and (phase == 1 or phase == 0):
             return 2
-        elif phase == 2 and len(emptyCols) == 87:
+        elif phase == 2 and len(emptyCols) >= 90:
             return 3
-        elif phase == 3 and  len(emptyCols) == 3:
+        elif phase == 3 and  len(emptyCols) <= 3:
             return 2
         return phase
 
     def get_next_formation_points(self, state):
         nCells = sum([sum(row) for row in state.amoeba_map])
         amoebaMap = state.amoeba_map
+        amoebaPoints = [(i, j) for i, row in enumerate(amoebaMap) for j, cell in enumerate(row) if cell == 1]
 
         #TODO: change ordering of moveable points
         #TODO: change ordering of retractable points, maybe based on distance to center of formation? mostly matters at the beginning
@@ -221,7 +227,7 @@ class RakeFormation(Formation):
             xOffset, yOffset = xStart, yStart
             if nCells > 100+100+33:
                 idealPoints = self._get_formation(xOffset+1, yOffset, state, nCells)\
-                    + [(xOffset+i, yOffset) for i in range(1, 9)]\
+                    + [(xOffset+i, 50) for i in range(1, 9)]\
                     + self._get_formation(xOffset+9, yOffset, state, nCells)
             else:
                 idealPoints = self._get_formation(xOffset+1, yOffset, state, nCells)
@@ -232,7 +238,7 @@ class RakeFormation(Formation):
             xOffset, yOffset = xStart, yStart
             if nCells > 100+100+33:
                 idealPoints = self._get_formation(xOffset+1, yOffset, state, nCells)\
-                    + [(xOffset+i, yOffset) for i in range(1, 9)]\
+                    + [(xOffset+i, 50) for i in range(1, 9)]\
                     + self._get_formation(xOffset+9, yOffset, state, nCells)
             else:
                 idealPoints = self._get_formation(xOffset+1, yOffset, state, nCells)
@@ -243,31 +249,46 @@ class RakeFormation(Formation):
             xOffset, yOffset = xStart, yStart #self._get_midpoint(yStart, yEnd)
 
             previousPoints = self._get_formation(xStart, yOffset, state, nCells)\
-                    + [(i, yOffset) for i in wrapped_range(xStart, xEnd-2)]\
-                    + self._get_formation(xEnd-2, yOffset, state, nCells)
-            previousPoints = remove_duplicates(previousPoints)
-            totalCorrectPoints = sum([1 for i, row in enumerate(amoebaMap) for j, col in enumerate(row) if col == 1 and (i, j) in previousPoints])
-            if totalCorrectPoints < nCells-10:#TODO
+                    + [(i, 50) for i in wrapped_range(xStart, xEnd-2)]\
+                    + self._get_formation(xEnd-2, yOffset, state, nCells)\
+                    + [(i, 50) for i in wrapped_range(0, 100)]\
+                    + self.allPoints
+
+            previousPoints = remove_duplicates(previousPoints)[:nCells]
+            totalCorrectPoints = sum([1 for point in previousPoints if point in amoebaPoints])
+            # print(xStart, xEnd, yStart, yEnd)
+            print("totalCorrectPoints: ", totalCorrectPoints)
+            print(nCells)
+            if totalCorrectPoints < nCells*0.9:#
+                print("Using prev formation")
                 return previousPoints
             idealPoints = self._get_formation(xStart-1, yOffset, state, nCells)\
-                    + [(i, yOffset) for i in wrapped_range(xStart, xEnd-1)]\
-                    + self._get_formation(xEnd-1, yOffset, state, nCells)
+                    + [(i, 50) for i in wrapped_range(xStart, xEnd-1)]\
+                    + self._get_formation(xEnd-1, yOffset, state, nCells)\
+                    + [(i, 50) for i in wrapped_range(0, 100)]\
+                    + self.allPoints
             return idealPoints
         elif self.phase == 3:
             xStart, xEnd, yStart, yEnd = self._get_current_xy(amoebaMap)
             xOffset, yOffset = xStart, yStart #self._get_midpoint(yStart, yEnd)
-
             previousPoints = self._get_formation(xStart, yOffset, state, nCells)\
-                    + [(i, yOffset) for i in wrapped_range(xStart, xEnd-2)]\
-                    + self._get_formation(xEnd-2, yOffset, state, nCells)
-            previousPoints = remove_duplicates(previousPoints)
-            totalCorrectPoints = sum([1 for i, row in enumerate(amoebaMap) for j, col in enumerate(row) if col == 1 and (i, j) in previousPoints])
-            if totalCorrectPoints < nCells-10:#TODO
+                    + [(i, 50) for i in wrapped_range(xStart, xEnd-2)]\
+                    + self._get_formation(xEnd-2, yOffset, state, nCells)\
+                    + [(i, 50) for i in wrapped_range(0, 100)]\
+                    + self.allPoints
+
+            previousPoints = remove_duplicates(previousPoints)[:nCells]
+            totalCorrectPoints = sum([1 for point in previousPoints if point in amoebaPoints])
+            if totalCorrectPoints < nCells*0.9:#TODO
+                print("Using prev formation")
                 return previousPoints
 
             idealPoints = self._get_formation(xStart+1, yOffset, state, nCells)\
-                    + [(i, yOffset) for i in wrapped_range(xStart+1, xEnd-3)]\
-                    + self._get_formation(xEnd-3, yOffset, state, nCells)
+                    + [(i, 50) for i in wrapped_range(xStart+1, xEnd-3)]\
+                    + self._get_formation(xEnd-3, yOffset, state, nCells)\
+                    + [(i, 50) for i in wrapped_range(0, 100)]\
+                    + self.allPoints
+
             return idealPoints
 
 
@@ -293,6 +314,11 @@ class RakeFormation(Formation):
         :return: A tuple of the start and end x and y
         '''
         #TODO change this all to be based on num cells in that row/col to account for random bacteria additions?
+        # calculate n Cells then use that to calculate expected len of amoeba, use that to get the start end cols
+        rowLens = [sum(amoebaMap[i]) for i in range(100)]
+        cuttoff = max(rowLens) * 0.9
+        rowsWithEntireLength = [x for x in range(100) if sum(amoebaMap[x]) >= cuttoff]
+
         cell_xs = [i for i, row in enumerate(amoebaMap) for j, cell in enumerate(row) if cell != 0]
 
         contiguousX = []
@@ -315,6 +341,20 @@ class RakeFormation(Formation):
                 break
             contiguousY.append(y)
             i += 1
+        contiguousXCopy = deepcopy(contiguousX)
+        for x in contiguousXCopy:
+            if x not in rowsWithEntireLength:
+                contiguousX.remove(x)
+            else:
+                break
+        contiguousXCopy = deepcopy(list(reversed(contiguousX)))
+        for x in contiguousXCopy:
+            if x not in rowsWithEntireLength:
+                contiguousX.remove(x)
+            else:
+                break
+        contiguousX.append((contiguousX[-1] + 1)%100)
+
 
         return contiguousX[0], contiguousX[-1], contiguousY[0], contiguousY[-1]
 
@@ -328,11 +368,11 @@ class RakeFormation(Formation):
         :return: list of indices of empty cols
         '''
         nCells = sum([sum(row) for row in amoebaMap])
-        expectedLen = (3 * (nCells / 7)) % 100
+        expectedLen = min(100, (3 * (nCells / 7)) % 100)
         emptyCols = []
 
         for i in wrapped_range(start, end+1):
-            if sum(amoebaMap[i]) <= expectedLen/3:#TODO: what should this be? smth related to expectedLen?
+            if sum(amoebaMap[i]) <= (3 * expectedLen/4):#TODO: what should this be? smth related to expectedLen?
                 emptyCols.append(i)
         if len(emptyCols) == 0:
             return []
@@ -373,7 +413,7 @@ class RakeFormation(Formation):
         :param nCells: The number of cells
         :return: A list of the formation points
         '''
-        nChunks = nCells // 7
+        nChunks = min(nCells // 7, 33)
         formation = []
         for i in range(nChunks):
             formation += self._generate_chunk(x, yOffset)
@@ -502,7 +542,8 @@ class Player:
         phase = self.formation.get_phase(phase, current_percept, retract, movable)
 
         print("Phase", phase)
-        # if len(retract) == 0 and len(movable) == 0:
+        if len(retract) == 0 and len(movable) == 0:
+            print("No moves")
         #     return self.move(last_percept, current_percept, self.encode_info(phase, count, 0, info))
         # else:
         #     isMoving = 1
