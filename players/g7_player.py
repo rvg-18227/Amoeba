@@ -159,66 +159,34 @@ class Player:
         # filling row from left to right
         
         quadractic_formation = list()
-        
-        # end_row = 51
+    
         break_row = 99
         start_row = 1
-        for col in range(99,51,-1):
-            for row in range(start_row, 99):
-                if row == break_row:
-                    break
-                else:
-                    quadractic_formation.append((col, row))
+        for col in range(99, 51, -1):
+            for row in range(start_row, break_row):
+                quadractic_formation.append((col, row))
             break_row = break_row - 1
             start_row = start_row + 1
         return quadractic_formation
 
-    def vertical_point(self, current_percept, retractable):
-        
-        move = []
-        # upward-left move
-        top_reached = self.min_distance_to(0, 0, current_percept.periphery) == (0, 0)
-        while retractable and not top_reached:
-            x, y = retractable[0]
-            x_start, y_start = self.min_distance_to(0, 0, current_percept.periphery)
-            move.append(x_start - 1, y_start - 1)
-            top_reached = x_start - 1 < 1 or y_start -1 < 1
-        
-        # downward-from-left move
-
-
-
-
-    def min_distance_to(self, x_target, y_target, periphery):
+    def left_quadrant(self):
         """
-        x_target, y_target:
-            => (0,0) = 0
-            => (0,1)
+            Goal: Precomputation 
+            4. define a fourth arc and sweep from 135deg to 225deg
         """
-        move_bit = {}
-        min_x, min_y = float('inf'), float('inf')
-        for (x, y) in periphery:
-            distance = abs(x_target - x) + abs(y_target - y)
-            if distance < abs(min_x - x_target) + abs(min_y - y_target):
-                min_x, min_y = x, y
-        return (min_x, min_y)
-    # def immobile_bacteria(self, current_percept):
-    # # To do need to ensure wall bacteria are considered
-    #     immobile_bateria = []
-    #     for (x, y) in current_percept.bacteria:
-    #         movable_nei = self.find_movable_neighbor(x, y, current_percept.amoeba_map, current_percept.bacteria)
-    #         if (x, y) not in movable_nei
-    #         nei_in_periphery = [i in current_percept.periphery for i in movable_nei]
-    #         if len(movable_nei) == 3 and:
 
-    # def find_neighbor_bacteria(self, x, y, current_percept):
-    #     nei_bacteria = []
-    #     for (x, y) in current_percept.bacteria:
-    #         if current_percept.amoeba_map[x][(y - 1) %100] in current_percept.bacteria:
-    #             nei_bacteria.append((x, (y - 1) %100))
-    #         if current_percept.amoeba_map[(x - 1) % 100][y] in current_percept.bacteria:
-    #             nei_bacteria.append(((x - 1) % 100, y))
-    #         if current_percept.amoba_map[x][(y + 1) % 100] in current_percept.bacteria:
+        quadractic_formation = list()
+        
+        break_row = 99
+        start_row = 1
+        for col in range(49):
+            for row in range(start_row, break_row):
+                quadractic_formation.append((col, row))
+            break_row = break_row - 1
+            start_row = start_row + 1
+        return quadractic_formation
+
+    
     
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
         movable = []
