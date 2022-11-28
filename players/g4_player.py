@@ -204,6 +204,8 @@ class Strategy(ABC):
 
     def __init__(self, metabolism: float) -> None:
         self.metabolism = metabolism
+        self.shifted = 1
+        self.rotation = 0
 
     @abstractmethod
     def move(
@@ -334,6 +336,12 @@ class BucketAttack(Strategy):
             y_cog, upper_buckets, lower_buckets , step=3
         )
 
+        if self.shifted == 1:
+            min_y = min(arm_cell_ys)
+            max_y = max(arm_cell_ys)
+            arm_cell_ys = [y - 1 for y in arm_cell_ys if y != min_y and y != max_y] + [max_y, min_y]
+            print("SHIFTED")
+
         wall_cells = (
             [ ( xmax % 100,       y % 100 ) for y in inner_wall_cell_ys ] +
             [ ( (xmax - 1) % 100, y % 100 ) for y in outer_wall_cell_ys ]
@@ -341,6 +349,14 @@ class BucketAttack(Strategy):
         arm_cells = [ ( (xmax + 1) % 100, y % 100 ) for y in arm_cell_ys ]
 
         return wall_cells + arm_cells
+
+    # def _shift(self, target_cells:list[cell], xmax: int) -> list[cell]:
+    #     """Shift arm down"""
+        
+    #     for cell in target_cells:
+    #         if cell[1] == xmax:
+    #             cell[1] -= 1
+    #     return target_cells
 
     def _get_cog(self, curr_state: AmoebaState) -> tuple[int, int]:
         """Compute center of gravity of current Ameoba."""
@@ -401,6 +417,9 @@ class BucketAttack(Strategy):
 
         size = (state.current_size)
 
+        SHIFTING = True
+        SHIFT_N = 16 #must be <= 16 currently
+
         # TODO: maybe not always shifting horizontally?
         # cog = self._get_cog(state if np.any(prev_state.amoeba_map) else prev_state)
         cog  = (50, 50)
@@ -410,7 +429,26 @@ class BucketAttack(Strategy):
         if not self._in_shape(state):
             arm_xval -= 1
 
+ 
+        mem = f'{memory:b}'
+        while len(mem) < 8:
+            mem = '0' + mem
+        self.rotation = int(mem[-4:],2)
+        self.shifted = int(mem[-5])
+        if arm_xval >= 0:
+            self.rotation = (self.rotation + 1) % SHIFT_N
+            lsb2 = f'{self.rotation:b}'
+            #if len(lsb2) == 1:
+            while len(lsb2) < 4:
+                lsb2 = '0' + lsb2
+            mem = mem[:-4] + lsb2
+        if self.rotation == 0 and arm_xval >= 0:
+            self.shifted = self.shifted ^ 1
+            if not(SHIFTING):
+                self.shifted = 0
+            mem  = mem[:-5] + f'{self.shifted:b}' + mem[-4:]
         target_cells = self._get_target_cells(size, cog, arm_xval)
+        memory = int(mem,2)
         return self._reshape(state, memory, set(target_cells))
 
 
