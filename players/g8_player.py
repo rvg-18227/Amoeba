@@ -2,16 +2,13 @@ import os
 import pickle
 import numpy as np
 import logging
-import constants
 from amoeba_state import AmoebaState
+from typing import List, Tuple
+
 import matplotlib.pyplot as plt
-from statistics import median
-
-def wrap_coordinates(x, y):
-        return x % constants.map_dim, y % constants.map_dim
-
-def get_nonzero_coordinates(amoeba_map):
-    return sorted(zip(*np.nonzero(amoeba_map)))
+import numpy.typing as npt
+import constants
+import math
 
 
 class Player:
@@ -46,33 +43,95 @@ class Player:
         self.logger = logger
         self.metabolism = metabolism
         self.goal_size = goal_size
-        self.current_size = goal_size // 4
+        self.current_size = goal_size / 4
 
         self.turn = 0
+
+        # Class accessible percept variables, written at the start of each turn
+        self.current_size: int = None
+        self.amoeba_map: npt.NDArray = None
+        self.bacteria_cells: List[Tuple[int, int]] = None
+        self.retractable_cells: List[Tuple[int, int]] = None
+        self.extendable_cells: List[Tuple[int, int]] = None
+        self.num_available_moves: int = None
+
     
-    def check_move(self, retract, move):
-        if not set(retract).issubset(set(self.periphery)):
+    def store_current_percept(self, current_percept: AmoebaState) -> None:
+        self.current_size = current_percept.current_size
+        self.amoeba_map = current_percept.amoeba_map
+        self.retractable_cells = current_percept.periphery
+        self.bacteria_cells = current_percept.bacteria
+        self.extendable_cells = current_percept.movable_cells
+        self.num_available_moves = int(np.ceil(self.metabolism * current_percept.current_size))
+
+
+    def move(self, last_percept, current_percept, info) -> (List, List, int):
+        """Function which retrieves the current state of the amoeba map and returns an amoeba movement
+
+            Args:
+                last_percept (AmoebaState): contains state information after the previous move
+                current_percept(AmoebaState): contains current state information
+                info (int): byte (ranging from 0 to 256) to convey information from previous turn
+            Returns:
+                Tuple[List[Tuple[int, int]], List[Tuple[int, int]], int]: This function returns three variables:
+                    1. A list of cells on the periphery that the amoeba retracts
+                    2. A list of positions the retracted cells have moved to
+                    3. A byte of information (values range from 0 to 255) that the amoeba can use
+        """
+        self.turn += 1
+        self.store_current_percept(current_percept)
+        
+        # self.current_size = current_percept.current_size
+        # mini = min(5, len(current_percept.periphery) // 2)
+        # for i, j in current_percept.bacteria:
+        #     current_percept.amoeba_map[i][j] = 1
+
+        # Saving amoeba map to txt file
+        # if self.turn == 1:
+        #     x = np.array(current_percept.amoeba_map)
+        #     x.astype(int)
+        #     np.savetxt('test.txt', x, fmt='%d')
+
+
+        info = 0
+
+        retracts, extends = self.get_top_moves()
+
+        print("Turn #{}".format(self.turn))
+        # print("Retract: ", retract)
+        print("Retract: ", retracts)
+        # print("Move to: ", movable)
+        print("Extends: ", extends)
+
+
+        # return retract, movable, info
+        return retracts, extends, info
+
+    
+    # TESTING
+    def check_move(self, retracts: List[Tuple[int, int]], extends: List[Tuple[int, int]]) -> bool:
+        if not set(retracts).issubset(set(self.retractable_cells)):
             return False
 
-        movable = retract[:]
-        new_periphery = list(set(self.periphery).difference(set(retract)))
+        movable = retracts[:]
+        new_periphery = list(set(self.retractable_cells).difference(set(retracts)))
         for i, j in new_periphery:
-            nbr = self.find_movable_neighbor(i, j, self.amoeba_map, self.bacteria)
+            nbr = self.find_movable_neighbor(i, j, self.amoeba_map, self.bacteria_cells)
             for x, y in nbr:
                 if (x, y) not in movable:
                     movable.append((x, y))
 
-        if not set(move).issubset(set(movable)):
+        if not set(extends).issubset(set(movable)):
             return False
 
         amoeba = np.copy(self.amoeba_map)
         amoeba[amoeba < 0] = 0
         amoeba[amoeba > 0] = 1
 
-        for i, j in retract:
+        for i, j in retracts:
             amoeba[i][j] = 0
 
-        for i, j in move:
+        for i, j in extends:
             amoeba[i][j] = 1
 
         tmp = np.where(amoeba == 1)
@@ -93,147 +152,39 @@ class Player:
             if ((a + 1) % constants.map_dim, b) in result and check[(a + 1) % constants.map_dim][b] == 0:
                 stack.append(((a + 1) % constants.map_dim, b))
 
-        return (amoeba == check).all()    
+        return (amoeba == check).all()
     
     
-    def gen_static_formation(self):
-        formation_map = np.zeros((constants.map_dim, constants.map_dim))
-        center_x, center_y = constants.map_dim // 2, constants.map_dim // 2
-        width = min(((self.current_size - 1) * 2) // 5, constants.map_dim)
-        # num_teeth = min(self.current_size - 2 * width, width // 2)
-        num_teeth = width // 2
-        if num_teeth < self.current_size - 2 * width:
-            teeth_width = 2 + (self.current_size - 2 * width - num_teeth) // num_teeth
-        else:
-            teeth_width = 2
-    
-        for i in range(0, (width // 2) + 1):
-            # formation_map[wrap_coordinates(center_x , center_y + i)] = 1
-            # formation_map[wrap_coordinates(center_x, center_y - i)] = 1
-            
-            # formation_map[wrap_coordinates(center_x - 1, center_y + i)] = 1
-            # formation_map[wrap_coordinates(center_x - 1, center_y - i)] = 1
-            formation_map[wrap_coordinates(center_x + i, center_y)] = 1
-            formation_map[wrap_coordinates(center_x - i, center_y)] = 1
-            
-            formation_map[wrap_coordinates(center_x + i, center_y - 1)] = 1
-            formation_map[wrap_coordinates(center_x - i, center_y - 1)] = 1
+    def get_top_moves(self):
+        potential_retracts = sorted( self.retractable_cells, key=lambda x: x[1] )
+        potential_extends = sorted( self.extendable_cells, key=lambda x: x[1], reverse=True )
         
-        for i in range(1, num_teeth + 1, 2):
-            for j in range(1, teeth_width + 1):
-                formation_map[wrap_coordinates(center_x + i, center_y + j)] = 1
-                formation_map[wrap_coordinates(center_x - i, center_y + j)] = 1
-
-            # formation_map[wrap_coordinates(center_x + i, center_y + 2)] = 1
-            # formation_map[wrap_coordinates(center_x - i, center_y + 2)] = 1
-            
-        return formation_map
-        
-    def get_retracts_moves(self, formation_map):
-        current_coordinates = get_nonzero_coordinates(self.amoeba_map)
-        target_coordinates = get_nonzero_coordinates(formation_map)
-        retract_candidates = [p for p in (set(current_coordinates) - set(target_coordinates)) if p in self.periphery]
-        #self.movable_cells = self.find_movable_cells(retracts, self.periphery, self.amoeba_map, self.bacteria)
-        move_candidates = [p for p in (set(target_coordinates) - set(current_coordinates)) if p in self.movable_cells]
-
-        # while not self.check_move(retracts, moves) and len(retracts) > 0 and len(moves) > 0:
-        #     retracts.pop()
-        #     moves.pop()
+        # Loop through potential extends, searching for a matching retract
         retracts = []
-        moves = []        
-        for m in move_candidates:
-            for r in retract_candidates:
-                if self.check_move(retracts + [r], moves + [m]):
+        extends = []
+        for potential_extend in potential_extends:
+            for potential_retract in potential_retracts:
+                if self.check_move(retracts + [potential_retract], extends + [potential_extend]):
                     # matching retract found, add the extend and retract to our lists
-                    retracts.append(r)
-                    retract_candidates.remove(r)
-                    moves.append(m)
-                    move_candidates.remove(m)
+                    retracts.append(potential_retract)
+                    potential_retracts.remove(potential_retract)
+                    extends.append(potential_extend)
+                    potential_extends.remove(potential_extend)
+
+                    if len(retracts) == self.num_available_moves:
+                        return retracts[:self.num_available_moves], extends[:self.num_available_moves]
+
                     break
-        bound = int(self.metabolism * self.current_size)
-        if len(retracts) == 0 or len(moves) == 0:
-            return [], []
+                
+        # show_amoeba_map(self.amoeba_map, retracts, extends)
+        return retracts[:self.num_available_moves], extends[:self.num_available_moves]
     
-        return retracts[:bound], moves[:bound]
 
-    
-    def move(self, last_percept, current_percept, info) -> (list, list, int):
-        """Function which retrieves the current state of the amoeba map and returns an amoeba movement
-
-            Args:
-                last_percept (AmoebaState): contains state information after the previous move
-                current_percept(AmoebaState): contains current state information
-                info (int): byte (ranging from 0 to 256) to convey information from previous turn
-            Returns:
-                Tuple[List[Tuple[int, int]], List[Tuple[int, int]], int]: This function returns three variables:
-                    1. A list of cells on the periphery that the amoeba retracts
-                    2. A list of positions the retracted cells have moved to
-                    3. A byte of information (values range from 0 to 255) that the amoeba can use
-        """
-        self.turn += 1
-        
-        # Saving the current state of the map
-        self.current_size = current_percept.current_size
-        self.amoeba_map = current_percept.amoeba_map
-        self.periphery = current_percept.periphery
-        self.bacteria = current_percept.bacteria
-        self.movable_cells = current_percept.movable_cells
-
-        
-        max_movable_cells = int(self.metabolism * self.current_size)
-        if info == 1:
-            # initial formation has formed
-            # shift by 1 and move teeth
-            rows = [y for _, y in get_nonzero_coordinates(self.amoeba_map)]
-            current_row = int(min(rows))
-            #print(current_row)
-            formation_map = self.gen_static_formation()
-            dist_moved = (current_row + 1) - (constants.map_dim // 2)
-            print(dist_moved)
-            formation_map = np.roll(formation_map, dist_moved + 1, axis=1)
-            teeth_shift = current_row % 2
-            formation_map = np.roll(formation_map, teeth_shift, axis=0)
-            retracts, moves = self.get_retracts_moves(formation_map)
-            if len(retracts) == 0 or len(moves) == 0:
-                print("No moves found")
-            plt.clf()
-            plt.imshow(formation_map)
-            plt.savefig("dynamic_formation.png")
-           
-            return retracts, moves, 1
-        else:
-            # initial formation has not formed yet
-            formation_map = self.gen_static_formation()
-            plt.clf()
-            plt.imshow(formation_map)
-            plt.savefig('formation_map.png')
-            retracts, moves = self.get_retracts_moves(formation_map)
-            if len(moves) == 0:
-                return [], [], 1
-            else:
-                return retracts, moves, 0
 
     
-    def get_top_row(self, periphery):
-        # Gets top row of amoeba to be retracted
-        # For each x coord, we want the one with the lowest y coord
-        top_row_vals = {}
-        for (x, y) in periphery:
-            if x in top_row_vals:
-                if y < top_row_vals[x]:
-                    top_row_vals[x] = y
-            else:
-                top_row_vals[x] = y
-
-        top_row = []
-        for key, val in top_row_vals.items():
-            top_row.append((key, val))
-
-        return top_row
 
 
-
-    def find_movable_cells(self, retract, periphery, amoeba_map, bacteria):
+    def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
         movable = []
         new_periphery = list(set(periphery).difference(set(retract)))
         for i, j in new_periphery:
@@ -244,7 +195,7 @@ class Player:
 
         movable += retract
 
-        return movable
+        return movable[:mini]
 
     def find_movable_neighbor(self, x, y, amoeba_map, bacteria):
         out = []
