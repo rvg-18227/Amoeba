@@ -1,5 +1,7 @@
 import os
 import pickle
+import random
+
 import numpy as np
 import numpy.typing as npt
 from typing import Tuple, List
@@ -10,12 +12,15 @@ import time
 import matplotlib.pyplot as plt
 from enum import Enum
 import sys
+import random as rnd
 
 # CONSTS
 
 MAP_DIM = 100
-# MAX_BASE_LEN = min(MAP_DIM, 50)
 MAX_BASE_LEN = min(MAP_DIM, 100)
+TOOTH_SPACING = 0
+SHIFTING_FREQ = 10
+# MAX_BASE_LEN = min(MAP_DIM, 100)
 
 
 # ********* HELPER FUNCTIONS ********* #
@@ -85,6 +90,7 @@ def tree_factors(index, max_factors):
 class MaxVals(Enum):
     #is_rake = 2
     x_val = 100
+    tooth_shift = 2
 
 
 class Memory:
@@ -92,16 +98,19 @@ class Memory:
         if byte is not None:
             vals = get_byte_info(byte)
             self.x_val = vals[0]
+            self.tooth_shift = vals[1]
         elif vals is not None:
             self.x_val = vals[0]
+            self.tooth_shift = vals[1]
         else:
             self.x_val = 50
+            self.tooth_shift = 0
 
     def get_byte(self):
-        return set_byte_info([self.x_val])
+        return set_byte_info([self.x_val, self.tooth_shift])
 
     def get_vals(self):
-        return [self.x_val]
+        return [self.x_val, self.tooth_shift]
 
 
 def get_byte_info(byte: int):
@@ -166,6 +175,7 @@ class Player:
         formation = np.zeros((MAP_DIM, MAP_DIM), dtype=np.int8)
         center_x = MAP_DIM // 2
         center_y = MAP_DIM // 2
+        spacing = TOOTH_SPACING + 1
 
 
         # find the number of complete 5-cell modules
@@ -176,7 +186,9 @@ class Player:
         reserve = amoeba_size % 5 % 2
 
         base_len = min(complete_modules * 2 + additional_sections, MAX_BASE_LEN)
-        teeth_len = min(complete_modules, base_len//2)
+        # teeth_len = min(complete_modules, base_len//2)
+        # teeth_len = min(complete_modules, base_len // spacing)
+        teeth_len = base_len//spacing
         reserve = max(reserve, amoeba_size-(base_len*2 + teeth_len))
         start_y = center_y - base_len // 2
 
@@ -187,11 +199,12 @@ class Player:
 
         # add the teeth
         start_modules = start_y  # +(additional_sections+1)//2
-        for y in range(start_modules, start_y + teeth_len * 2):
-            if (y - start_modules) % 2 == 0:
+        for y in range(start_modules, start_y + teeth_len * spacing):
+            # if (y - start_modules) % spacing == 0:
+            if y % spacing == 0:
                 formation[center_x + 1, y] = 1
 
-        # add the "reserve" cell at the back
+        # # add the "reserve" cell at the back
         for i in range(reserve):
             row = i//base_len
             col = i % base_len
@@ -216,10 +229,13 @@ class Player:
         potential_extends = [p for p in list(set(desired_points).difference(set(current_points))) if
                              p in self.extendable_cells]
 
+        potential_retracts.sort(key=lambda pos: pos[0])
+        potential_extends.sort(key=lambda pos: pos[0])
+
         #print("Potential Retracts", potential_retracts)
         #print("Potential Extends", potential_extends)
 
-        # Ensure we can morph given our available moves
+        # Change this since it breaks the situation with smaller metabolisms
         if len(potential_retracts) > self.num_available_moves:
             return [], []
 
@@ -336,20 +352,28 @@ class Player:
         # cells_to_move = abs(comb_end-comb_start)
         
         if self.is_square(current_percept):
-            mem.x_val = 50 
+            mem.x_val = 50
+            mem.tooth_shift = 0
+
         while len(retracts) == 0 and len(moves) == 0:
-            
             offset_x = mem.x_val - MAP_DIM//2
-            offset_y = 0 if (mem.x_val % 8) < 4 else 1
+            offset_y = 0 if (mem.x_val % SHIFTING_FREQ*2) < SHIFTING_FREQ else -1
+            # if random.random() < 0.5:
+            #     mem.tooth_shift ^= 1
+            # #
+            # offset_y = -mem.tooth_shift
             
             target_formation = self.generate_tooth_formation(self.current_size)
             target_formation = np.roll(target_formation, offset_x, 0)
+            # target_formation = self.shift_col(target_formation, mem.x_val+1, offset_y)
             target_formation = np.roll(target_formation, offset_y, 1)
             retracts, moves = self.get_morph_moves(target_formation)
 
             if len(retracts) == 0 and len(moves) == 0:
                 mem.x_val = (mem.x_val + 1) % 100
                 print('--------------------')
+            # elif mem.x_val > 55 and rnd.choices([True, False], weights=(0.01, 0.99)):
+            #     mem.x_val = (mem.x_val + 1) % 100
             
         # print(cells_to_move)
         # if (self.num_available_moves // cells_to_move > 0):
@@ -378,9 +402,10 @@ class Player:
         #     print(retracts, moves)
         info = mem.get_byte()
         return retracts, moves, info
-    def down_1(arr, n):
+
+    def shift_col(self, arr, col, shift):
         arr2 = np.copy(arr)
-        arr2[:,n] = np.roll(arr2[:,n], -1)
+        arr2[:,col] = np.roll(arr2[:,col], shift)
         return arr2
     # def move(self, last_percept, current_percept, info) -> (list, list, int):
     #     """Function which retrieves the current state of the amoeba map and returns an amoeba movement
@@ -486,3 +511,4 @@ class Player:
                 out.append(((x + 1) % 100, y))
 
         return out
+
