@@ -236,8 +236,8 @@ class Player:
         #print("Potential Extends", potential_extends)
 
         # Change this since it breaks the situation with smaller metabolisms
-        if len(potential_retracts) > self.num_available_moves:
-            return [], []
+        # if len(potential_retracts) > self.num_available_moves:
+        #     return [], []
 
         # Loop through potential extends, searching for a matching retract
         retracts = []
@@ -253,7 +253,7 @@ class Player:
                     break
 
         # show_amoeba_map(self.amoeba_map, retracts, extends)
-        return retracts, extends
+        return retracts[:self.num_available_moves], extends[:self.num_available_moves]
 
     # adapted from amoeba game code
     def check_move(self, retracts: List[Tuple[int, int]], extends: List[Tuple[int, int]]) -> bool:
