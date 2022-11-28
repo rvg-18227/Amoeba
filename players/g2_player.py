@@ -14,6 +14,16 @@ turn = 0
 
 
 # ---------------------------------------------------------------------------- #
+#                               Constants                                      #
+# ---------------------------------------------------------------------------- #
+
+CENTER_X = constants.map_dim // 2
+CENTER_Y = constants.map_dim // 2
+
+COMB_SEPARATION_DIST = 24
+
+
+# ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
 # ---------------------------------------------------------------------------- #
 
@@ -157,13 +167,18 @@ class Player:
         self.extendable_cells: List[Tuple[int, int]] = None
         self.num_available_moves: int = None
 
-    def generate_comb_formation(self, size: int, tooth_offset: int) -> npt.NDArray:
+    def generate_comb_formation(self, size: int, tooth_offset=0, center_x=CENTER_X, center_y=CENTER_Y) -> npt.NDArray:
         formation = np.zeros((constants.map_dim, constants.map_dim), dtype=np.int8)
-        center_x = constants.map_dim // 2
-        center_y = constants.map_dim // 2
 
-        backbone_size = min((size // 5) * 2, 98)
-        teeth_size = min(size - (backbone_size * 2), 48)
+        teeth_size = min((size // 5), 49)
+        backbone_size = min((size - teeth_size) // 2, 99)
+        cells_used = backbone_size * 2 + teeth_size
+        
+        # If we have hit our max size, form an additional comb and connect it via a bridge
+        if backbone_size == 99:
+            formation = np.bitwise_or(formation, self.generate_comb_formation(size - cells_used - COMB_SEPARATION_DIST, tooth_offset, center_x - COMB_SEPARATION_DIST, center_y))
+            for i in range(center_x - COMB_SEPARATION_DIST, center_x):
+                formation[i, center_y] = 1
 
         # print("size: {}, backbone_size: {}, teeth_size: {}".format(size, backbone_size, teeth_size))
 
@@ -176,7 +191,7 @@ class Player:
             # second layer of backbone
             formation[center_x - 1, center_y + i] = 1
             formation[center_x - 1, center_y - i] = 1
-        for i in range(1, teeth_size + 1, 2):
+        for i in range(1, min(teeth_size + 1, backbone_size // 2), 2): 
             formation[center_x + 1, center_y + tooth_offset + i] = 1
             formation[center_x + 1, center_y + tooth_offset - i] = 1
 
