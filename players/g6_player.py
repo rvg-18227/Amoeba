@@ -89,7 +89,9 @@ class Player:
             if amoeba_map[tuple(retract_even[i])] == 0:
                 # no cell next to even retraction cell
                 prioritize_rows.append(retract_even[i, 0])
-                curr_col.append(retract_even[i, 1]-1)
+                curr_col.append((retract_even[i, 1]-1) % 100)
+
+        self.logger.info(f'prioritized rows: \n{prioritize_rows}')
 
         periphery = np.array(periphery)
         movable = set(movable)
@@ -101,7 +103,7 @@ class Player:
         		rightmost_cells = np.concatenate([rightmost_cells, periphery[periphery[:, 0]==row]])
         else:
         	rightmost_cells = periphery
-        rightmost_val = rightmost_cells[:, 1].max()
+        rightmost_val = rightmost_cells[:, 1].max() if not split else rightmost_cells[rightmost_cells[:, 1]<=split_pt].max()+100
 
         moves = []
         for i in range(len(prioritize_rows)):
@@ -110,11 +112,11 @@ class Player:
             next_row = bool(np.where(amoeba_map[row+1, :]==1)[0].shape[0])
             temp_move = (row, curr_col[i])
             for col in range(rightmost_val, curr_col[i]-1, -1):
-                if amoeba_map[row, col] == 0 and \
-                    (not prev_row or amoeba_map[row-1, col] == 1) and \
-                    (not next_row or amoeba_map[row+1, col] == 1):
+                if amoeba_map[row, col%100] == 0 and \
+                    (not prev_row or amoeba_map[row-1, col%100] == 1) and \
+                    (not next_row or amoeba_map[row+1, col%100] == 1):
                     # check if new location connects prev row and next row
-                    temp_move = (row, col)
+                    temp_move = (row, col%100)
                     break
             moves.append(temp_move)
         self.logger.info(f'prioritized rows:{prioritize_rows}, moves: {moves}')
@@ -126,15 +128,21 @@ class Player:
         self.logger.info(f'rightmost all: \n{rightmost_cells}')
         rightmost_cells = rightmost_cells[(-rightmost_cells[:, 1]).argsort()] # sort cells by col
         rightmost_cells = rightmost_cells[np.unique(rightmost_cells[:, 0], return_index=True)[1]] # keep rightmost cell for each row
-        target_col = rightmost_cells[:, 1].max()
-        left_col = rightmost_cells[:, 1].min()
-        if left_col == target_col:
-            target_col += 1
+        
+        if not split:
+            target_col = rightmost_cells[:, 1].max()
+            left_col = rightmost_cells[:, 1].min()
+            if left_col == target_col:
+                target_col += 1
+        else:
+            target_col = rightmost_cells[rightmost_cells[:, 1]<=split_pt].max()+100
         self.logger.info(f'rightmost unique: \n{rightmost_cells}')
         for i in range(rightmost_cells.shape[0]):
             col = rightmost_cells[i, 1]
+            col = col if not split or col > split_pt else col+100
             if col < target_col:
                 move = (rightmost_cells[i, 0], (col+1)%100)
+                self.logger.info(f'move - movable: \n{move}, {move in movable}')
                 if move in movable:
                     moves.append(move)
 
