@@ -174,40 +174,6 @@ class Player:
         self.metabolism = metabolism
         self.goal_size = goal_size
         self.current_size = goal_size / 4
-        
-        # Class accessible percept variables, written at the start of each turn
-        self.current_size: int = None
-        self.amoeba_map: npt.NDArray = None
-        self.bacteria_cells: List[Tuple[int, int]] = None
-        self.retractable_cells: List[Tuple[int, int]] = None
-        self.extendable_cells: List[Tuple[int, int]] = None
-        self.num_available_moves: int = None
-        
-    def generate_tooth_formation(self, size: int) -> npt.NDArray:
-        formation = np.zeros((constants.map_dim, constants.map_dim), dtype=np.int8)
-        center_x = constants.map_dim // 2
-        center_y = constants.map_dim // 2
-        
-        backbone_size = ((size // 5) * 2) + 2
-        teeth_size = size - (backbone_size * 2)
-        
-        # print("size: {}, backbone_size: {}, teeth_size: {}".format(size, backbone_size, teeth_size))
-        
-        formation[center_x, center_y] = 1
-        formation[center_x - 1, center_y] = 1
-        for i in range(1, ((backbone_size - 1) // 2) + 1):
-            # first layer of backbone
-            formation[center_x, center_y + i] = 1
-            formation[center_x, center_y - i] = 1
-            # second layer of backbone
-            formation[center_x - 1, center_y + i] = 1
-            formation[center_x - 1, center_y - i] = 1
-        for i in range(1, teeth_size + 1, 2):
-            formation[center_x + 1, center_y + i] = 1
-            formation[center_x + 1, center_y - i] = 1
-        for i in range(1, teeth_size + 1, 2):
-            formation[center_x + 2, center_y + i] = 1
-            formation[center_x + 2, center_y - i] = 1
 
         # Class accessible percept variables, written at the start of each turn
         self.current_size: int = None
@@ -317,26 +283,6 @@ class Player:
         # show_amoeba_map(self.amoeba_map, retracts, extends)
         return retracts, extends
 
-        # Ensure we can morph given our available moves
-        if len(potential_retracts) > self.num_available_moves:
-            return [], []
-        
-        # Loop through potential extends, searching for a matching retract
-        retracts = []
-        extends = []
-        for potential_extend in potential_extends:
-            for potential_retract in potential_retracts:
-                if self.check_move(retracts + [potential_retract], extends + [potential_extend]):
-                    # matching retract found, add the extend and retract to our lists
-                    retracts.append(potential_retract)
-                    potential_retracts.remove(potential_retract)
-                    extends.append(potential_extend)
-                    potential_extends.remove(potential_extend)
-                    break
-                
-        # show_amoeba_map(self.amoeba_map, retracts, extends)
-        return retracts, extends
-        
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
         movable = []
         new_periphery = list(set(periphery).difference(set(retract)))
