@@ -320,32 +320,24 @@ class Player:
                 info = mem.get_byte()
                 # memory_fields = read_memory(info)
         if mem.is_rake:
-            # mainly group 2 but tweaked
+            # using some of group 2's code
             # TODO: implement this (moves when the amoeba is a rake)
-            comb_start_col = np.argwhere(self.amoeba_map == 1)[0][0]
-            vertical_shift = comb_start_col % 2
-            #print(vertical_shift)
-            offset = (comb_start_col + 1) - 50
-            next_tooth = np.roll(self.generate_tooth_formation(self.current_size), 2, 0)
-            # Shift up/down by 1 every other column
-            #next_tooth = np.roll(next_tooth, vertical_shift, 1)
+            
+            comb_col = np.argwhere(self.amoeba_map == 1)
+            comb_start = comb_col[0][0]
+            comb_end = comb_col[-1][0]
+            cells_to_move = abs(comb_end-comb_start)
+            
+            if (self.num_available_moves // cells_to_move > 0):
+                # amount of cols the comb should progress
+                next_tooth = np.roll(self.amoeba_map, 1, 0)
+                mem.is_rake = False
+                info = mem.get_byte()
+            else:
+                next_tooth = self.amoeba_map
+
             retracts, moves = self.get_morph_moves(next_tooth)
             print(retracts,  moves)
-            #time.sleep(60)
-
-
-        # if memory_fields[MemoryFields.Initialized]:
-        # if mem.is_rake:
-        #     curr_backbone_col = min(x for x, _ in map_to_coords(self.amoeba_map))
-        #     vertical_shift = curr_backbone_col % 2
-        #     offset = (curr_backbone_col + 1) - (MAP_DIM // 2)
-        #     next_tooth = np.roll(self.generate_tooth_formation(self.current_size), offset + 1, 0)
-        #     # Shift up/down by 1 every other column
-        #     next_tooth = np.roll(next_tooth, vertical_shift, 1)
-        #     retracts, moves = self.get_morph_moves(next_tooth)
-        #     print(retracts, moves)
-
-        return retracts, moves, info
 
     # def move(self, last_percept, current_percept, info) -> (list, list, int):
     #     """Function which retrieves the current state of the amoeba map and returns an amoeba movement
