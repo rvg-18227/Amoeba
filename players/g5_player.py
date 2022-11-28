@@ -9,11 +9,14 @@ import math
 import time
 import matplotlib.pyplot as plt
 from enum import Enum
+import sys
 
 # CONSTS
 
 MAP_DIM = 100
-MAX_BASE_LEN = min(MAP_DIM, 50)
+# MAX_BASE_LEN = min(MAP_DIM, 50)
+MAX_BASE_LEN = min(MAP_DIM, 100)
+
 
 # ********* HELPER FUNCTIONS ********* #
 
@@ -80,24 +83,25 @@ def tree_factors(index, max_factors):
 # ********* BYTE INFO ******** #
 
 class MaxVals(Enum):
-    is_rake = 2
+    #is_rake = 2
+    x_val = 100
 
 
 class Memory:
     def __init__(self, byte=None, vals=None):
         if byte is not None:
             vals = get_byte_info(byte)
-            self.is_rake = vals[0] == 1
+            self.x_val = vals[0]
         elif vals is not None:
-            self.is_rake = vals[0] == 1
+            self.x_val = vals[0]
         else:
-            self.is_rake = False
+            self.x_val = 50
 
     def get_byte(self):
-        return set_byte_info([1 if self.is_rake else 0])
+        return set_byte_info([self.x_val])
 
     def get_vals(self):
-        return [1 if self.is_rake else 0]
+        return [self.x_val]
 
 
 def get_byte_info(byte: int):
@@ -212,8 +216,8 @@ class Player:
         potential_extends = [p for p in list(set(desired_points).difference(set(current_points))) if
                              p in self.extendable_cells]
 
-        print("Potential Retracts", potential_retracts)
-        print("Potential Extends", potential_extends)
+        #print("Potential Retracts", potential_retracts)
+        #print("Potential Extends", potential_extends)
 
         # Ensure we can morph given our available moves
         if len(potential_retracts) > self.num_available_moves:
@@ -312,16 +316,55 @@ class Player:
 
         # memory_fields = read_memory(info)
         # if not memory_fields[MemoryFields.Initialized]:
-        if not mem.is_rake:
-            retracts, moves = self.get_morph_moves(self.generate_tooth_formation(self.current_size))
-            if len(moves) == 0:
+
+        #if not mem.is_rake:
+            # retracts, moves = self.get_morph_moves(self.generate_tooth_formation(self.current_size))
+            # print(len(moves))
+            # if len(moves) == 0:
                 # info = change_memory_field(info, MemoryFields.Initialized, True)
-                mem.is_rake = True
-                info = mem.get_byte()
+                #mem.is_rake = True
+                #info = mem.get_byte()
                 # memory_fields = read_memory(info)
-        if mem.is_rake:
-            # TODO: implement this (moves when the amoeba is a rake)
-            time.sleep(60)
+        #if mem.is_rake:
+            # print("hi")
+        # TODO: implement this (moves when the amoeba is a rake)
+        # comb_col = np.argwhere(self.amoeba_map == 1)
+        
+        # comb_start = comb_col[0][0]
+        # comb_end = comb_col[-1][0]
+        
+        # cells_to_move = abs(comb_end-comb_start)
+        
+        if self.is_square(current_percept):
+            mem.x_val = 50 
+        while len(retracts) == 0 and len(moves) == 0:
+            
+            offset_x = mem.x_val - MAP_DIM//2
+            offset_y = 0 if (mem.x_val % 8) < 4 else 1
+            
+            target_formation = self.generate_tooth_formation(self.current_size)
+            target_formation = np.roll(target_formation, offset_x, 0)
+            target_formation = np.roll(target_formation, offset_y, 1)
+            retracts, moves = self.get_morph_moves(target_formation)
+
+            if len(retracts) == 0 and len(moves) == 0:
+                mem.x_val = (mem.x_val + 1) % 100
+                print('--------------------')
+            
+        # print(cells_to_move)
+        # if (self.num_available_moves // cells_to_move > 0):
+        #     # amount of cols the comb should progress
+        #     next_tooth = np.roll(self.amoeba_map, 1, 0)
+        #     self.down_1(next_tooth, )
+        #     mem.is_rake = False
+        #     info = mem.get_byte()
+        # else:
+        #     next_tooth = self.amoeba_map
+
+        
+        # retracts, moves = self.get_morph_moves(next_tooth)
+        #print(retracts,  moves)
+            #time.sleep(60)
 
         # if memory_fields[MemoryFields.Initialized]:
         # if mem.is_rake:
@@ -333,9 +376,12 @@ class Player:
         #     next_tooth = np.roll(next_tooth, vertical_shift, 1)
         #     retracts, moves = self.get_morph_moves(next_tooth)
         #     print(retracts, moves)
-
+        info = mem.get_byte()
         return retracts, moves, info
-
+    def down_1(arr, n):
+        arr2 = np.copy(arr)
+        arr2[:,n] = np.roll(arr2[:,n], -1)
+        return arr2
     # def move(self, last_percept, current_percept, info) -> (list, list, int):
     #     """Function which retrieves the current state of the amoeba map and returns an amoeba movement
     #
@@ -407,7 +453,7 @@ class Player:
 
     def is_square(self, current_percept):
         min_x, max_x, min_y, max_y = self.bounds(current_percept)
-        print(min_x, max_x, min_y, max_y)
+        #print(min_x, max_x, min_y, max_y)
         len_x = max_x - min_x + 1
         len_y = max_y - min_y + 1
         if len_x == len_y and len_x * len_y == current_percept.current_size:
