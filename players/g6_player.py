@@ -82,7 +82,7 @@ class Player:
         """
         retract = np.array(retract)
         retract_even = retract[retract[:, 0]%2==0]
-        retract_even[:, 1] += 1 # check cell next to the even retraction cell
+        retract_even[:, 1] = (retract_even[:, 1] + 1) % 100 # check cell next to the even retraction cell
         prioritize_rows = []
         curr_col = []
         for i in range(retract_even.shape[0]):
