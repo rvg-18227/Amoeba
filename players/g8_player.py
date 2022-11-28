@@ -11,7 +11,7 @@ def wrap_coordinates(x, y):
         return x % constants.map_dim, y % constants.map_dim
 
 def get_nonzero_coordinates(amoeba_map):
-    return sorted(zip(*np.nonzero(amoeba_map.T)))
+    return sorted(zip(*np.nonzero(amoeba_map)))
 
 
 class Player:
@@ -99,21 +99,34 @@ class Player:
     def gen_static_formation(self):
         formation_map = np.zeros((constants.map_dim, constants.map_dim))
         center_x, center_y = constants.map_dim // 2, constants.map_dim // 2
-        width = ((self.current_size - 1) * 2) // 5
-        num_teeth = min(self.current_size - 2 * width, width // 2)
+        width = min(((self.current_size - 1) * 2) // 5, constants.map_dim)
+        # num_teeth = min(self.current_size - 2 * width, width // 2)
+        num_teeth = width // 2
+        if num_teeth < self.current_size - 2 * width:
+            teeth_width = 2 + (self.current_size - 2 * width - num_teeth) // num_teeth
+        else:
+            teeth_width = 2
     
         for i in range(0, (width // 2) + 1):
-            formation_map[wrap_coordinates(center_x , center_y + i)] = 1
-            formation_map[wrap_coordinates(center_x, center_y - i)] = 1
+            # formation_map[wrap_coordinates(center_x , center_y + i)] = 1
+            # formation_map[wrap_coordinates(center_x, center_y - i)] = 1
             
-            formation_map[wrap_coordinates(center_x - 1, center_y + i)] = 1
-            formation_map[wrap_coordinates(center_x - 1, center_y - i)] = 1
+            # formation_map[wrap_coordinates(center_x - 1, center_y + i)] = 1
+            # formation_map[wrap_coordinates(center_x - 1, center_y - i)] = 1
+            formation_map[wrap_coordinates(center_x + i, center_y)] = 1
+            formation_map[wrap_coordinates(center_x - i, center_y)] = 1
+            
+            formation_map[wrap_coordinates(center_x + i, center_y - 1)] = 1
+            formation_map[wrap_coordinates(center_x - i, center_y - 1)] = 1
         
         for i in range(1, num_teeth + 1, 2):
-            formation_map[wrap_coordinates(center_x + 1, center_y + i)] = 1
-            formation_map[wrap_coordinates(center_x + 1, center_y - i)] = 1
-            formation_map[wrap_coordinates(center_x + 2, center_y + i)] = 1
-            formation_map[wrap_coordinates(center_x + 2, center_y - i)] = 1
+            for j in range(1, teeth_width + 1):
+                formation_map[wrap_coordinates(center_x + i, center_y + j)] = 1
+                formation_map[wrap_coordinates(center_x - i, center_y + j)] = 1
+
+            # formation_map[wrap_coordinates(center_x + i, center_y + 2)] = 1
+            # formation_map[wrap_coordinates(center_x - i, center_y + 2)] = 1
+            
         return formation_map
         
     def get_retracts_moves(self, formation_map):
@@ -138,11 +151,10 @@ class Player:
                     move_candidates.remove(m)
                     break
         bound = int(self.metabolism * self.current_size)
-        s = min(5, len(self.periphery) // 2)
         if len(retracts) == 0 or len(moves) == 0:
             return [], []
     
-        return retracts, moves
+        return retracts[:bound], moves[:bound]
 
     
     def move(self, last_percept, current_percept, info) -> (list, list, int):
@@ -172,15 +184,15 @@ class Player:
         if info == 1:
             # initial formation has formed
             # shift by 1 and move teeth
-            rows = [x for x, _ in get_nonzero_coordinates(self.amoeba_map)]
+            rows = [y for _, y in get_nonzero_coordinates(self.amoeba_map)]
             current_row = int(min(rows))
             #print(current_row)
             formation_map = self.gen_static_formation()
             dist_moved = (current_row + 1) - (constants.map_dim // 2)
             print(dist_moved)
-            formation_map = np.roll(formation_map, dist_moved + 1, axis=0)
+            formation_map = np.roll(formation_map, dist_moved + 1, axis=1)
             teeth_shift = current_row % 2
-            formation_map = np.roll(formation_map, teeth_shift, axis=1)
+            formation_map = np.roll(formation_map, teeth_shift, axis=0)
             retracts, moves = self.get_retracts_moves(formation_map)
             if len(retracts) == 0 or len(moves) == 0:
                 print("No moves found")
