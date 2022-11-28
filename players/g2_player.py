@@ -114,10 +114,26 @@ if __name__ == "__main__":
     assert fields[MemoryFields.Translating] == False
 
 
+
+# ---------------------------------------------------------------------------- #
+#                               Formation Class                                #
+# ---------------------------------------------------------------------------- #
+
+class Formation:        
+    def __init__(self, initial_formation=None) -> None:
+        self.map = initial_formation if initial_formation else np.zeros((constants.map_dim, constants.map_dim), dtype=np.int8)
+    
+    def add_cell(self, x, y):
+        self.map[x % constants.map_dim, y % constants.map_dim] = 1
+    
+    def merge_formation(self, formation_map: npt.NDArray):
+        self.map = np.logical_or(self.map, formation_map)
+
+
+
 # ---------------------------------------------------------------------------- #
 #                               Main Player Class                              #
 # ---------------------------------------------------------------------------- #
-
 
 class Player:
     def __init__(
@@ -166,9 +182,12 @@ class Player:
         self.retractable_cells: List[Tuple[int, int]] = None
         self.extendable_cells: List[Tuple[int, int]] = None
         self.num_available_moves: int = None
-
+        
     def generate_comb_formation(self, size: int, tooth_offset=0, center_x=CENTER_X, center_y=CENTER_Y) -> npt.NDArray:
-        formation = np.zeros((constants.map_dim, constants.map_dim), dtype=np.int8)
+        formation = Formation()
+        
+        if size < 2:
+            return formation.map
 
         teeth_size = min((size // 5), 49)
         backbone_size = min((size - teeth_size) // 2, 99)
@@ -176,27 +195,28 @@ class Player:
         
         # If we have hit our max size, form an additional comb and connect it via a bridge
         if backbone_size == 99:
-            formation = np.bitwise_or(formation, self.generate_comb_formation(size - cells_used - COMB_SEPARATION_DIST, tooth_offset, center_x - COMB_SEPARATION_DIST, center_y))
-            for i in range(center_x - COMB_SEPARATION_DIST, center_x):
-                formation[i, center_y] = 1
+            formation.merge_formation(self.generate_comb_formation(size - cells_used - COMB_SEPARATION_DIST + 2, tooth_offset, center_x + COMB_SEPARATION_DIST, center_y))
+            for i in range(center_x, center_x + COMB_SEPARATION_DIST):
+                formation.add_cell(i, center_y)
 
         # print("size: {}, backbone_size: {}, teeth_size: {}".format(size, backbone_size, teeth_size))
 
-        formation[center_x, center_y] = 1
-        formation[center_x - 1, center_y] = 1
+        formation.add_cell(center_x, center_y)
+        formation.add_cell(center_x - 1, center_y)
         for i in range(1, round((backbone_size - 1) / 2 + 0.1) + 1):
             # first layer of backbone
-            formation[center_x, center_y + i] = 1
-            formation[center_x, center_y - i] = 1
+            formation.add_cell(center_x, center_y + i)
+            formation.add_cell(center_x, center_y - i)
             # second layer of backbone
-            formation[center_x - 1, center_y + i] = 1
-            formation[center_x - 1, center_y - i] = 1
+            formation.add_cell(center_x - 1, center_y + i)
+            formation.add_cell(center_x - 1, center_y - i)
         for i in range(1, min(teeth_size + 1, backbone_size // 2), 2): 
-            formation[center_x + 1, center_y + tooth_offset + i] = 1
-            formation[center_x + 1, center_y + tooth_offset - i] = 1
+            formation.add_cell(center_x + 1, center_y + tooth_offset + i)
+            formation.add_cell(center_x + 1, center_y + tooth_offset - i)
 
-        # show_amoeba_map(formation)
-        return formation
+
+        # show_amoeba_map(formation.map)
+        return formation.map
 
     def get_morph_moves(
         self, desired_amoeba: npt.NDArray
@@ -387,32 +407,28 @@ class Player:
             )
             if len(moves) == 0:
                 info = change_memory_field(info, MemoryFields.Initialized, True)
+                info = change_memory_field(info, MemoryFields.Translating, True)
                 memory_fields = read_memory(info)
 
         if memory_fields[MemoryFields.Initialized]:
-            curr_backbone_col = min(x for x, _ in map_to_coords(self.amoeba_map))
-            vertical_shift = curr_backbone_col % 2
-            offset = (curr_backbone_col + 1) - (constants.map_dim // 2)
-            next_comb = np.roll(
-                self.generate_comb_formation(self.current_size, vertical_shift),
-                offset + 1,
-                0,
-            )
-            # Shift up/down by 1 every other column
-            next_comb = np.roll(next_comb, vertical_shift, 1)
-            retracts = []
-            moves = []
-            while len(moves) == 0:
-                next_comb = np.roll(
-                    self.generate_comb_formation(self.current_size, vertical_shift),
-                    offset + 1,
-                    0,
-                )
-                retracts, moves = self.get_morph_moves(next_comb)
-                # Sometimes we have leftover cells that can't be used to add another comb row
-                # We don't want to leave these in the leftmost column
-                if len(moves) == 0:
-                    offset += 1
-                    print("Failed to find moves, trying again...")
+            curr_coords = map_to_coords(self.amoeba_map)
+            curr_backbone_col = min(x for x, y in curr_coords if y == max(y for x, y in curr_coords))
+            
+            right_edge_cells = [(x, y) for x, y in curr_coords if x == constants.map_dim - 1]
+            left__edge_cells = [(x, y) for x, y in curr_coords if x == 0]
+            if len(right_edge_cells) and len(left__edge_cells):
+               curr_backbone_col = min(x for x, _ in curr_coords if x > CENTER_X) 
+            
+            vertical_shift = int(np.ceil(curr_backbone_col / 2) + 1) % 2
+            if memory_fields[MemoryFields.Translating]:
+                offset = (curr_backbone_col + 1) - CENTER_X + 1
+                info = change_memory_field(info, MemoryFields.Translating, False)
+            else: 
+                offset = (curr_backbone_col + 1) - CENTER_X
+                info = change_memory_field(info, MemoryFields.Translating, True)
+
+            next_comb = self.generate_comb_formation(self.current_size, vertical_shift, CENTER_X + offset, CENTER_Y)
+            retracts, moves = self.get_morph_moves(next_comb)
+
 
         return retracts, moves, info
