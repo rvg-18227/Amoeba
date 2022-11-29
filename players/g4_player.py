@@ -12,6 +12,7 @@ import numpy as np
 
 sys.path.append(os.getcwd())
 from amoeba_state import AmoebaState
+import constants
 
 
 #------------------------------------------------------------------------------
@@ -37,7 +38,7 @@ class State(Enum):
 #------------------------------------------------------------------------------
 
 def visualize_reshape(
-    target: list[cell], ameoba: list[cell],
+    target: list[cell], ameoba: list[cell], bacteria: list[cell],
     occupiable: list[cell], retractable: list[cell],
     retract: list[cell], extend: list[cell]):
 
@@ -74,7 +75,7 @@ def visualize_reshape(
         size = (mpl.rcParams['lines.markersize'] + 4) ** 2
         ax1.scatter(x, y, facecolors='none', edgecolors='forestgreen', marker='s', s=size)
 
-    # subplot 2: retract & extend
+    # subplot 2: retract & extend & bacteria
     for x, y in retract:
         size = (mpl.rcParams['lines.markersize'] + 4) ** 2
         ax2.scatter(x, y, facecolors='none', edgecolors='forestgreen', marker='s', s=size)
@@ -82,6 +83,11 @@ def visualize_reshape(
     for x, y in extend:
         size = (mpl.rcParams['lines.markersize'] + 1.5) ** 2
         ax2.scatter(x, y, facecolors='none', edgecolors='tab:purple', s=size)
+
+    for x, y in bacteria:
+        size = (mpl.rcParams['lines.markersize'] + 2.5) ** 2
+        ax2.scatter(x, y, facecolors='none', edgecolors='orange', marker='s', s=size)
+
 
     # markers
     mlines = mpl.lines
@@ -104,14 +110,17 @@ def visualize_reshape(
     purpule_circle2 = mlines.Line2D(
         [], [], color='tab:purple', marker='o', linestyle='None',
         markerfacecolor='none', markersize=5, label='extend')
+    orange_triangle2 = mlines.Line2D(
+        [], [], color='orange', marker='s', linestyle='None',
+        markerfacecolor='none', markersize=5, label='bacteria')
 
     # plotting
     ax1.legend(
         handles=[red_dot, green_dot, purpule_circle, green_square],
         loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=4, fancybox=True, shadow=True)
     ax2.legend(
-        handles=[red_dot, green_dot, purpule_circle2, green_square2],
-        loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=4, fancybox=True, shadow=True)
+        handles=[red_dot, green_dot, purpule_circle2, green_square2, orange_triangle2],
+        loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=5, fancybox=True, shadow=True)
     fig.tight_layout()
     plt.figure(1)
 
@@ -195,6 +204,60 @@ def retract_k(k: int, choices: list[cell], amoeba_map: np.ndarray) -> list[cell]
 
     return [cell for cell, _ in sorted_choices[:k]]
 
+def check_move(
+    retract: list[cell],
+    move: list[cell],
+    state: AmoebaState
+) -> bool:
+
+    periphery = state.periphery
+    amoeba_map = state.amoeba_map
+    bacteria = state.bacteria
+
+    if not set(retract).issubset(set(periphery)):
+        return False
+
+    movable = retract[:]
+    new_periphery = list(set(periphery).difference(set(retract)))
+    for i, j in new_periphery:
+        nbr = find_movable_neighbor(i, j, amoeba_map, bacteria)
+        for x, y in nbr:
+            if (x, y) not in movable:
+                movable.append((x, y))
+
+    if not set(move).issubset(set(movable)):
+        return False
+
+    amoeba = np.copy(amoeba_map)
+    amoeba[amoeba < 0] = 0
+    amoeba[amoeba > 0] = 1
+
+    for i, j in retract:
+        amoeba[i][j] = 0
+
+    for i, j in move:
+        amoeba[i][j] = 1
+
+    tmp = np.where(amoeba == 1)
+    result = list(zip(tmp[0], tmp[1]))
+    check = np.zeros((constants.map_dim, constants.map_dim), dtype=int)
+
+    stack = result[0:1]
+    while len(stack):
+        a, b = stack.pop()
+        check[a][b] = 1
+
+        if (a, (b - 1) % constants.map_dim) in result and check[a][(b - 1) % constants.map_dim] == 0:
+            stack.append((a, (b - 1) % constants.map_dim))
+        if (a, (b + 1) % constants.map_dim) in result and check[a][(b + 1) % constants.map_dim] == 0:
+            stack.append((a, (b + 1) % constants.map_dim))
+        if ((a - 1) % constants.map_dim, b) in result and check[(a - 1) % constants.map_dim][b] == 0:
+            stack.append(((a - 1) % constants.map_dim, b))
+        if ((a + 1) % constants.map_dim, b) in result and check[(a + 1) % constants.map_dim][b] == 0:
+            stack.append(((a + 1) % constants.map_dim, b))
+
+    return (amoeba == check).all()
+
 
 #------------------------------------------------------------------------------
 #  Movement Strategy
@@ -251,9 +314,12 @@ class Strategy(ABC):
         retract = retract_k(k, list(retractable_cells), curr_state.amoeba_map)
         extend = list(to_occupy)[:k]
 
+        if not check_move(retract, extend, curr_state):
+            print("[ G4 ] problematic move")
+
         # debug
         visualize_reshape(
-            list(target), ameoba_cells,
+            list(target), ameoba_cells, curr_state.bacteria,
             occupiable_cells, list(retractable_cells),
             retract, extend
         )
