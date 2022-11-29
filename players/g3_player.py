@@ -41,6 +41,34 @@ class Player:
 
         self.turn = 0
 
+    # Find shape given size of anoemba, in the form of a list of offsets from center
+    def get_desired_shape(self):
+        # Assume base shape given size is always > 5
+        offsets = {(0,0), (1,0), (-1,0), (1,1), (-1,1)}
+        total_cells = self.current_size-5
+        i = 2
+        j = 1
+        while total_cells > 0:
+            if total_cells < 6:
+                if total_cells > 1:
+                    # If possible add evenly
+                    offsets.update({(i,j), (-i,j)})
+                    total_cells-=2
+                    j+=1
+                else:
+                    # Add last remaining to left arm
+                    offsets.update({(i, j)})
+                    total_cells-=1
+            else:
+                # if there are at least 6 add 3 to each side
+                offsets.update({(i, j), (i,j+1), (i, j+2), (-i, j), (-i,j+1), (-i, j+2)})
+                total_cells -= 6
+                i+=1
+                j+=2
+        
+        return offsets
+
+
     def get_left_row(self, periphery):
         # Credit: G8
         # Gets left row of amoeba to be retracted
