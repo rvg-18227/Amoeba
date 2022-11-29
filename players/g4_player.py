@@ -452,6 +452,29 @@ class BucketAttack(Strategy):
     #             cell[1] -= 1
     #     return target_cells
 
+    def _get_rectangle_target(self, size: int, cog: cell, xmax: int) -> list[cell]:
+        _, y_cog = cog
+        wall_length, orphans=int(size/4),size%4
+        upper=y_cog+wall_length
+        lower=y_cog-wall_length
+
+        inner_wall_cell_ys = self._spread_vertically(
+            y_cog,
+            upper,
+            lower+orphans
+        )
+        outer_wall_cell_ys = self._spread_vertically(
+            y_cog,
+            upper,
+            lower
+        )
+        wall_cells = (
+                [(xmax % 100, y % 100) for y in inner_wall_cell_ys] +
+                [((xmax + 1) % 100, y % 100) for y in outer_wall_cell_ys]
+        )
+
+        return wall_cells
+
     def _get_cog(self, curr_state: AmoebaState) -> tuple[int, int]:
         """Compute center of gravity of current Ameoba."""
         ameoba_cells = np.array(list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value))))
@@ -543,6 +566,11 @@ class BucketAttack(Strategy):
             mem  = mem[:-5] + f'{self.shifted:b}' + mem[-4:]
         target_cells = self._get_target_cells(size, cog, arm_xval)
         memory = int(mem,2)
+
+        normal_retract, _,_=self._reshape(state, memory, set(target_cells))
+        if len(normal_retract)==0:
+            target_cells = self._get_rectangle_target(size, cog, arm_xval)
+
         return self._reshape(state, memory, set(target_cells))
 
 
