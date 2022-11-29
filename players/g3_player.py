@@ -82,7 +82,11 @@ class Player:
 
     def get_center_point(self, current_percept, info) -> int:
         if info: # initialized
-            min_x = min(current_percept.periphery)[0]
+            min_x = 100
+            for x, y in self.periphery:
+                if y == 50:
+                    min_x = min(min_x, x)
+            
             return (min_x, 50) # 51?
         else:
             return (50, 50) # 51, 51? need to check later
