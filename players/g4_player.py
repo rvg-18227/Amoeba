@@ -174,9 +174,24 @@ def find_movable_cells(
         else movable_list
     )
 
-def retract_k(k: int, choices: list[cell], amoeba_map: np.ndarray) -> list[cell]:
-    """Select k cells to retract from choices (list of retractable cells) that
-    ensures the ameoba will stay connected after retraction."""
+def retract_k(
+    k: int,
+    choices: list[cell],
+    possible_moves: list[cell],
+    state: AmoebaState
+) -> list[cell]:
+    """Select up to k cells to retract from choices (list of retractable cells) that
+    ensures the ameoba will stay connected after retraction.
+
+    Args:
+        k: ideal number of cells to retract
+        choices: cells we want to retract from
+        possible_moves: cells we can extend our ameoba to
+        state: the current state of the ameoba
+    
+    Note: This function might return n < k cells to retract because retracting any
+    more cells would cause separation.
+    """
     if k >= len(choices):
         return choices
 
@@ -191,7 +206,7 @@ def retract_k(k: int, choices: list[cell], amoeba_map: np.ndarray) -> list[cell]
             ((x-1) % 100, y),
             ((x+1) % 100, y)
         ]:
-            if amoeba_map[xn][yn] == State.empty.value:
+            if state.amoeba_map[xn][yn] == State.empty.value:
                 exposure += 1
 
         return exposure
@@ -202,7 +217,19 @@ def retract_k(k: int, choices: list[cell], amoeba_map: np.ndarray) -> list[cell]
         reverse=True
     )
 
-    return [cell for cell, _ in sorted_choices[:k]]
+    retract, i = [], 0
+    while len(retract) < k and i < len(sorted_choices):
+        cell, _ = sorted_choices[i]
+        _retract = retract + [cell]
+        _moves = possible_moves[:len(_retract)]
+
+        # only add a cell to retract if it doesn't cause separation
+        if check_move(_retract, _moves, state):
+            retract.append(cell)
+
+        i += 1
+
+    return retract
 
 def check_move(
     retract: list[cell],
@@ -311,10 +338,11 @@ class Strategy(ABC):
             int(self.metabolism * curr_state.current_size), # max retractable cells
             len(to_occupy), len(retractable_cells)
         )
-        retract = retract_k(k, list(retractable_cells), curr_state.amoeba_map)
-        extend = list(to_occupy)[:k]
+        retract = retract_k(k, list(retractable_cells), list(to_occupy), curr_state)
+        extend = list(to_occupy)[:len(retract)]
 
-        if not check_move(retract, extend, curr_state):
+        # for debugging: stop when a move causes separation
+        if debug and not check_move(retract, extend, curr_state):
             print("[ G4 ] problematic move")
 
         # debug
