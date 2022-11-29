@@ -9,6 +9,7 @@ from typing import Tuple, List
 import numpy.typing as npt
 import math
 
+MAP_LENGTH = 100
 
 class Player:
     def __init__(self, rng: np.random.Generator, logger: logging.Logger, metabolism: float, goal_size: int,
@@ -94,7 +95,7 @@ class Player:
     def offset_to_absolute(self, offsets:set[Tuple[int]], center_point:Tuple[int]) -> set[Tuple[int]]:
         absolute_cords = set()
         for offset in offsets:
-            absolute_cords.add((center_point[0] + offset[0], center_point[1] + offset[1]))
+            absolute_cords.add(((center_point[0] + offset[0]) % MAP_LENGTH, (center_point[1] + offset[1]) % MAP_LENGTH))
         
         return absolute_cords
 
@@ -159,6 +160,7 @@ class Player:
             center_point = self.get_center_point(current_percept, 0)
         else:
             center_point = self.get_center_point(current_percept, 1)
+            center_point = (center_point[0] + 1, center_point[1])
             print(center_point)
         retracts, moves = self.morph(desired_shape_offsets, center_point)
 
