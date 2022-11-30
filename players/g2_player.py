@@ -23,6 +23,7 @@ CENTER_X = constants.map_dim // 2
 CENTER_Y = constants.map_dim // 2
 
 COMB_SEPARATION_DIST = 24
+TEETH_GAP = 2
 
 
 # ---------------------------------------------------------------------------- #
@@ -198,7 +199,7 @@ class Player:
         if size < 2:
             return formation.map
 
-        teeth_size = min((size // 5), 49)
+        teeth_size = min((size // ((TEETH_GAP + 1) * 2 + 1)), 49)
         backbone_size = min((size - teeth_size) // 2, 99)
         cells_used = backbone_size * 2 + teeth_size
 
@@ -226,7 +227,7 @@ class Player:
             # second layer of backbone
             formation.add_cell(center_x - 1, center_y + i)
             formation.add_cell(center_x - 1, center_y - i)
-        for i in range(1, min(teeth_size + 1, backbone_size // 2), 2):
+        for i in range(1, round(min((teeth_size * (TEETH_GAP + 1)) / 2, backbone_size / 2) + 0.1), TEETH_GAP + 1):
             formation.add_cell(center_x + 1, center_y + tooth_offset + i)
             formation.add_cell(center_x + 1, center_y + tooth_offset - i)
 
