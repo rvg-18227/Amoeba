@@ -102,8 +102,10 @@ class Player:
             movable = self.find_movable_cells([], current_percept.periphery, current_percept.amoeba_map,
                             current_percept.bacteria)
             retract_extra, extend_extra, extra_row_num = self.allocate_extra(movable, current_percept.periphery, current_percept.amoeba_map, split)
-            
-            retract_teeth = self.teeth_retract(current_percept.amoeba_map, 3)
+            if extra_row_num != []:
+                print('extra row num', extra_row_num)
+            # TODO change num_cells to be a function of metabolism
+            retract_teeth = self.teeth_retract(current_percept.amoeba_map, 10)
             extend_teeth = self.teeth_extend(current_percept.amoeba_map, retract_teeth)
             
             movable = self.find_movable_cells([], current_percept.periphery, current_percept.amoeba_map,
@@ -180,10 +182,18 @@ class Player:
                 max_num_col = 3
             if count[i] > max_num_col:
                 cells = amoeba_loc[np.where(amoeba_loc[:, 0]==rows[i])[0]]
-                rightmost_cell = tuple((cells[cells[:, 1].argmax()].astype(int) % 100).tolist())
-                if rightmost_cell in periphery:
-                    extra.append(rightmost_cell)
-                    extra_row_num.append(rows[i])
+                if rows[i] % 2 == 0:
+                    # even row
+                    rightmost_cell = tuple((cells[cells[:, 1].argmax()].astype(int) % 100).tolist())
+                    if rightmost_cell in periphery:
+                        extra.append(rightmost_cell)
+                        extra_row_num.append(rows[i])
+                else:
+                    # odd row
+                    leftmost_cell = tuple((cells[cells[:, 1].argmin()].astype(int) % 100).tolist())
+                    if leftmost_cell in periphery:
+                        extra.append(leftmost_cell)
+                        extra_row_num.append(rows[i])
 
         # Get Extendable cells
         expand_cells = self.expand(movable, periphery, amoeba_map)
