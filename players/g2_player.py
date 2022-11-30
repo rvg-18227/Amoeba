@@ -23,7 +23,7 @@ CENTER_X = constants.map_dim // 2
 CENTER_Y = constants.map_dim // 2
 
 COMB_SEPARATION_DIST = 24
-TEETH_GAP = 2
+TEETH_GAP = 1
 
 
 # ---------------------------------------------------------------------------- #
