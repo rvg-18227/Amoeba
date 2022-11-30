@@ -26,7 +26,13 @@ COMB_SEPARATION_DIST = 24
 TEETH_GAP = 1
 
 VERTICAL_SHIFT_PERIOD = 4
-VERTICAL_SHIFT_LIST = (([0 for i in range(VERTICAL_SHIFT_PERIOD)] + [1 for i in range(VERTICAL_SHIFT_PERIOD)])*(round(np.ceil(100/(VERTICAL_SHIFT_PERIOD*2)))))[:100]
+VERTICAL_SHIFT_LIST = (
+    (
+        [0 for i in range(VERTICAL_SHIFT_PERIOD)]
+        + [1 for i in range(VERTICAL_SHIFT_PERIOD)]
+    )
+    * (round(np.ceil(100 / (VERTICAL_SHIFT_PERIOD * 2))))
+)[:100]
 
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
@@ -44,7 +50,7 @@ def coords_to_map(coords: list[tuple[int, int]], size=constants.map_dim) -> npt.
     return amoeba_map
 
 
-def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[], title='') -> None:
+def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[], title="") -> None:
     retracts_map = coords_to_map(retracts)
     extends_map = coords_to_map(extends)
 
@@ -229,7 +235,11 @@ class Player:
             # second layer of backbone
             formation.add_cell(center_x - 1, center_y + i)
             formation.add_cell(center_x - 1, center_y - i)
-        for i in range(1, round(min((teeth_size * (TEETH_GAP + 1)) / 2, backbone_size / 2) + 0.1), TEETH_GAP + 1):
+        for i in range(
+            1,
+            round(min((teeth_size * (TEETH_GAP + 1)) / 2, backbone_size / 2) + 0.1),
+            TEETH_GAP + 1,
+        ):
             formation.add_cell(center_x + 1, center_y + tooth_offset + i)
             formation.add_cell(center_x + 1, center_y + tooth_offset - i)
 
@@ -256,6 +266,7 @@ class Player:
             for p in list(set(desired_points).difference(set(current_points)))
             if p in self.extendable_cells
         ]
+        potential_extends.sort(key=lambda p: p[1])
 
         # show_amoeba_map(desired_amoeba, title="Desired Amoeba")
         # show_amoeba_map(self.amoeba_map, potential_retracts, potential_extends, title="Current Amoeba, Potential Retracts and Extends")
@@ -270,7 +281,6 @@ class Player:
 
             matching_retracts = list(potential_retracts)
             matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))
-            matching_retracts.reverse()
 
             for i in range(len(matching_retracts)):
                 retract = matching_retracts[i]
@@ -435,7 +445,7 @@ class Player:
         if memory_fields[MemoryFields.Initialized]:
             # Extract backbone column from memory
             curr_backbone_col = info >> 1
-            vertical_shift = VERTICAL_SHIFT_LIST[curr_backbone_col] 
+            vertical_shift = VERTICAL_SHIFT_LIST[curr_backbone_col]
             next_comb = self.generate_comb_formation(
                 self.current_size, vertical_shift, curr_backbone_col, CENTER_Y
             )
