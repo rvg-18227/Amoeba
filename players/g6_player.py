@@ -58,10 +58,51 @@ class Player:
 
         mini = min(5, int(self.current_size*self.metabolism))
 
-        retract_teeth = self.teeth_retract(current_percept.amoeba_map, 3)
-        extend_teeth = self.teeth_extend(current_percept.amoeba_map, retract_teeth)
-        return retract_teeth, extend_teeth, 0
+        info_binary  = format(info, '04b')
+        print(info_binary)
+        is_initialized = info_binary[0]
+
+        if is_initialized == '0':
+            print(last_percept.current_size)
+            print(current_percept.current_size)
+
+            amoeba_loc = np.stack(np.where(current_percept.amoeba_map == 1)).T
+            amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
+            right_side = np.min(amoeba_loc[:, 0])
+            left_side = np.max(amoeba_loc[:, 0])
+            retract_list = []
+            for column in range(right_side, left_side+1):
+                if len(retract_list) == 3:
+                    break
+
+                column_array = np.where(amoeba_loc[:, 0] == column)
+                num_column = np.size(column_array)
+
+                if column % 2 != 0:
+                    #odd column
+                    if num_column > 3:
+                        bottom_cell = np.max(column_array)
+                        bottom_cell = amoeba_loc[bottom_cell]
+                        retract_list.append((bottom_cell[0], bottom_cell[1]))
+                else:
+                    #even column
+                    if num_column > 2:
+                        bottom_cell = np.max(column_array)
+                        bottom_cell = amoeba_loc[bottom_cell]
+                        retract_list.append((bottom_cell[0], bottom_cell[1]))
+
+            if len(retract_list) == 0:
+                #in correct shape
+                return [], [], 255
+            else:
+                return retract_list, self.teeth_extend(current_percept.amoeba_map, retract_list), 0
+
+        else:
+            retract_teeth = self.teeth_retract(current_percept.amoeba_map, 3)
+            extend_teeth = self.teeth_extend(current_percept.amoeba_map, retract_teeth)
+            return retract_teeth, extend_teeth, 255
         #retract = self.sample_backend(current_percept.amoeba_map, mini, split)
+        '''
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
 
@@ -78,6 +119,7 @@ class Player:
         self.logger.info(f'retract: \n{retract}')
         self.logger.info(f'moves: \n{moves}')
         return retract[:move_num], moves[:move_num], info+1
+        '''
 
     def get_branch_tips(self, retract, movable, periphery, amoeba_map, split, split_pt):
         """
