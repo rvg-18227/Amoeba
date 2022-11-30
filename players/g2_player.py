@@ -41,7 +41,7 @@ def coords_to_map(coords: list[tuple[int, int]], size=constants.map_dim) -> npt.
     return amoeba_map
 
 
-def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[]) -> None:
+def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[], title='') -> None:
     retracts_map = coords_to_map(retracts)
     extends_map = coords_to_map(extends)
 
@@ -60,6 +60,7 @@ def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[]) -> None:
     plt.pcolormesh(map, edgecolors="k", linewidth=1)
     ax = plt.gca()
     ax.set_aspect("equal")
+    plt.title(title)
     # plt.savefig(f"debug/{turn}.png")
     plt.show()
 
@@ -253,6 +254,9 @@ class Player:
             if p in self.extendable_cells
         ]
 
+        # show_amoeba_map(desired_amoeba, title="Desired Amoeba")
+        # show_amoeba_map(self.amoeba_map, potential_retracts, potential_extends, title="Current Amoeba, Potential Retracts and Extends")
+
         # Loop through potential extends, searching for a matching retract
         retracts = []
         extends = []
@@ -295,7 +299,7 @@ class Player:
         #                 unused_extends.remove(matching_extends[0])
         #                 break
 
-        # show_amoeba_map(self.amoeba_map, retracts, extends)
+        # show_amoeba_map(self.amoeba_map, retracts, extends, title="Current Amoeba, Selected Retracts and Extends")
         return retracts, extends
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
@@ -437,12 +441,13 @@ class Player:
             # When we "settle" into the target backbone column, no moves are generated
             if len(moves) == 0:
                 # So we advance the backbone column by 1
-                curr_backbone_col = (curr_backbone_col + 1) % 100
-                info = curr_backbone_col << 1 | 1
-                vertical_shift = int(np.ceil(curr_backbone_col / 2) + 1) % 2
+                prev_backbone_col = curr_backbone_col
+                new_backbone_col = (prev_backbone_col + 1) % 100
+                vertical_shift = int(np.ceil(new_backbone_col / 2) + 1) % 2
                 next_comb = self.generate_comb_formation(
-                    self.current_size, vertical_shift, curr_backbone_col, CENTER_Y
+                    self.current_size, vertical_shift, prev_backbone_col, CENTER_Y
                 )
                 retracts, moves = self.get_morph_moves(next_comb)
+                info = new_backbone_col << 1 | 1
 
         return retracts, moves, info
