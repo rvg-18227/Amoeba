@@ -225,7 +225,7 @@ class Player:
 
         amoeba_loc = np.stack(np.where(amoeba_map==1)).T
         amoeba_even = amoeba_loc[amoeba_loc[:, 0]%2==0]
-        leftmost_col = amoeba_even[:, 1].max()
+        leftmost_col = amoeba_even[:, 1].min()
         retracts = amoeba_even[amoeba_even[:, 1]==leftmost_col]
         retract_final = []
         extend_final = []
