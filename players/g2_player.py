@@ -25,6 +25,8 @@ CENTER_Y = constants.map_dim // 2
 COMB_SEPARATION_DIST = 24
 TEETH_GAP = 1
 
+VERTICAL_SHIFT_PERIOD = 4
+VERTICAL_SHIFT_LIST = (([0 for i in range(VERTICAL_SHIFT_PERIOD)] + [1 for i in range(VERTICAL_SHIFT_PERIOD)])*(round(np.ceil(100/(VERTICAL_SHIFT_PERIOD*2)))))[:100]
 
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
@@ -433,7 +435,7 @@ class Player:
         if memory_fields[MemoryFields.Initialized]:
             # Extract backbone column from memory
             curr_backbone_col = info >> 1
-            vertical_shift = int(np.ceil(curr_backbone_col / 2) + 1) % 2
+            vertical_shift = VERTICAL_SHIFT_LIST[curr_backbone_col] 
             next_comb = self.generate_comb_formation(
                 self.current_size, vertical_shift, curr_backbone_col, CENTER_Y
             )
@@ -444,7 +446,7 @@ class Player:
                 # So we advance the backbone column by 1
                 prev_backbone_col = curr_backbone_col
                 new_backbone_col = (prev_backbone_col + 1) % 100
-                vertical_shift = int(np.ceil(new_backbone_col / 2) + 1) % 2
+                vertical_shift = VERTICAL_SHIFT_LIST[new_backbone_col]
                 next_comb = self.generate_comb_formation(
                     self.current_size, vertical_shift, prev_backbone_col, CENTER_Y
                 )
