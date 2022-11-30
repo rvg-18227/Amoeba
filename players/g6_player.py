@@ -173,6 +173,7 @@ class Player:
         amoeba_even = amoeba_loc[amoeba_loc[:, 0]%2==0]
         even_rows, count = np.unique(amoeba_even[:, 0], return_counts=True)
         extra = []
+        print(even_rows, count)
         for i in range(even_rows.shape[0]):
             if count[i] > 2:
                 cells = amoeba_even[np.where(amoeba_even[:, 0]==even_rows[i])[0]]
@@ -208,7 +209,7 @@ class Player:
                 expand_cells.append(move)
 
         # expand to an additional row
-        for c_i in range(2):
+        for c_i in range(min(2, last_row_cells.shape[0])):
             cell = last_row_cells[c_i]
             move = (int(cell[0]+1)%100, int(cell[1])%100)
             if move in movable:
