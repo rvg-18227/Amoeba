@@ -58,10 +58,67 @@ class Player:
 
         mini = min(5, int(self.current_size*self.metabolism))
 
-        retract_teeth = self.teeth_retract(current_percept.amoeba_map, mini, split)
-        extend_teeth = self.teeth_extend(current_percept.amoeba_map, retract_teeth)
-        return retract_teeth, extend_teeth, 0
+        info_binary  = format(info, '04b')
+        is_initialized = info_binary[0]
+
+        if is_initialized == '0':
+
+            amoeba_loc = np.stack(np.where(current_percept.amoeba_map == 1)).T
+            amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
+            right_side = np.min(amoeba_loc[:, 0])
+            left_side = np.max(amoeba_loc[:, 0])
+            retract_list = []
+            for column in range(right_side, left_side+1):
+                if len(retract_list) == 3:
+                    break
+
+                column_array = np.where(amoeba_loc[:, 0] == column)
+                num_column = np.size(column_array)
+
+                if column % 2 != 0:
+                    #odd column
+                    if num_column > 3:
+                        bottom_cell = np.max(column_array)
+                        bottom_cell = amoeba_loc[bottom_cell]
+                        retract_list.append((bottom_cell[0], bottom_cell[1]))
+                else:
+                    #even column
+                    if num_column > 2:
+                        bottom_cell = np.max(column_array)
+                        bottom_cell = amoeba_loc[bottom_cell]
+                        retract_list.append((bottom_cell[0], bottom_cell[1]))
+
+            if len(retract_list) == 0:
+                #in correct shape
+                return [], [], 255
+            else:
+                movable = self.find_movable_cells(retract_list, current_percept.periphery, current_percept.amoeba_map,
+                                          current_percept.bacteria)
+                extend_list = self.expand(movable, current_percept.periphery, current_percept.amoeba_map)
+                num = min(len(retract_list), len(extend_list))
+                return retract_list[:num], extend_list[:num], 0
+
+        else:
+            movable = self.find_movable_cells([], current_percept.periphery, current_percept.amoeba_map,
+                            current_percept.bacteria)
+            retract_extra, extend_extra = self.allocate_extra(movable, current_percept.periphery, current_percept.amoeba_map, split)
+            
+            retract_teeth = self.teeth_retract(current_percept.amoeba_map, 3)
+            extend_teeth = self.teeth_extend(current_percept.amoeba_map, retract_teeth)
+            
+            movable = self.find_movable_cells([], current_percept.periphery, current_percept.amoeba_map,
+                            current_percept.bacteria)
+            retract_even, extend_even = self.allocate_even_row(movable, current_percept.periphery, current_percept.amoeba_map, split)
+            
+            print(retract_extra, extend_extra)
+            print(retract_teeth, extend_teeth)
+            print(retract_even, extend_even)
+            retract_full = (retract_extra + retract_teeth + retract_even)[:mini]
+            extend_full = (extend_extra + extend_teeth + extend_even)[:mini]
+
+            return retract_full, extend_full, 255
         #retract = self.sample_backend(current_percept.amoeba_map, mini, split)
+        '''
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
 
@@ -78,6 +135,114 @@ class Player:
         self.logger.info(f'retract: \n{retract}')
         self.logger.info(f'moves: \n{moves}')
         return retract[:move_num], moves[:move_num], info+1
+        '''
+
+    def check_formation(self, amoeba_map):
+        """
+        Checks if the formation is a comb
+        Ignoring last row
+        """
+        amoeba_loc = np.stack(np.where(amoeba_map==1)).T
+        rows, count = np.unique(amoeba_loc[:, 0], return_counts=True)
+        max_row = rows.max()
+        for i in rows.shape[0]:
+            if rows[i] == max_row:
+                if rows[i] % 2 == 1 and count[i] > 3:
+                    return False
+                elif rows[i] % 2 == 0 and count[i] > 2:
+                    return False
+            else:
+                if rows[i] % 2 == 1 and count[i] != 3:
+                    return False
+                elif rows[i] % 2 == 0 and count[i] != 2:
+                    return False
+        return True
+
+    def allocate_extra(self, movable, periphery, amoeba_map, split):
+        """
+        Use newly eaten bacterias in the even rows to extend the comb
+        """
+        if split:
+            split_pt = 50 # hardcoded for now
+            amoeba_map = np.copy(amoeba_map)
+            amoeba_map = np.concatenate([amoeba_map, amoeba_map[:, :split_pt]], axis=1)
+            amoeba_map[:, :split_pt] = 0
+
+        # Get extra cells
+        amoeba_loc = np.stack(np.where(amoeba_map==1)).T
+        amoeba_even = amoeba_loc[amoeba_loc[:, 0]%2==0]
+        even_rows, count = np.unique(amoeba_even[:, 0], return_counts=True)
+        extra = []
+        for i in range(even_rows.shape[0]):
+            if count[i] > 2:
+                cells = amoeba_even[np.where(amoeba_even[:, 0]==even_rows[i])[0]]
+                rightmost_cell = tuple((cells[cells[:, 1].argmax()].astype(int) % 100).tolist())
+                if rightmost_cell in periphery:
+                    extra.append(rightmost_cell)
+
+        # Get Extendable cells
+        expand_cells = self.expand(movable, periphery, amoeba_map)
+
+        num = min(len(extra), len(expand_cells))
+        return extra[:num], expand_cells[:num]
+
+    def expand(self, movable, periphery, amoeba_map):
+        """
+        Returns locations to expand on at the bottom
+        """
+        amoeba_loc = np.stack(np.where(amoeba_map==1)).T
+        rows, count = np.unique(amoeba_loc[:, 0], return_counts=True)
+        last_row = rows.max()
+        last_count = count[rows.argmax()]
+        last_row_cells = amoeba_loc[amoeba_loc[:, 0]==last_row]
+        expand_cells = []
+        if last_row % 2 == 0:
+            max_num_col = 2
+        else:
+            max_num_col = 3
+        if last_count < max_num_col:
+            # expand to the right on the last row
+            cell = last_row_cells[last_row_cells[:, 1].argmax()] # rightmost cell
+            move = (int(cell[0])%100, int(cell[1]+1)%100)
+            if move in movable:
+                expand_cells.append(move)
+
+        # expand to an additional row
+        for c_i in range(2):
+            cell = last_row_cells[c_i]
+            move = (int(cell[0]+1)%100, int(cell[1])%100)
+            if move in movable:
+                expand_cells.append(move)
+
+        return expand_cells
+
+    def allocate_even_row(self, movable, periphery, amoeba_map, split):
+        if split:
+            split_pt = 50 # hardcoded for now
+            amoeba_map = np.copy(amoeba_map)
+            amoeba_map = np.concatenate([amoeba_map, amoeba_map[:, :split_pt]], axis=1)
+            amoeba_map[:, :split_pt] = 0
+
+        amoeba_loc = np.stack(np.where(amoeba_map==1)).T
+        amoeba_even = amoeba_loc[amoeba_loc[:, 0]%2==0]
+        leftmost_col = amoeba_even[:, 1].min()
+        retracts = amoeba_even[amoeba_even[:, 1]==leftmost_col]
+        retract_final = []
+        extend_final = []
+        for i in range(retracts.shape[0]):
+            retract_cell = tuple((retracts[i].astype(int)%100).tolist())
+            if not retract_cell in periphery:
+                continue
+            cells = amoeba_even[amoeba_even[:, 0]==retract_cell[0]]
+            target_col = cells[:, 1].max() + 1
+            extend_cell = (retract_cell[0], int(target_col)%100)
+            if not extend_cell in movable:
+                continue
+
+            retract_final.append(retract_cell)
+            extend_final.append(extend_cell)
+
+        return retract_final, extend_final
 
     def get_branch_tips(self, retract, movable, periphery, amoeba_map, split, split_pt):
         """
