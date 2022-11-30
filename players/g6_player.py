@@ -240,7 +240,8 @@ class Player:
             if not retract_cell in periphery:
                 continue
             cells = amoeba_even[amoeba_even[:, 0]==retract_cell[0]]
-            target_col = cells[:, 1].max() + 1
+            #target_col = cells[:, 1].max() + 1
+            target_col = retract_cell[1] + 2
             extend_cell = (retract_cell[0], int(target_col)%100)
             if not extend_cell in movable:
                 continue
