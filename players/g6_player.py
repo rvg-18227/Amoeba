@@ -105,7 +105,7 @@ class Player:
             if extra_row_num != []:
                 print('extra row num', extra_row_num)
             # TODO change num_cells to be a function of metabolism
-            retract_teeth = self.teeth_retract(current_percept.amoeba_map, 10)
+            retract_teeth = self.teeth_retract(current_percept.amoeba_map, 10, split, extra_row_num)
             extend_teeth = self.teeth_extend(current_percept.amoeba_map, retract_teeth)
             
             movable = self.find_movable_cells([], current_percept.periphery, current_percept.amoeba_map,
@@ -383,7 +383,7 @@ class Player:
 
         return split, split_col
 
-    def sample_column(self, column, num_cells, odd=True):
+    def sample_column(self, column, num_cells, odd=True, extra_row_num=[]):
         """Function that sample a column of the amoeba map
 
         Args:
@@ -400,7 +400,10 @@ class Player:
             for i in range(column.shape[0]):
                 if len(move_cells) == num_cells:
                     break
-                if column[i] == 1 and i % 2 != 0:
+                if column[(i+1)%100] == 0 and column[i] == 1 and i%2 == 1 and len(extra_row_num) != 0:
+                    # last column odd
+                    continue
+                if column[i] == 1 and i % 2 != 0 and i not in extra_row_num:
                     move_cells.append(i)
         else:
             # sample even row
@@ -412,7 +415,7 @@ class Player:
         return move_cells
         
                     
-    def teeth_retract(self, amoeba_map, num_cells, split=False) -> list:
+    def teeth_retract(self, amoeba_map, num_cells, split=False, extra_row_num=[]) -> list:
         """Function that sample the teeth row of the amoeba
            Always return even number of cells
         
@@ -423,14 +426,15 @@ class Player:
         Returns:
             move_cells: list of cells to move
         """
-        def find_move_cells(start, num_cells, amoeba_map):
+        def find_move_cells(start, num_cells, amoeba_map, extra_row_num):
             for i in range(start, 100):
                 curr_column = amoeba_map[:, i]
                 if np.max(curr_column) == 1:
                     sample_column_idx = i
                     break
             sample_column = amoeba_map[:, sample_column_idx]
-            return [(j, i) for j in self.sample_column(sample_column, num_cells, odd=True)]
+            columns = self.sample_column(sample_column, num_cells, odd=True, extra_row_num=extra_row_num)
+            return [(j, i) for j in columns]
         
         start = 0
         if split:
@@ -441,7 +445,7 @@ class Player:
                 if np.max(curr_column) == 0:
                     start = i
                     break
-        return find_move_cells(start, num_cells-num_cells%2, amoeba_map)
+        return find_move_cells(start, num_cells-num_cells%2, amoeba_map, extra_row_num)
     
     def teeth_extend(self, amoeba_map, retract, split=False):
         start = 0
@@ -458,13 +462,13 @@ class Player:
                 start = i
                 break
         # find the first column of the amoeba
-        for i in range(start, 100):
-            if amoeba_map_vec[(i+1) % 100] == 0:
-                first_column = i
-                for j, _ in retract:
-                    if amoeba_map[j, i] == 1:
-                        first_column = i + 1
-                break
+        extend = []
+        retract_col = [j for j, i in retract]
+        for j in retract_col:
+            for i in range(start, 100):
+                if amoeba_map[j, (i+1)%100] == 0:
+                    extend.append((j, (i+1)%100))
+                    break
         # return one before the first column of amoeba
-        return [(i, (first_column) % 100) for i, _ in retract]
+        return extend
         
