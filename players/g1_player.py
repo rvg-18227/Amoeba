@@ -3,7 +3,9 @@ import pickle
 import numpy as np
 import logging
 from amoeba_state import AmoebaState
+import math
 
+from queue import PriorityQueue, Queue
 
 class Player:
     def __init__(self, rng: np.random.Generator, logger: logging.Logger, metabolism: float, goal_size: int,
@@ -39,7 +41,11 @@ class Player:
         self.goal_size = goal_size
         self.current_size = goal_size / 4
 
-    def move(self, last_percept, current_percept, info) -> (list, list, int):
+        self.size_to_radius = {}
+        for i in range(50,3,-1):
+            self.size_to_radius[i] = i**2 - (i-3)**2
+
+    def move(self, last_percept: AmoebaState, current_percept: AmoebaState, info: int) -> (list, list, int):
         """Function which retrieves the current state of the amoeba map and returns an amoeba movement
 
             Args:
@@ -52,102 +58,186 @@ class Player:
                     2. A list of positions the retracted cells have moved to
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
-        self.current_size = current_percept.current_size
-        mini = min(5, len(current_percept.periphery) // 2)
-        for i, j in current_percept.bacteria:
-            current_percept.amoeba_map[i][j] = 1
+        #print(current_percept.amoeba_map)
 
-        retract = [tuple(i) for i in self.rng.choice(current_percept.periphery, replace=False, size=mini)]
-        movable = self.find_movable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
-                                          current_percept.bacteria, mini)
-
-        info = 0
-        retrac = self.retract_rear_end(movable)
-        movable = self.extend_front_end()
-        return retract, movable, info
-    def getPivotElement(self,array, left, right):
-        if right < left:
-            return -1
-        if right == left:
-            return left
-        middle = None
-        if (left + right) %2 ==0:
-            middle = left + right//2
-        else:
-            middle = left + right//2 -1
-        print(middle)
-        if (middle < right) and (array[middle] > array[middle + 1]):
-            return middle
-        if (middle > left )and (array[middle] < array[middle - 1]):
-            return middle-1
-        if array[left] >= array[middle]:
-            return self.getPivotElement(array, left, middle-1)
-        else:
-            return self.getPivotElement(array, middle + 1, right)
-    def retract_rear_end(self,moveable)-> list:
-        #just gonna try to move the right
-        all_moveable = moveable.sorted()
-        x_index = np.array(all_moveable)[:, 0]
-        pivot = None
-        for i in range(len(x_index)-1):
-            first_num = x_index[i]
-            second_num = x_index[i+1]
-            if second_num - first_num >1:
-                pivot = i
-                break
-
-        before_pivot = min(num_cell_moveabel,pivot)
-        num_cell_moveabel = self.current_size * self.metabolism
-        retract = all_moveable[before_pivot:]
-        cell_left =num_cell_moveabel -  pivot
-        retract.append(all_moveable[:cell_left])
-    
-        retract = all_moveable[:num_cell_moveabel]
-        return retract
-    def extend_front_end(self,moveable) -> list:
-        all_moveable = moveable.sorted()
-        x_index = np.array(all_moveable)[:, 0]
-        pivot = None
-        for i in range(len(x_index)-1):
-            first_num = x_index[i]
-            second_num = x_index[i+1]
-            if second_num - first_num >1:
-                pivot = i
-                break
-        before_pivot = min(num_cell_moveabel,pivot)
-        num_cell_moveabel = self.current_size * self.metabolism
-        extend = all_moveable[:before_pivot]
-        cell_left =num_cell_moveabel -  pivot
-        retract.append(all_moveable[:cell_left])
-        
-    
-        retract = all_moveable[:num_cell_moveabel]
-        extend = []
-        move_y= False
-        if pivot == len(all_moveable)-2:
-            move_y =True
-        for i in retract:
-            if move_y:
-                x = i[0]
-                y =( i[1]+1) % 100
-            else:
-                x = i[0]+1
-                y = i[1]
+        #store center as information. Center would be (info, info)
+        #close cavities left of the center
             
-            extend.append([x,y])
-        return extend
-    def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
+        r = self.largest_radius_given_size(current_percept.current_size)
+
+        if info == 0:
+            info = r
+        
+        centers = []
+
+        #new center is the max_x, max_y
+        for i in range(140, 0, -1):
+            i = i%100
+            if current_percept.amoeba_map[i][i] == 1:
+                if current_percept.amoeba_map[i][i-1] == 1 and current_percept.amoeba_map[i-1][i] == 1:
+                    centers.append((i,i))
+
+                #a new center or is currently being shrunk
+                if len(centers) == 1:
+                    if current_percept.amoeba_map[i][i+1] == 0 and current_percept.amoeba_map[i+1][i] == 0:
+                        if current_percept.amoeba_map[i][i-1] == 1 and current_percept.amoeba_map[i-1][i] == 1:
+                            info = r
+        
+        center = centers[0]
+
+        #center = (53,53)
+        next_center = ((center[0]+info)%100, (center[1]+info)%100)
+        
+        formation_needed = self.find_surround_cells(info, info, center)
+        #check = self.formation_secured(current_percept.amoeba_map, formation_needed)
+
+        movable = None
+        retract = None
+
+        #create and continue formation
+        print("Formation at: ", center, next_center)
+
+        #cells I can retract
+        retract = self.furthest_to_top_right(list(set(current_percept.periphery).difference(set(formation_needed))), next_center, current_percept)
+
+        #holes behind center
+        cavity_cells = self.find_island(current_percept.amoeba_map, (center[0]-1, center[1]-1))
+        shrink_cells = []
+
+        for i in cavity_cells:
+            if i in set(current_percept.movable_cells):
+                shrink_cells.append(i)
+
+        formation_moves = list(set(formation_needed).intersection(set(current_percept.movable_cells)))
+        formation_moves.sort(key = lambda x : self.manhattan_distance(x, center))
+
+        movable = list(shrink_cells) + formation_moves
+
+
+        #print(retract)
+        #print(movable)
+            
+
+        if len(retract) > len(movable):
+            retract = retract[:len(movable)]
+        elif len(retract) < len(movable):
+            movable = movable[:len(retract)]
+
+        if len(retract) > self.metabolism*current_percept.current_size:
+            retract = retract[:int(self.metabolism*current_percept.current_size)]
+
+        if len(movable) > self.metabolism*current_percept.current_size:
+            movable = movable[:int(self.metabolism*current_percept.current_size)]
+
+        #print(retract)
+        #print(movable)
+
+        return retract[:2], movable[:2], info
+
+    """def mend_retract_movable(self, retract, movable, current_percept):
+        ret_i = 0
+        move_i = 0
+
+        move = []
+        ret = []
+
+        while ret_i < len(retract) and move_i < len(movable):
+            ret.append(retract[ret_i])
+
+            while move_i < len(movable) and len(move) < len(ret):
+                if self.check_move(ret, move + [movable[move_i]], current_percept):
+                    move.append(movable[move_i])
+                
+                move_i += 1
+
+        if len(ret) > len(move):
+            ret = ret[:len(move)]
+        elif len(ret) < len(move):
+            move = move[:len(ret)]
+
+        return ret, move"""
+        
+    def manhattan_distance(self, src, trgt):
+        x1 = src[0]
+        y1 = src[1]
+
+        x2 = trgt[0]
+        y2 = trgt[1]
+
+        x_dist = min(x2-x1, 100+x1-x2)
+        y_dist = min(y2-y1, 100+y1-y2)
+
+        return x_dist**2 + y_dist**2
+
+    def find_island(self, amoeba_map, start):
+
+        if amoeba_map[start[0]][start[1]] == 1:
+            return []
+
+        seen = set()
+        in_queue = set()
+        l = []
+
+        q = Queue()
+        q.put(start)
+
+        while q.qsize() > 0:
+            curr = q.get()
+
+            if q in seen:
+                continue
+            else:
+                seen.add(curr)
+                l.append(curr)
+                for n in self.find_neighbor(curr, amoeba_map):
+                    if n not in seen and n not in in_queue:
+                        q.put(n)
+                        in_queue.add(n)
+
+        return l[::-1]
+
+    def find_neighbor(self, curr, amoeba_map):
+        x, y = curr
+        out = []
+        if amoeba_map[x][(y - 1) % 100] == 0:
+            out.append((x, (y - 1) % 100))
+        if amoeba_map[x][(y + 1) % 100] == 0:
+            out.append((x, (y + 1) % 100))
+        if amoeba_map[(x - 1) % 100][y] == 0:
+            out.append(((x - 1) % 100, y))
+        if amoeba_map[(x + 1) % 100][y] == 0:
+            out.append(((x + 1) % 100, y))
+
+        return out
+
+    #return "count" points closest furthest from a certain point
+    def furthest_to_top_right(self, retractable, target, current_percept):
+
+        pq = PriorityQueue()
+
+        for cell in retractable:
+            pq.put((-self.manhattan_distance(cell, target), cell))
+
+        retract = []
+        for i in range(pq.qsize()):
+            test = pq.get()[1]
+            if self.check_move(retract+[test], current_percept):
+                retract.append(test)
+
+        return retract
+
+    def find_movable_cells(self, periphery, amoeba_map, bacteria, mini):
         movable = []
-        new_periphery = list(set(periphery).difference(set(retract)))
+        new_periphery = list(set(periphery))
         for i, j in new_periphery:
             nbr = self.find_movable_neighbor(i, j, amoeba_map, bacteria)
             for x, y in nbr:
                 if (x, y) not in movable:
                     movable.append((x, y))
 
-        movable += retract
+        #movable += retract
 
-        return movable[:mini]
+        return movable#[:mini]
 
     def find_movable_neighbor(self, x, y, amoeba_map, bacteria):
         out = []
@@ -162,3 +252,79 @@ class Player:
                 out.append(((x + 1) % 100, y))
 
         return out
+
+    #for a given amoeba size, and a required thickness, return the cells needed to be occupied 
+    #uses center as a reference point
+    def find_surround_cells(self, radius, end_length, center):
+        
+        #2-Width L
+        cells = set()
+
+        center_x, center_y = center
+
+        for i in range(int(radius)+1):
+            cells.add((center_x+i, center_y))
+            cells.add((center_x, center_y+i))
+
+        for i in range(int(radius)+1):
+            cells.add((center_x+i, center_y-1))
+            cells.add((center_x-1, center_y+i))
+
+        for i in range(-1, end_length+1):
+            cells.add((center_x+radius, center_y+i))
+            cells.add((center_x+i, center_y+radius))
+
+        fixed_cells = set()
+        for x,y in cells:
+            fixed_cells.add((x%100, y%100))
+
+        return fixed_cells
+
+    def largest_radius_given_size(self, size):
+        
+        for radius, cell_count in self.size_to_radius.items():
+            if cell_count <= size:
+                return radius-2
+
+
+    def check_move(self, retract, current_precept):
+
+        periphery = current_precept.periphery
+
+        if not set(retract).issubset(set(periphery)):
+            return False
+
+        """movable = retract[:]
+        new_periphery = list(set(periphery).difference(set(retract)))
+        for i, j in new_periphery:
+            nbr = self.find_movable_neighbor(i, j, current_precept.amoeba_map, current_precept.bacteria)
+            for x, y in nbr:
+                if (x, y) not in movable:
+                    movable.append((x, y))"""
+
+        amoeba = np.copy(current_precept.amoeba_map)
+        amoeba[amoeba < 0] = 0
+        amoeba[amoeba > 0] = 1
+
+        for i, j in retract:
+            amoeba[i][j] = 0
+
+        tmp = np.where(amoeba == 1)
+        result = list(zip(tmp[0], tmp[1]))
+        check = np.zeros((100, 100), dtype=int)
+
+        stack = result[0:1]
+        while len(stack):
+            a, b = stack.pop()
+            check[a][b] = 1
+
+            if (a, (b - 1) % 100) in result and check[a][(b - 1) % 100] == 0:
+                stack.append((a, (b - 1) % 100))
+            if (a, (b + 1) % 100) in result and check[a][(b + 1) % 100] == 0:
+                stack.append((a, (b + 1) % 100))
+            if ((a - 1) % 100, b) in result and check[(a - 1) % 100][b] == 0:
+                stack.append(((a - 1) % 100, b))
+            if ((a + 1) % 100, b) in result and check[(a + 1) % 100][b] == 0:
+                stack.append(((a + 1) % 100, b))
+
+        return (amoeba == check).all()
