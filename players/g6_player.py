@@ -58,7 +58,10 @@ class Player:
 
         mini = min(5, int(self.current_size*self.metabolism))
 
-        retract = self.sample_backend(current_percept.amoeba_map, mini, split)
+        retract_teeth = self.teeth_retract(current_percept.amoeba_map, 3)
+        extend_teeth = self.teeth_extend(current_percept.amoeba_map, retract_teeth)
+        return retract_teeth, extend_teeth, 0
+        #retract = self.sample_backend(current_percept.amoeba_map, mini, split)
         for i, j in current_percept.bacteria:
             current_percept.amoeba_map[i][j] = 1
 
@@ -198,34 +201,37 @@ class Player:
 
         return split, split_col
 
-    def sample_column(self, column, num_cells):
+    def sample_column(self, column, num_cells, odd=True):
         """Function that sample a column of the amoeba map
 
         Args:
             column (np.ndarray): 1D numpy array of the column
             num_cells (int): number of cells to sample
+            odd (bool): whether to sample odd rows
 
         Returns:
             move_cells: list of cells to move
         """
         move_cells = []
-        # prioritize even row
-        for i in range(column.shape[0]):
-            if len(move_cells) == num_cells:
-                break
-            if column[i] == 1 and i % 2 == 0:
-                move_cells.append(i)
-        # append odd row
-        for i in range(column.shape[0]):
-            if len(move_cells) == num_cells:
-                break
-            if column[i] == 1 and i % 2 != 0:
-                move_cells.append(i)
+        if odd:
+            # sample odd rows
+            for i in range(column.shape[0]):
+                if len(move_cells) == num_cells:
+                    break
+                if column[i] == 1 and i % 2 != 0:
+                    move_cells.append(i)
+        else:
+            # sample even row
+            for i in range(column.shape[0]):
+                if len(move_cells) == num_cells:
+                    break
+                if column[i] == 1 and i % 2 == 0:
+                    move_cells.append(i)
         return move_cells
         
-    
-    def sample_backend(self, amoeba_map, num_cells, split=False) -> list:
-        """Function that smaple the backend of the amoeba
+                    
+    def teeth_retract(self, amoeba_map, num_cells, split=False) -> list:
+        """Function that sample the teeth row of the amoeba
         
         Args:
             amoeba_map (np.ndarray): 2D numpy array of the current amoeba map
@@ -234,7 +240,6 @@ class Player:
         Returns:
             move_cells: list of cells to move
         """
-        # TODO potential improvement: sample from i-1 column that contain movable cells
         def find_move_cells(start, num_cells, amoeba_map):
             for i in range(start, 100):
                 curr_column = amoeba_map[:, i]
@@ -242,7 +247,7 @@ class Player:
                     sample_column_idx = i
                     break
             sample_column = amoeba_map[:, sample_column_idx]
-            return [(j, i) for j in self.sample_column(sample_column, num_cells)]
+            return [(j, i) for j in self.sample_column(sample_column, num_cells, odd=True)]
         
         start = 0
         if split:
@@ -254,5 +259,26 @@ class Player:
                     start = i
                     break
         return find_move_cells(start, num_cells, amoeba_map)
-                    
-                    
+    
+    def teeth_extend(self, amoeba_map, retract, split=False):
+        start = 0
+        amoeba_map_vec = (amoeba_map.sum(axis=0) != 0).astype(int)
+        if split:
+            start = None
+            # move pass the first chunk of amoeba
+            for i in range(0, 100):
+                if amoeba_map_vec[i] == 0:
+                    start = i
+                    break
+        for i in range(start, 100):
+            if amoeba_map_vec[i] == 1:
+                start = i
+                break
+        # find the first column of the amoeba
+        for i in range(start, 100):
+            if amoeba_map_vec[(i+1) % 100] == 0:
+                first_column = i
+                break
+        # return one before the first column of amoeba
+        return [(i, (first_column+1) % 100) for i, _ in retract]
+        
