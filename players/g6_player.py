@@ -58,7 +58,7 @@ class Player:
 
         mini = min(5, int(self.current_size*self.metabolism))
 
-        retract_teeth = self.teeth_retract(current_percept.amoeba_map, 3)
+        retract_teeth = self.teeth_retract(current_percept.amoeba_map, mini, split)
         extend_teeth = self.teeth_extend(current_percept.amoeba_map, retract_teeth)
         return retract_teeth, extend_teeth, 0
         #retract = self.sample_backend(current_percept.amoeba_map, mini, split)
@@ -232,6 +232,7 @@ class Player:
                     
     def teeth_retract(self, amoeba_map, num_cells, split=False) -> list:
         """Function that sample the teeth row of the amoeba
+           Always return even number of cells
         
         Args:
             amoeba_map (np.ndarray): 2D numpy array of the current amoeba map
@@ -258,7 +259,7 @@ class Player:
                 if np.max(curr_column) == 0:
                     start = i
                     break
-        return find_move_cells(start, num_cells, amoeba_map)
+        return find_move_cells(start, num_cells-num_cells%2, amoeba_map)
     
     def teeth_extend(self, amoeba_map, retract, split=False):
         start = 0
@@ -278,7 +279,10 @@ class Player:
         for i in range(start, 100):
             if amoeba_map_vec[(i+1) % 100] == 0:
                 first_column = i
+                for j, _ in retract:
+                    if amoeba_map[j, i] == 1:
+                        first_column = i + 1
                 break
         # return one before the first column of amoeba
-        return [(i, (first_column+1) % 100) for i, _ in retract]
+        return [(i, (first_column) % 100) for i, _ in retract]
         
