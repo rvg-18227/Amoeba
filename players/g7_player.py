@@ -42,10 +42,11 @@ def breaks_amoeba(point, amoeba_map):
     :param amoeba_map: The amoeba map
     :return: True if the point breaks the amoeba, False otherwise
     '''
+
     x, y = point
     # check that all amoeba cells are connected
     isolated_neighbors = get_neighbors(x, y, amoeba_map)
-    queue = [isolated_neighbors[0]] #todso heapq??
+    queue = [isolated_neighbors[0]]
     copy_amoeba_map = deepcopy(amoeba_map)
     copy_amoeba_map[x][y] = 0
     visited = set()
@@ -61,14 +62,18 @@ def breaks_amoeba(point, amoeba_map):
         queue.extend(neighbors)
         if len(to_visit_isolated_connections) == 0:
             return False
-
-    return len(visited - set([(i, j) for i, row in enumerate(copy_amoeba_map) for j, cell in enumerate(row) if cell != 0])) > 0 or len(visited) != len(set([(i, j) for i, row in enumerate(copy_amoeba_map) for j, cell in enumerate(row) if cell != 0]))
+    return True
+    #TODO: make sure we don't need this code below? always true if break out of while loop?
+    amoeba_cells = set([(i, j) for i, row in enumerate(copy_amoeba_map) for j, cell in enumerate(row) if cell != 0])
+    return len(visited) != len(amoeba_cells) or len(visited - amoeba_cells) > 0
 
 def remove_duplicates(points):
     validPoints = []
+    addedPoints = set()
     for i, point in enumerate(points):
-        if point not in validPoints:
+        if point not in addedPoints:
             validPoints.append(point)
+            addedPoints.add(point)
     return validPoints
 # ---------------------------------------------------------------------------- #
 #                               Formation Classes                              #
@@ -332,6 +337,41 @@ class RakeFormation(Formation):
         # Phase 3: 2 lines move inwards
         raise NotImplementedError
 
+    def get_n_moves(self, allRetracable, pointsToMoveTo, state, n_cells_can_move):
+        ''' 
+        Returns the points to retract and move so that len(pointsToMoveTo) == len(pointsToRetract)
+
+        :param allRetracable: A list of all points that can be retracted
+        :param pointsToMoveTo: A list of all points that need to be moved to
+        :param state: The current state
+        :param n_cells_can_move: The number of cells that can move based on the metabolism
+        :return: A tuple of the points to retract and the points to move to
+        '''
+        amoebaMapCopy = deepcopy(state.amoeba_map)
+        moveDups = [point for point in pointsToMoveTo if pointsToMoveTo.count(point) > 1]
+        validPointsToMoveTo = [point for i, point in enumerate(pointsToMoveTo) if point not in moveDups and pointsToMoveTo.index(point) == i]
+        allValidRetracable = []
+
+        #make n passes? does this work
+        for j in range(2):
+            for i, point in enumerate(allRetracable):
+                if point not in allValidRetracable and not breaks_amoeba(point, amoebaMapCopy):
+                    allValidRetracable.append(point)
+                    amoebaMapCopy[point[0]][point[1]] = 0
+
+        validPointsToMoveTo.sort(key = lambda x: 101*x[0] + x[1])
+
+        allValidRetracable = allValidRetracable[:n_cells_can_move]
+        validPointsToMoveTo = validPointsToMoveTo[:n_cells_can_move]
+
+        if len(allValidRetracable) > len(validPointsToMoveTo):
+            return allValidRetracable[:len(validPointsToMoveTo)], validPointsToMoveTo
+        elif len(allValidRetracable) < len(validPointsToMoveTo):
+            return allValidRetracable, validPointsToMoveTo[:len(allValidRetracable)]
+        else:
+            return allValidRetracable, validPointsToMoveTo
+
+
     def _get_midpoint(self, start, end):
         if end < start:
             #TODO: 44 -> 3 = midpt of (100-44 + 3-0)//2 = 28
@@ -408,7 +448,6 @@ class RakeFormation(Formation):
             if sum(amoebaMap[i]) <= (3 * expectedLen/4):
                 emptyCols.append(i)
         if len(emptyCols) == 0:
-            print("no empty cols")
             return []
 
         continuousSeqs = {}
@@ -696,7 +735,6 @@ class Player:
         
         phase = self.formation.get_phase(phase, current_percept, retract, movable)
 
-        print("Phase", phase)
         if len(retract) == 0 and len(movable) == 0:
             print("No moves")
         #     return self.move(last_percept, current_percept, self.encode_info(phase, count, 0, info))
