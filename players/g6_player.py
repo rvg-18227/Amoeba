@@ -92,12 +92,31 @@ class Player:
                 #in correct shape
                 return [], [], 255
             else:
-                return retract_list, self.teeth_extend(current_percept.amoeba_map, retract_list), 0
+                movable = self.find_movable_cells(retract_list, current_percept.periphery, current_percept.amoeba_map,
+                                          current_percept.bacteria)
+                extend_list = self.expand(movable, current_percept.periphery, current_percept.amoeba_map)
+                num = min(len(retract_list), len(extend_list))
+                return retract_list[:num], extend_list[:num], 0
 
         else:
+            movable = self.find_movable_cells([], current_percept.periphery, current_percept.amoeba_map,
+                            current_percept.bacteria)
+            retract_extra, extend_extra = self.allocate_extra(movable, current_percept.periphery, current_percept.amoeba_map, split)
+            
             retract_teeth = self.teeth_retract(current_percept.amoeba_map, 3)
             extend_teeth = self.teeth_extend(current_percept.amoeba_map, retract_teeth)
-            return retract_teeth, extend_teeth, 255
+            
+            movable = self.find_movable_cells([], current_percept.periphery, current_percept.amoeba_map,
+                            current_percept.bacteria)
+            retract_even, extend_even = self.allocate_even_row(movable, current_percept.periphery, current_percept.amoeba_map, split)
+            
+            print(retract_extra, extend_extra)
+            print(retract_teeth, extend_teeth)
+            print(retract_even, extend_even)
+            retract_full = (retract_extra + retract_teeth + retract_even)[:mini]
+            extend_full = (extend_extra + extend_teeth + extend_even)[:mini]
+
+            return retract_full, extend_full, 255
         #retract = self.sample_backend(current_percept.amoeba_map, mini, split)
         '''
         for i, j in current_percept.bacteria:
@@ -139,7 +158,7 @@ class Player:
                     return False
         return True
 
-    def allocate_extra(self, movable, periphery, amoeba_loc, amoeba_map, split):
+    def allocate_extra(self, movable, periphery, amoeba_map, split):
         """
         Use newly eaten bacterias in the even rows to extend the comb
         """
@@ -154,9 +173,9 @@ class Player:
         amoeba_even = amoeba_loc[amoeba_loc[:, 0]%2==0]
         even_rows, count = np.unique(amoeba_even[:, 0], return_counts=True)
         extra = []
-        for i in rows.shape[0]:
-            if count[i] > 0:
-                cells = amoeba_even[np.where(amoeba_even[:, 0]==rows[i])[0]]
+        for i in range(even_rows.shape[0]):
+            if count[i] > 2:
+                cells = amoeba_even[np.where(amoeba_even[:, 0]==even_rows[i])[0]]
                 rightmost_cell = tuple((cells[cells[:, 1].argmax()].astype(int) % 100).tolist())
                 if rightmost_cell in periphery:
                     extra.append(rightmost_cell)
@@ -185,19 +204,19 @@ class Player:
             # expand to the right on the last row
             cell = last_row_cells[last_row_cells[:, 1].argmax()] # rightmost cell
             move = (int(cell[0])%100, int(cell[1]+1)%100)
-            if move in periphery:
+            if move in movable:
                 expand_cells.append(move)
 
         # expand to an additional row
-        for c_i in range(last_row_cells.shape[0]):
-            cell = c_i
+        for c_i in range(2):
+            cell = last_row_cells[c_i]
             move = (int(cell[0]+1)%100, int(cell[1])%100)
-            if move in periphery:
+            if move in movable:
                 expand_cells.append(move)
 
         return expand_cells
 
-    def allocate_even_row(self, movable, periphery, amoeba_loc, amoeba_map, split):
+    def allocate_even_row(self, movable, periphery, amoeba_map, split):
         if split:
             split_pt = 50 # hardcoded for now
             amoeba_map = np.copy(amoeba_map)
