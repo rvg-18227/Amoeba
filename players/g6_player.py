@@ -101,7 +101,7 @@ class Player:
         else:
             movable = self.find_movable_cells([], current_percept.periphery, current_percept.amoeba_map,
                             current_percept.bacteria)
-            retract_extra, extend_extra = self.allocate_extra(movable, current_percept.periphery, current_percept.amoeba_map, split)
+            retract_extra, extend_extra, extra_row_num = self.allocate_extra(movable, current_percept.periphery, current_percept.amoeba_map, split)
             
             retract_teeth = self.teeth_retract(current_percept.amoeba_map, 3)
             extend_teeth = self.teeth_extend(current_percept.amoeba_map, retract_teeth)
@@ -110,9 +110,9 @@ class Player:
                             current_percept.bacteria)
             retract_even, extend_even = self.allocate_even_row(movable, current_percept.periphery, current_percept.amoeba_map, split)
             
-            print(retract_extra, extend_extra)
-            print(retract_teeth, extend_teeth)
-            print(retract_even, extend_even)
+            # print(retract_extra, extend_extra)
+            # print(retract_teeth, extend_teeth)
+            # print(retract_even, extend_even)
             retract_full = (retract_extra + retract_teeth + retract_even)[:mini]
             extend_full = (extend_extra + extend_teeth + extend_even)[:mini]
 
@@ -170,22 +170,27 @@ class Player:
 
         # Get extra cells
         amoeba_loc = np.stack(np.where(amoeba_map==1)).T
-        amoeba_even = amoeba_loc[amoeba_loc[:, 0]%2==0]
-        even_rows, count = np.unique(amoeba_even[:, 0], return_counts=True)
+        rows, count = np.unique(amoeba_loc[:, 0], return_counts=True)
         extra = []
-        print(even_rows, count)
-        for i in range(even_rows.shape[0]):
-            if count[i] > 2:
-                cells = amoeba_even[np.where(amoeba_even[:, 0]==even_rows[i])[0]]
+        extra_row_num = []
+        for i in range(rows.shape[0]):
+            if rows[i] % 2 == 0:
+                max_num_col = 2
+            else:
+                max_num_col = 3
+            if count[i] > max_num_col:
+                cells = amoeba_loc[np.where(amoeba_loc[:, 0]==rows[i])[0]]
                 rightmost_cell = tuple((cells[cells[:, 1].argmax()].astype(int) % 100).tolist())
                 if rightmost_cell in periphery:
                     extra.append(rightmost_cell)
+                    extra_row_num.append(rows[i])
 
         # Get Extendable cells
         expand_cells = self.expand(movable, periphery, amoeba_map)
 
         num = min(len(extra), len(expand_cells))
-        return extra[:num], expand_cells[:num]
+        #print(extra_row_num)
+        return extra[:num], expand_cells[:num], extra_row_num
 
     def expand(self, movable, periphery, amoeba_map):
         """
