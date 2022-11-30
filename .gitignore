@@ -8,4 +8,5 @@ render/
 .DS_Store
 .idea/
 .vscode/
+.venv/
 results.log
