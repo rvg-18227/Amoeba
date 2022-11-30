@@ -189,13 +189,13 @@ class Player:
         return absolute_cords
 
     def morph(self, offsets:set, center_point:Tuple[int]):
+        # adapted from group 2
         cur_ameoba_points = self.map_to_coords(self.amoeba_map)
         desired_ameoba_points = self.offset_to_absolute(offsets, center_point)
 
         potential_retracts = list(self.periphery.intersection((cur_ameoba_points.difference(desired_ameoba_points))))
         potential_extends = list(self.movable_cells.intersection(desired_ameoba_points.difference(cur_ameoba_points)))
 
-        # TODO: FIX BELOW 
         # Loop through potential extends, searching for a matching retract
         retracts = []
         extends = []
@@ -218,7 +218,6 @@ class Player:
                     break
         
         # TODO: extra bacteria handling??
-
 
         return retracts, extends
 
@@ -245,13 +244,14 @@ class Player:
         self.num_available_moves = int(np.ceil(self.metabolism * self.current_size))
 
         desired_shape_offsets = self.get_desired_shape()
-        if self.turn < 50: # change later to num_available_moves
-            center_point = self.get_center_point(current_percept, 0)
+        if self.turn < 50: 
+            info = 0
+            center_point = self.get_center_point(current_percept, info)
         else:
-            center_point = self.get_center_point(current_percept, 1)
+            info = 1
+            center_point = self.get_center_point(current_percept, info)
             center_point = (center_point[0] + 1, center_point[1])
         retracts, moves = self.morph(desired_shape_offsets, center_point)
 
-        info = 0 # delete later
         return retracts, moves, info
     
