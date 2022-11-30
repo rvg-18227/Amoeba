@@ -190,12 +190,20 @@ class Player:
                         extra_row_num.append(rows[i])
                 else:
                     # odd row
-                    leftmost_cell = tuple((cells[cells[:, 1].argmin()].astype(int) % 100).tolist())
-                    if leftmost_cell in periphery:
-                        extra.append(leftmost_cell)
-                        extra_row_num.append(rows[i])
+                    if count[i] == 4:
+                        rightmost_cell = tuple((cells[cells[:, 1].argmax()].astype(int) % 100).tolist())
+                        if rightmost_cell in periphery:
+                            extra.append(rightmost_cell)
+                            extra_row_num.append(rows[i])
+                    else:
+                        leftmost_cell = tuple((cells[cells[:, 1].argmin()].astype(int) % 100).tolist())
+                        if leftmost_cell in periphery:
+                            extra.append(leftmost_cell)
+                            extra_row_num.append(rows[i])
 
         # Get Extendable cells
+        # Possible bug in expand?? Return wrong expandable cells
+        # (53, 67), (55, 67) 
         expand_cells = self.expand(movable, periphery, amoeba_map)
 
         num = min(len(extra), len(expand_cells))
