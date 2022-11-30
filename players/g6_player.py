@@ -59,12 +59,9 @@ class Player:
         mini = min(5, int(self.current_size*self.metabolism))
 
         info_binary  = format(info, '04b')
-        print(info_binary)
         is_initialized = info_binary[0]
 
         if is_initialized == '0':
-            print(last_percept.current_size)
-            print(current_percept.current_size)
 
             amoeba_loc = np.stack(np.where(current_percept.amoeba_map == 1)).T
             amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
