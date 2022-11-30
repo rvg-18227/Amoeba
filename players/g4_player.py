@@ -57,71 +57,59 @@ def visualize_reshape(
     
     fig, (ax1, ax2) = debug_fig
 
+    # marker sizes
+    size_s = (mpl.rcParams['lines.markersize'] + 1.5) ** 2
+    size_m = (mpl.rcParams['lines.markersize'] + 2.5) ** 2
+    size_l = (mpl.rcParams['lines.markersize'] + 4) ** 2
+
     # common: ameoba & target
-    for x, y in target:
-        ax1.plot(x, y, 'r.')
-        ax2.plot(x, y, 'r.')
+    for ax in [ax1, ax2]:
+        ax.plot(*list(zip(*target)), 'r.', label='target')
+        ax.plot(*list(zip(*ameoba)), 'g.', label='ameoba')
 
-    for x, y in ameoba:
-        ax1.plot(x, y, 'g.')
-        ax2.plot(x, y, 'g.')
+    def scatter(ax: plt.Axes, pts: list[cell], **kwargs) -> None:
+        if len(pts) == 0:
+            return
 
-    # subplot 1: occupiable & retractable
-    for x, y in occupiable:
-        size = (mpl.rcParams['lines.markersize'] + 1.5) ** 2
-        ax1.scatter(x, y, facecolors='none', edgecolors='tab:purple', s=size)
-
-    for x, y in retractable:
-        size = (mpl.rcParams['lines.markersize'] + 4) ** 2
-        ax1.scatter(x, y, facecolors='none', edgecolors='forestgreen', marker='s', s=size)
-
-    # subplot 2: retract & extend & bacteria
-    for x, y in retract:
-        size = (mpl.rcParams['lines.markersize'] + 4) ** 2
-        ax2.scatter(x, y, facecolors='none', edgecolors='forestgreen', marker='s', s=size)
-
-    for x, y in extend:
-        size = (mpl.rcParams['lines.markersize'] + 1.5) ** 2
-        ax2.scatter(x, y, facecolors='none', edgecolors='tab:purple', s=size)
-
-    for x, y in bacteria:
-        size = (mpl.rcParams['lines.markersize'] + 2.5) ** 2
-        ax2.scatter(x, y, facecolors='none', edgecolors='orange', marker='s', s=size)
+        ax.scatter(*list(zip(*pts)), **kwargs)
 
 
-    # markers
-    mlines = mpl.lines
-    red_dot = mlines.Line2D(
-        [], [], color='g', marker='.', linestyle='None', markersize=5, label='ameoba')
-    green_dot = mlines.Line2D(
-        [], [], color='r', marker='.', linestyle='None', markersize=5, label='target')
-
-    purpule_circle = mlines.Line2D(
-        [], [], color='tab:purple', marker='o', linestyle='None',
-        markerfacecolor='none', markersize=5, label='occupiable')
-    green_square = mlines.Line2D(
-        [], [], color='forestgreen', marker='s', linestyle='None',
-        markerfacecolor='none', markersize=5, label='retractable'
+    # subplot 1: occupiable, retractable
+    scatter(
+        ax1, occupiable, label='occupiable',
+        facecolors='none', edgecolors='tab:purple', s=size_s
+    )
+    scatter(
+        ax1, retractable, label='retractable',
+        facecolors='none', edgecolors='forestgreen', marker='s', s=size_l
     )
 
-    green_square2 = mlines.Line2D(
-        [], [], color='forestgreen', marker='s', linestyle='None',
-        markerfacecolor='none', markersize=5, label='retract')
-    purpule_circle2 = mlines.Line2D(
-        [], [], color='tab:purple', marker='o', linestyle='None',
-        markerfacecolor='none', markersize=5, label='extend')
-    orange_triangle2 = mlines.Line2D(
-        [], [], color='orange', marker='s', linestyle='None',
-        markerfacecolor='none', markersize=5, label='bacteria')
+    # subplot 2: retract, extend, bacteria
+    scatter(
+        ax2, retract, label='retract',
+        facecolors='none', edgecolors='forestgreen', marker='s', s=size_l
+    )
+    scatter(
+        ax2, extend, label='extend',
+        facecolors='none', edgecolors='tab:purple', s=size_s
+    )
+    scatter(
+        ax2, bacteria, label='bacteria',
+        facecolors='none', edgecolors='orange', marker='s', s=size_m
+    )
 
-    # plotting
+    # legend
     ax1.legend(
-        handles=[red_dot, green_dot, purpule_circle, green_square],
-        loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=4, fancybox=True, shadow=True)
+        loc='upper center', bbox_to_anchor=(0.5, 1.1),
+        ncol=4, fancybox=True, shadow=True
+    )
     ax2.legend(
-        handles=[red_dot, green_dot, purpule_circle2, green_square2, orange_triangle2],
-        loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=5, fancybox=True, shadow=True)
+        loc='upper center', bbox_to_anchor=(0.5, 1.1),
+        ncol=5, fancybox=True, shadow=True
+    )
     fig.tight_layout()
+
+    # switch back to figure 1: ameoba simulator
     plt.figure(1)
 
 
