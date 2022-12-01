@@ -10,3 +10,4 @@ render/
 .vscode/
 .venv/
 results.log
+test_game.py

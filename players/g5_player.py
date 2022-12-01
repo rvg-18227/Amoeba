@@ -18,9 +18,10 @@ import random as rnd
 
 MAP_DIM = 100
 MAX_BASE_LEN = min(MAP_DIM, 100)
-TOOTH_SPACING = 1
-SHIFTING_FREQ = 6
-# MAX_BASE_LEN = min(MAP_DIM, 100)
+TOOTH_SPACING = 1       # 1 best
+SHIFTING_FREQ = 6       # 6 best for high metabolisms, 4 better for low
+SIZE_MULTIPLIER = 4     # 4 best for density = 0.1 metabolism = 0.1
+MOVING_TYPE = 'center_teeth_first'  # 'center' best for low metabolisms - 'center_teeth_first' better for high
 
 
 # ********* HELPER FUNCTIONS ********* #
@@ -171,7 +172,20 @@ class Player:
         self.num_available_moves: int = None
 
     @staticmethod
-    def generate_tooth_formation(amoeba_size: int) -> npt.NDArray:
+    def iter_from_middle(lst):
+        try:
+            middle = len(lst) // 2
+            yield lst[middle]
+
+            for shift in range(1, middle + 1):
+                # order is important!
+                yield lst[middle - shift]
+                yield lst[middle + shift]
+
+        except IndexError:  # occures on lst[len(lst)] or for empty list
+            return
+
+    def generate_tooth_formation(self, amoeba_size: int) -> npt.NDArray:
         formation = np.zeros((MAP_DIM, MAP_DIM), dtype=np.int8)
         center_x = MAP_DIM // 2
         center_y = MAP_DIM // 2
@@ -187,22 +201,23 @@ class Player:
         base_len = min(complete_modules * 2 + additional_sections, MAX_BASE_LEN)
         # teeth_len = min(complete_modules, base_len//2)
         # teeth_len = min(complete_modules, base_len // spacing)
-        teeth_len = base_len//spacing
-        reserve = max(reserve, amoeba_size-(base_len*2 + teeth_len))
+        teeth_len = base_len // spacing
+        # reserve = max(reserve, amoeba_size-(base_len*2 + teeth_len))
         start_y = center_y - base_len // 2
-        # start_y = 50
 
-        # add the 2-cell-wide base
+        # add the 2-cell-wide base and teeth
         for y in range(start_y, start_y + base_len):
             formation[center_x, y%100] = 1
             formation[center_x - 1, y%100] = 1
-
-        # add the teeth
-        start_modules = start_y  # +(additional_sections+1)//2
-        for y in range(start_modules, start_y + teeth_len * spacing):
-            # if (y - start_modules) % spacing == 0:
             if y%100 % spacing == 0:
                 formation[center_x + 1, y%100] = 1
+
+        # add the teeth
+        # start_modules = start_y  # +(additional_sections+1)//2
+        # for y in range(start_modules, start_y + teeth_len * spacing):
+        #     # if (y - start_modules) % spacing == 0:
+        #     if y%100 % spacing == 0:
+        #         formation[center_x + 1, y%100] = 1
 
         # # add the "reserve" cell at the back
         # for i in range(reserve):
@@ -213,6 +228,7 @@ class Player:
         # show_amoeba_map(formation)
         return formation
 
+    # sort potential retracts based on the number of neighbors (less members -> higher priority)
     def sort_retracts(self, potential_retracts):
         ranked_cells = []
         for x, y in potential_retracts:
@@ -240,19 +256,20 @@ class Player:
 
         # potential_retracts.sort(key=lambda pos: pos[1])
         potential_retracts = self.sort_retracts(potential_retracts)
-        potential_extends.sort(key=lambda pos: pos[1])
-
-        #print("Potential Retracts", potential_retracts)
-        #print("Potential Extends", potential_extends)
-
-        # Change this since it breaks the situation with smaller metabolisms
-        # if len(potential_retracts) > self.num_available_moves:
-        #     return [], []
+        if MOVING_TYPE == 'top_down':
+            potential_extends.sort(key=lambda pos: pos[1])
+        elif MOVING_TYPE == 'top_down_teeth_first':
+            potential_extends.sort(key=lambda pos: (-pos[0], pos[1]))
+        elif MOVING_TYPE == 'center':
+            potential_extends.sort(key=lambda pos: abs(50 - pos[1]))
+        elif MOVING_TYPE == 'center_teeth_first':
+            potential_extends.sort(key=lambda pos: (-pos[0], abs(50-pos[1])))
 
         # Loop through potential extends, searching for a matching retract
         retracts = []
         extends = []
-        while potential_extends and potential_retracts:
+        change = True   # tracks whether anything was moved to prevent endless loop
+        while potential_extends and potential_retracts and change:
             change = False
             # for potential_extend in potential_extends:
             #     for potential_retract in potential_retracts:
@@ -266,19 +283,9 @@ class Player:
                         potential_extends.remove(potential_extend)
                         change = True
                         break
-            if not change:
-                break
-        # for potential_extend in potential_extends:
-        #     for potential_retract in potential_retracts:
-        #         if self.check_move(retracts + [potential_retract], extends + [potential_extend]):
-        #             # matching retract found, add the extend and retract to our lists
-        #             retracts.append(potential_retract)
-        #             potential_retracts.remove(potential_retract)
-        #             extends.append(potential_extend)
-        #             potential_extends.remove(potential_extend)
-        #             break
 
         # show_amoeba_map(self.amoeba_map, retracts, extends)
+        # truncate to account for smaller metabolism
         return retracts[:self.num_available_moves], extends[:self.num_available_moves]
 
     # adapted from amoeba game code
@@ -354,27 +361,6 @@ class Player:
         retracts = []
         moves = []
         mem = Memory(byte=info)
-
-        # memory_fields = read_memory(info)
-        # if not memory_fields[MemoryFields.Initialized]:
-
-        #if not mem.is_rake:
-            # retracts, moves = self.get_morph_moves(self.generate_tooth_formation(self.current_size))
-            # print(len(moves))
-            # if len(moves) == 0:
-                # info = change_memory_field(info, MemoryFields.Initialized, True)
-                #mem.is_rake = True
-                #info = mem.get_byte()
-                # memory_fields = read_memory(info)
-        #if mem.is_rake:
-            # print("hi")
-        # TODO: implement this (moves when the amoeba is a rake)
-        # comb_col = np.argwhere(self.amoeba_map == 1)
-        
-        # comb_start = comb_col[0][0]
-        # comb_end = comb_col[-1][0]
-        
-        # cells_to_move = abs(comb_end-comb_start)
         
         if self.is_square(current_percept):
             mem.x_val = 50
@@ -383,22 +369,23 @@ class Player:
         while len(retracts) == 0 and len(moves) == 0:
             if mem.tooth_shift == 0:
                 offset_x = mem.x_val - MAP_DIM//2 - 1
+                # offset_x = mem.x_val - MAP_DIM // 2
             else:
                 offset_x = mem.x_val - MAP_DIM//2
 
             offset_y = 0 if (mem.x_val % (SHIFTING_FREQ*2)) < SHIFTING_FREQ else -1
-            # if random.random() < 0.5:
-            #     mem.tooth_shift ^= 1
-            # #
-            # offset_y = -mem.tooth_shift
-            
-            # target_formation = self.generate_tooth_formation(last_percept.current_size)
-            target_formation = self.generate_tooth_formation(self.current_size)
-            target_formation = np.roll(target_formation, offset_x, 0)
-            # target_formation = self.shift_col(target_formation, mem.x_val+1, offset_y)
-            target_formation = np.roll(target_formation, offset_y, 1)
-            # show_amoeba_map(target_formation)
 
+            if SIZE_MULTIPLIER == 0:
+                target_formation = self.generate_tooth_formation(self.current_size)
+            elif SIZE_MULTIPLIER < 0:
+                target_size = ((self.goal_size // 4 + (-SIZE_MULTIPLIER) * ((100 + offset_x) % 100)) + self.current_size) // 2
+                target_formation = self.generate_tooth_formation(target_size)
+            else:
+                target_size = self.goal_size // 4 + SIZE_MULTIPLIER * ((100 + offset_x) % 100)  # calculate the desired size with regard
+                target_formation = self.generate_tooth_formation(target_size)
+
+            target_formation = np.roll(target_formation, offset_x, 0)
+            target_formation = np.roll(target_formation, offset_y, 1)
             retracts, moves = self.get_morph_moves(target_formation)
 
             if len(retracts) == 0 and len(moves) == 0:
@@ -408,35 +395,7 @@ class Player:
                         mem.tooth_shift = 0
                 else:
                     mem.tooth_shift = 1
-                print('--------------------')
-            # elif mem.x_val > 55 and rnd.choices([True, False], weights=(0.01, 0.99)):
-            #     mem.x_val = (mem.x_val + 1) % 100
-            
-        # print(cells_to_move)
-        # if (self.num_available_moves // cells_to_move > 0):
-        #     # amount of cols the comb should progress
-        #     next_tooth = np.roll(self.amoeba_map, 1, 0)
-        #     self.down_1(next_tooth, )
-        #     mem.is_rake = False
-        #     info = mem.get_byte()
-        # else:
-        #     next_tooth = self.amoeba_map
 
-        
-        # retracts, moves = self.get_morph_moves(next_tooth)
-        #print(retracts,  moves)
-            #time.sleep(60)
-
-        # if memory_fields[MemoryFields.Initialized]:
-        # if mem.is_rake:
-        #     curr_backbone_col = min(x for x, _ in map_to_coords(self.amoeba_map))
-        #     vertical_shift = curr_backbone_col % 2
-        #     offset = (curr_backbone_col + 1) - (MAP_DIM // 2)
-        #     next_tooth = np.roll(self.generate_tooth_formation(self.current_size), offset + 1, 0)
-        #     # Shift up/down by 1 every other column
-        #     next_tooth = np.roll(next_tooth, vertical_shift, 1)
-        #     retracts, moves = self.get_morph_moves(next_tooth)
-        #     print(retracts, moves)
         info = mem.get_byte()
         return retracts, moves, info
 
@@ -444,60 +403,6 @@ class Player:
         arr2 = np.copy(arr)
         arr2[:, col] = np.roll(arr2[:,col], shift)
         return arr2
-    # def move(self, last_percept, current_percept, info) -> (list, list, int):
-    #     """Function which retrieves the current state of the amoeba map and returns an amoeba movement
-    #
-    #         Args:
-    #             last_percept (AmoebaState): contains state information after the previous move
-    #             current_percept(AmoebaState): contains current state information
-    #             info (int): byte (ranging from 0 to 256) to convey information from previous turn
-    #         Returns:
-    #             Tuple[List[Tuple[int, int]], List[Tuple[int, int]], int]: This function returns three variables:
-    #                 1. A list of cells on the periphery that the amoeba retracts
-    #                 2. A list of positions the retracted cells have moved to
-    #                 3. A byte of information (values range from 0 to 255) that the amoeba can use
-    #     """
-    #
-    #     # self.current_size = current_percept.current_size
-    #     # mini = min(5, len(current_percept.periphery) // 2)
-    #     # for i, j in current_percept.bacteria:
-    #     #     current_percept.amoeba_map[i][j] = 1
-    #     #
-    #     # retract = [tuple(i) for i in self.rng.choice(current_percept.periphery, replace=False, size=mini)]
-    #     # movable = self.find_movable_cells(retract, current_percept.periphery, current_percept.amoeba_map,
-    #     #                                   current_percept.bacteria, mini)
-    #     #
-    #     # info = 0
-    #
-    #     sz = current_percept.current_size
-    #     max_movable = min(sz//2, int(math.ceil(sz * self.metabolism)))
-    #     retract, movable = [], []
-    #
-    #     if self.is_square(current_percept):
-    #         for row in current_percept.amoeba_map:
-    #             print(row)
-    #         # print('##########################')
-    #         min_x, max_x, min_y, max_y = self.bounds(current_percept)
-    #         first_row = []
-    #         for x in range(min_x, max_x+1):
-    #             first_row.append((min_y, x))
-    #
-    #         target_positions = [(min_y+1, min_x-1), (min_y+2, min_x-1), (min_y+1, max_x+1), (min_y+2, max_x+1)]
-    #
-    #         to_retract = first_row[1::2]
-    #         for i in range(min([len(to_retract), max_movable, 4])):
-    #             retract.append(to_retract.pop())
-    #             movable.append(target_positions.pop())
-    #
-    #         for y, x in current_percept.periphery:
-    #             if target_positions and y > min_y + 2:
-    #                 retract.append((y, x))
-    #                 movable.append(target_positions.pop())
-    #     else:
-    #         # time.sleep(60)
-    #         # print('**************')
-    #
-    #     return retract, movable, info
 
     def bounds(self, current_percept):
         min_x, max_x, min_y, max_y = 100, -1, 100, -1
@@ -515,7 +420,6 @@ class Player:
 
     def is_square(self, current_percept):
         min_x, max_x, min_y, max_y = self.bounds(current_percept)
-        #print(min_x, max_x, min_y, max_y)
         len_x = max_x - min_x + 1
         len_y = max_y - min_y + 1
         if len_x == len_y and len_x * len_y == current_percept.current_size:
