@@ -375,13 +375,15 @@ class Player:
 
             offset_y = 0 if (mem.x_val % (SHIFTING_FREQ*2)) < SHIFTING_FREQ else -1
 
-            if SIZE_MULTIPLIER == 0:
+            if SIZE_MULTIPLIER == 0 or self.current_size > 250:
                 target_formation = self.generate_tooth_formation(self.current_size)
-            elif SIZE_MULTIPLIER < 0:
-                target_size = ((self.goal_size // 4 + (-SIZE_MULTIPLIER) * ((100 + offset_x) % 100)) + self.current_size) // 2
-                target_formation = self.generate_tooth_formation(target_size)
+            # elif SIZE_MULTIPLIER < 0:
+            #     target_size = ((self.goal_size // 4 + (-SIZE_MULTIPLIER) * ((100 + offset_x) % 100)) + self.current_size) // 2
+            #     target_formation = self.generate_tooth_formation(target_size)
             else:
                 target_size = self.goal_size // 4 + SIZE_MULTIPLIER * ((100 + offset_x) % 100)  # calculate the desired size with regard
+                if target_size//self.current_size < 0.8:
+                    target_size = self.current_size
                 target_formation = self.generate_tooth_formation(target_size)
 
             target_formation = np.roll(target_formation, offset_x, 0)
