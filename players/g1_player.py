@@ -70,17 +70,24 @@ class Player:
         
         centers = []
 
+        #no y value
+        max_x = 0
+        for x in range(100):
+            if 1 not in current_percept.amoeba_map[x]:
+                max_x = x
+                break
+
         #new center is the max_x, max_y
-        for i in range(140, 0, -1):
+        for i in range(100+max_x, max_x, -1):
             i = i%100
             if current_percept.amoeba_map[i][i] == 1:
-                if current_percept.amoeba_map[i][i-1] == 1 and current_percept.amoeba_map[i-1][i] == 1:
+                if current_percept.amoeba_map[i][(i-1)%100] == 1 and current_percept.amoeba_map[(i-1)%100][i] == 1:
                     centers.append((i,i))
 
                 #a new center or is currently being shrunk
                 if len(centers) == 1:
-                    if current_percept.amoeba_map[i][i+1] == 0 and current_percept.amoeba_map[i+1][i] == 0:
-                        if current_percept.amoeba_map[i][i-1] == 1 and current_percept.amoeba_map[i-1][i] == 1:
+                    if current_percept.amoeba_map[i][(i+1)%100] == 0 and current_percept.amoeba_map[(i+1)%100][i] == 0:
+                        if current_percept.amoeba_map[i][(i-1)%100] == 1 and current_percept.amoeba_map[(i-1)%100][i] == 1:
                             info = r
         
         center = centers[0]
@@ -89,6 +96,7 @@ class Player:
         next_center = ((center[0]+info)%100, (center[1]+info)%100)
         
         formation_needed = self.find_surround_cells(info, info, center)
+        #print(formation_needed)
         #check = self.formation_secured(current_percept.amoeba_map, formation_needed)
 
         movable = None
@@ -101,7 +109,8 @@ class Player:
         retract = self.furthest_to_top_right(list(set(current_percept.periphery).difference(set(formation_needed))), next_center, current_percept)
 
         #holes behind center
-        cavity_cells = self.find_island(current_percept.amoeba_map, (center[0]-1, center[1]-1))
+        cavity_cells = self.find_island(current_percept.amoeba_map, (center[0]-1%100, center[1]-1%100))
+        print(len(cavity_cells))
         shrink_cells = []
 
         for i in cavity_cells:
@@ -109,9 +118,12 @@ class Player:
                 shrink_cells.append(i)
 
         formation_moves = list(set(formation_needed).intersection(set(current_percept.movable_cells)))
-        formation_moves.sort(key = lambda x : self.manhattan_distance(x, center))
+        formation_moves.sort(key = lambda x : self.manhattan_distance(x, center), reverse=True)
 
-        movable = list(shrink_cells) + formation_moves
+        if len(shrink_cells) > 0:
+            movable = list(shrink_cells)
+        else:
+            movable = list(shrink_cells) + formation_moves
 
 
         #print(retract)
@@ -129,8 +141,9 @@ class Player:
         if len(movable) > self.metabolism*current_percept.current_size:
             movable = movable[:int(self.metabolism*current_percept.current_size)]
 
-        #print(retract)
-        #print(movable)
+        print(retract)
+        print(current_percept.movable_cells)
+        print(movable)
 
         return retract, movable, info
 
@@ -164,8 +177,14 @@ class Player:
         x2 = trgt[0]
         y2 = trgt[1]
 
-        x_dist = min(x2-x1, 100+x1-x2)
-        y_dist = min(y2-y1, 100+y1-y2)
+
+        #0,90 = min(90-0, 100-(90-0)) = min(90,10)
+        #90,0 = min(0-90, 100-(0-90)) = min()
+        x_diff = abs(x2-x1)
+        y_diff = abs(y2-y1)
+        
+        x_dist = min(x_diff, 100-x_diff)
+        y_dist = min(y_diff, 100-y_diff)
 
         return x_dist**2 + y_dist**2
 
@@ -270,7 +289,7 @@ class Player:
             cells.add((center_x+i, center_y-1))
             cells.add((center_x-1, center_y+i))
 
-        for i in range(-1, end_length+1):
+        for i in range(0, end_length+1):
             cells.add((center_x+radius, center_y+i))
             cells.add((center_x+i, center_y+radius))
 
