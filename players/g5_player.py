@@ -14,14 +14,18 @@ from enum import Enum
 import sys
 import random as rnd
 
-# CONSTS
+# CONSTS #
 
 MAP_DIM = 100
 MAX_BASE_LEN = min(MAP_DIM, 100)
 TOOTH_SPACING = 1       # 1 best
 SHIFTING_FREQ = 6       # 6 best for high metabolisms, 4 better for low
-SIZE_MULTIPLIER = 4     # 4 best for density = 0.1 metabolism = 0.1
-MOVING_TYPE = 'center_teeth_first'  # 'center' best for low metabolisms - 'center_teeth_first' better for high
+SIZE_MULTIPLIER = 6     # 4 best for density = 0.1 metabolism = 0.1
+MOVING_TYPE = 'center'  # 'center' best for low metabolisms - 'center_teeth_first' better for high
+
+# Best configs so far #
+# m = 0.1; A = 5; s = 2 -> 1 6 4 'center' -> 202 moves
+# m = 1.0; A = 5; s = 2 -> 1 6 6 'center_teeth_first' -> 74 moves
 
 
 # ********* HELPER FUNCTIONS ********* #
@@ -84,6 +88,36 @@ def tree_factors(index, max_factors):
         index %= n_children
 
     return factors
+
+
+# search the list for the element that causes check(li) to fail and remove the element
+def binary_search(li, check):
+    mid = len(li) // 2
+
+    if not check(li[:mid]):
+        return binary_search(li[:mid], check) + li[mid:]
+
+    elif not check(li[mid + 1:]):
+        return li[:mid + 1] + binary_search(li[mid + 1:], check)
+
+    elif not check(li):
+        return li[:mid] + li[mid + 1:]
+    else:
+        return li
+
+
+def iter_from_middle(lst):
+    try:
+        middle = len(lst) // 2
+        yield lst[middle]
+
+        for shift in range(1, middle + 1):
+            # order is important!
+            yield lst[middle - shift]
+            yield lst[middle + shift]
+
+    except IndexError:  # occures on lst[len(lst)] or for empty list
+        return
 
 
 # ********* BYTE INFO ******** #
@@ -171,20 +205,6 @@ class Player:
         self.extendable_cells: List[Tuple[int, int]] = None
         self.num_available_moves: int = None
 
-    @staticmethod
-    def iter_from_middle(lst):
-        try:
-            middle = len(lst) // 2
-            yield lst[middle]
-
-            for shift in range(1, middle + 1):
-                # order is important!
-                yield lst[middle - shift]
-                yield lst[middle + shift]
-
-        except IndexError:  # occures on lst[len(lst)] or for empty list
-            return
-
     def generate_tooth_formation(self, amoeba_size: int) -> npt.NDArray:
         formation = np.zeros((MAP_DIM, MAP_DIM), dtype=np.int8)
         center_x = MAP_DIM // 2
@@ -211,6 +231,103 @@ class Player:
             formation[center_x - 1, y%100] = 1
             if y%100 % spacing == 0:
                 formation[center_x + 1, y%100] = 1
+
+        # add the teeth
+        # start_modules = start_y  # +(additional_sections+1)//2
+        # for y in range(start_modules, start_y + teeth_len * spacing):
+        #     # if (y - start_modules) % spacing == 0:
+        #     if y%100 % spacing == 0:
+        #         formation[center_x + 1, y%100] = 1
+
+        # # add the "reserve" cell at the back
+        # for i in range(reserve):
+        #     row = i//base_len
+        #     col = i % base_len
+        #     formation[center_x-2-row, start_y+col] = 1
+
+        # show_amoeba_map(formation)
+        return formation
+
+    def generate_tworake_formation(self, amoeba_size: int, curr_x: int, shift: int) -> npt.NDArray:
+        formation = np.zeros((MAP_DIM, MAP_DIM), dtype=np.int8)
+        center_x = MAP_DIM // 2
+        center_y = MAP_DIM // 2
+        spacing = TOOTH_SPACING + 1
+        if amoeba_size > 300 and (abs(curr_x - 50) < 5 or abs(curr_x - 100) < 5):
+            if curr_x > 60:
+                curr_x = 104
+            else:
+                curr_x = 54
+
+        # print('gtf x: ', curr_x)
+        # find the number of complete 5-cell modules
+        complete_modules = amoeba_size // 5
+        # find the number of unfinished sections
+        additional_sections = amoeba_size % 5 // 2
+        # find whether there is an odd cell
+        reserve = amoeba_size % 5 % 2
+
+        base_len = min(complete_modules * 2 + additional_sections, MAX_BASE_LEN)
+        # teeth_len = min(complete_modules, base_len//2)
+        # teeth_len = min(complete_modules, base_len // spacing)
+        teeth_len = base_len // spacing
+        # reserve = max(reserve, amoeba_size-(base_len*2 + teeth_len))
+        start_y = center_y - base_len // 2
+        # start_x = (center_x + offset_x)%100
+        start_x = curr_x
+
+        # add the 2-cell-wide base and teeth
+        for y in range(start_y, start_y + base_len):
+            formation[start_x, y % 100] = 1
+            formation[start_x - 1, y % 100] = 1
+            if y % 100 % spacing == shift:
+                formation[(start_x + 1) % 100, y % 100] = 1
+
+        cells_used = (formation == 1).sum()
+        available = amoeba_size - cells_used
+
+        bar_length = min(100, available)
+        print(center_y)
+        for offset in range(1, bar_length + 1):
+            formation[(start_x - offset) % 100, center_y] = 1
+
+        cells_used = (formation == 1).sum()
+        available = amoeba_size - cells_used
+
+        complete_modules = available // 5
+        # find the number of unfinished sections
+        additional_sections = available % 5 // 2
+        # find whether there is an odd cell
+        reserve = available % 5 % 2
+
+        base_len = min(complete_modules * 2 + additional_sections, MAX_BASE_LEN)
+        # teeth_len = min(complete_modules, base_len//2)
+        # teeth_len = min(complete_modules, base_len // spacing)
+        teeth_len = base_len // spacing
+        # reserve = max(reserve, amoeba_size-(base_len*2 + teeth_len))
+        start_y = center_y - base_len // 2
+        # start_x = (center_x + offset_x)%100
+
+        start_x = (99 - curr_x) % 100
+        for y in range(start_y, start_y + base_len):
+            formation[start_x, y % 100] = 1
+            formation[start_x - 1, y % 100] = 1
+            if y % 100 % spacing == 0:
+                formation[(start_x + 1) % 100, y % 100] = 1
+
+        cells_used = (formation == 1).sum()
+        available = amoeba_size - cells_used
+        print(amoeba_size)
+        print(cells_used)
+
+        for y in iter_from_middle(list(range(0, 50)) + list(range(51, 100))):
+            for x in range(0, 100):
+                if available <= 0:
+                    break
+                formation[x, y] = 1
+                available -= 1
+            if available <= 0:
+                break
 
         # add the teeth
         # start_modules = start_y  # +(additional_sections+1)//2
@@ -269,20 +386,30 @@ class Player:
         retracts = []
         extends = []
         change = True   # tracks whether anything was moved to prevent endless loop
-        while potential_extends and potential_retracts and change:
-            change = False
-            # for potential_extend in potential_extends:
-            #     for potential_retract in potential_retracts:
-            for potential_retract in potential_retracts:
-                for potential_extend in potential_extends:
-                    if self.check_move(retracts + [potential_retract], extends + [potential_extend]):
-                        # matching retract found, add the extend and retract to our lists
-                        retracts.append(potential_retract)
-                        potential_retracts.remove(potential_retract)
-                        extends.append(potential_extend)
-                        potential_extends.remove(potential_extend)
-                        change = True
-                        break
+        potential_extends = potential_extends[::-1]
+        # while potential_extends and potential_retracts and change and len(retracts) < self.num_available_moves:
+        #     change = False
+        #     # for potential_extend in potential_extends:
+        #     #     for potential_retract in potential_retracts:
+        #     for potential_retract in potential_retracts:
+        #         # for potential_extend in potential_extends:
+        #         if self.check_move(retracts + [potential_retract], extends + [potential_extends[-1]]):
+        #             # matching retract found, add the extend and retract to our lists
+        #             retracts.append(potential_retract)
+        #             potential_retracts.remove(potential_retract)
+        #             # extends.append(potential_extend)
+        #             extends.append(potential_extends.pop())
+        #             # potential_extends.remove(potential_extend)
+        #             change = True
+        #             break
+
+        possible_moves = min(len(potential_retracts), len(potential_extends), self.num_available_moves)
+        retracts = potential_retracts[:possible_moves]
+        extends = potential_extends[:possible_moves]
+
+        while not self.check_move(retracts, extends):
+            retracts = binary_search(retracts, lambda r: self.check_move(r, extends[:len(r)]))
+            extends.pop()
 
         # show_amoeba_map(self.amoeba_map, retracts, extends)
         # truncate to account for smaller metabolism
@@ -369,34 +496,42 @@ class Player:
         while len(retracts) == 0 and len(moves) == 0:
             if mem.tooth_shift == 0:
                 offset_x = mem.x_val - MAP_DIM//2 - 1
+                x_val = mem.x_val - 1
                 # offset_x = mem.x_val - MAP_DIM // 2
             else:
+                x_val = mem.x_val
                 offset_x = mem.x_val - MAP_DIM//2
 
             offset_y = 0 if (mem.x_val % (SHIFTING_FREQ*2)) < SHIFTING_FREQ else -1
 
-            if SIZE_MULTIPLIER == 0 or self.current_size > 250:
-                target_formation = self.generate_tooth_formation(self.current_size)
+            # if SIZE_MULTIPLIER == 0 or self.current_size > 250:
+            #     target_formation = self.generate_tooth_formation(self.current_size)
             # elif SIZE_MULTIPLIER < 0:
             #     target_size = ((self.goal_size // 4 + (-SIZE_MULTIPLIER) * ((100 + offset_x) % 100)) + self.current_size) // 2
             #     target_formation = self.generate_tooth_formation(target_size)
-            else:
-                target_size = self.goal_size // 4 + SIZE_MULTIPLIER * ((100 + offset_x) % 100)  # calculate the desired size with regard
-                if target_size//self.current_size < 0.8:
-                    target_size = self.current_size
-                target_formation = self.generate_tooth_formation(target_size)
+            # elif self.current_size >= 250:
+            #     target_formation = self.generate_tworake_formation(self.current_size, mem.x_val)
+            # else:
+            #     target_size = self.goal_size // 4 + SIZE_MULTIPLIER * ((100 + offset_x) % 100)  # calculate the desired size with regard
+            #     if target_size//self.current_size < 0.8:
+            #         target_size = self.current_size
+            #     target_formation = self.generate_tooth_formation(target_size)
 
-            target_formation = np.roll(target_formation, offset_x, 0)
-            target_formation = np.roll(target_formation, offset_y, 1)
+            target_formation = self.generate_tworake_formation(self.current_size, x_val, offset_y+1)
+
+            # target_formation = np.roll(target_formation, offset_x, 0)
+            # target_formation = np.roll(target_formation, offset_y, 1)
             retracts, moves = self.get_morph_moves(target_formation)
 
             if len(retracts) == 0 and len(moves) == 0:
                 if mem.tooth_shift == 1:
                     mem.x_val = (mem.x_val + 1) % 100
+                    print('actual x: ', mem.x_val)
                     if mem.x_val % SHIFTING_FREQ == 0:
                         mem.tooth_shift = 0
                 else:
                     mem.tooth_shift = 1
+                # mem.x_val = (mem.x_val + 1) % 100
 
         info = mem.get_byte()
         return retracts, moves, info
