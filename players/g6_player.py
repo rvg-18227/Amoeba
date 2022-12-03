@@ -38,7 +38,7 @@ class Player:
         self.metabolism = metabolism
         self.goal_size = goal_size
         self.current_size = goal_size / 4
-        
+
     def move(self, last_percept, current_percept, info) -> (list, list, int):
         """Function which retrieves the current state of the amoeba map and returns an amoeba movement
 
@@ -76,51 +76,56 @@ class Player:
     def reorganize_retract(self, amoeba_map, periphery):
         amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
         amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
-        right_side = np.min(amoeba_loc[:, 1])
-        left_side = np.max(amoeba_loc[:, 1])
+        top_side = np.min(amoeba_loc[:, 1])
+        bottom_side = np.max(amoeba_loc[:, 1])
         retract_list = []
 
-        for row in range(right_side, left_side+1):
+        for row in range(top_side, bottom_side-1):
             if len(retract_list) == 4:
                 break
 
             row_array = np.where(amoeba_loc[:, 1] == row)[0]
             row_cells = amoeba_loc[row_array]
-            columns = row_cells[:, 0]
+            columns = np.sort(row_cells[:, 0])
 
             for col in columns:
                 if len(retract_list) == 4:
                     break
                 num_column = np.size(np.where(amoeba_loc[:, 0] == col)[0])
+                self.logger.info(f'num_col: {num_column}')
                 if num_column > 2:
                     cell = (col, row)
                     if cell in periphery:
                         retract_list.append(cell)
-                        amoeba_loc = np.delete(amoeba_loc, np.where(amoeba_loc==cell)[0], axis=0)
+                        self.logger.info(f'cell retract: {cell}')
+                        self.logger.info(f'cell idx : {np.where(amoeba_loc==cell)[0]}')
+                        cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
+                        amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx==True)[0], axis=0)
+                        self.logger.info(f'cell idx after : {np.where(amoeba_loc==cell)[0]}')
 
         return retract_list
 
     def reorganize_expand(self, amoeba_map, movable):
         amoeba_loc = np.stack(np.where(amoeba_map==1)).T.astype(int)
-        rows, count = np.unique(amoeba_loc[:, 0], return_counts=True)
+        cols, count = np.unique(amoeba_loc[:, 0], return_counts=True)
 
         direction = [-1, 1]
         expand_cells = []
-        for i, idx in enumerate([rows.argmin(), rows.argmax()]):
-            row = rows[idx]
-            row_count = count[idx]
-            row_cells = amoeba_loc[amoeba_loc[:, 0]==row]
+        for i, idx in enumerate([cols.argmin(), cols.argmax()]):
+            col = cols[idx]
+            col_count = count[idx]
+            col_cells = amoeba_loc[amoeba_loc[:, 0]==col]
 
-            if row_count < 2:
-                # expand to the right on the first/last row
-                cell = row_cells[row_cells[:, 1].argmax()] # rightmost cell
+            if col_count < 2:
+                # expand to the bottom of the first/last col
+                cell = col_cells[col_cells[:, 1].argmax()] # lowest cell
                 move = ((cell[0])%100, (cell[1]+1)%100)
                 # if move in movable:
                 expand_cells.append(move)
 
-            # expand to an additional row
-            for c_i in range(min(2, row_cells.shape[0])):
-                cell = row_cells[-c_i-1]
+            # expand to an additional col
+            for c_i in range(min(2, col_cells.shape[0])):
+                cell = col_cells[-2:][c_i]
                 move = ((cell[0]+direction[i])%100, (cell[1])%100)
                 # if move in movable:
                 expand_cells.append(move)
