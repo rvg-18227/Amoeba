@@ -98,10 +98,9 @@ class Player:
                     if cell in periphery:
                         retract_list.append(cell)
                         self.logger.info(f'cell retract: {cell}')
-                        self.logger.info(f'cell idx : {np.where(amoeba_loc==cell)[0]}')
                         cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
+                        self.logger.info(f'cell idx : {np.where(cell_idx==True)[0]}')
                         amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx==True)[0], axis=0)
-                        self.logger.info(f'cell idx after : {np.where(amoeba_loc==cell)[0]}')
 
         return retract_list
 
