@@ -11,3 +11,5 @@ render/
 .venv/
 results.log
 test_game.py
+main.py
+amoeba_game.py
