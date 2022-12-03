@@ -38,7 +38,7 @@ class Player:
         self.metabolism = metabolism
         self.goal_size = goal_size
         self.current_size = goal_size / 4
-
+        
     def move(self, last_percept, current_percept, info) -> (list, list, int):
         """Function which retrieves the current state of the amoeba map and returns an amoeba movement
 
@@ -59,9 +59,9 @@ class Player:
         mini = int(self.current_size*self.metabolism)
 
         info_binary  = format(info, '04b')
-        stage = info_binary[0]
+        stage = int(info_binary[0])
 
-        retract_list = self.reorganize_retract(current_percept.amoeba_map)
+        retract_list = self.reorganize_retract(current_percept.amoeba_map, current_percept.periphery)
         movable = self.find_movable_cells(retract_list, current_percept.periphery, current_percept.amoeba_map,
                     current_percept.bacteria)
         expand_list = self.reorganize_expand(current_percept.amoeba_map, movable)
@@ -71,27 +71,32 @@ class Player:
         self.logger.info(f'retract: {retract_list}')
         self.logger.info(f'expand: {expand_list}')
 
-        print(movable)
+        return retract_list[:mini], expand_list[:mini], info+1
 
-        return retract_list[:mini], expand_list[:mini], stage
-
-    def reorganize_retract(self, amoeba_map):
+    def reorganize_retract(self, amoeba_map, periphery):
         amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
         amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
-        right_side = np.min(amoeba_loc[:, 0])
-        left_side = np.max(amoeba_loc[:, 0])
+        right_side = np.min(amoeba_loc[:, 1])
+        left_side = np.max(amoeba_loc[:, 1])
         retract_list = []
-        for column in range(right_side, left_side+1):
+
+        for row in range(right_side, left_side+1):
             if len(retract_list) == 4:
                 break
 
-            column_array = np.where(amoeba_loc[:, 0] == column)
-            num_column = np.size(column_array)
+            row_array = np.where(amoeba_loc[:, 1] == row)[0]
+            row_cells = amoeba_loc[row_array]
+            columns = row_cells[:, 0]
 
-            if num_column > 2:
-                bottom_cell = np.min(column_array)
-                bottom_cell = amoeba_loc[bottom_cell]
-                retract_list.append((bottom_cell[0], bottom_cell[1]))
+            for col in columns:
+                if len(retract_list) == 4:
+                    break
+                num_column = np.size(np.where(amoeba_loc[:, 0] == col)[0])
+                if num_column > 2:
+                    cell = (col, row)
+                    if cell in periphery:
+                        retract_list.append(cell)
+                        amoeba_loc = np.delete(amoeba_loc, np.where(amoeba_loc==cell)[0], axis=0)
 
         return retract_list
 
