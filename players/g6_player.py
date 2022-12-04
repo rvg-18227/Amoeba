@@ -120,7 +120,18 @@ class Player:
         frontline = np.array(frontline).astype(int)
         min_row = frontline[:, 1].min()
 
-        #print(frontline, min_row)
+        # check if min_row is too large, if so wait
+        amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
+        cols, _ = np.unique(amoeba_loc[:, 0], return_counts=True)
+        min_row_all = min_row - 1
+        for col in cols:
+            min_row_all = min(min_row_all, amoeba_loc[amoeba_loc[:, 0]==col][:, 1].max())
+
+        # print(frontline, min_row)
+        # print(amoeba_loc, min_row_all)
+
+        if min_row > min_row_all + 2:
+            return []
 
         for i in range(frontline.shape[0]):
             cell = frontline[i]
@@ -144,6 +155,11 @@ class Player:
             columns = np.sort(row_cells[:, 0])
 
             for col in columns:
+                # never move bottom-most row
+                max_row = amoeba_loc[amoeba_loc[:, 0]==col][:, 1].max()
+                if row == max_row: 
+                    continue
+
                 num_column = np.size(np.where(amoeba_loc[:, 0] == col)[0])
                 #self.logger.info(f'num_col: {num_column}')
                 if num_column > min_num_per_col:
