@@ -180,9 +180,6 @@ def retract_k(
     Note: This function might return n < k cells to retract because retracting any
     more cells would cause separation.
     """
-    if k >= len(choices):
-        return choices
-
     def exposure(cell) -> int:
         x, y = cell
         exposure = 0
@@ -205,6 +202,19 @@ def retract_k(
         reverse=True
     )
 
+    # fast path: optimistically try if selecting topk, return if
+    # it passes check_move, in the best case this reduces # invocations
+    # of check_moves from O(max(len(choices), len(possible_moves))) to 1
+    _k = min(k, len(choices), len(possible_moves))
+    top_k = [ cell for cell, _ in sorted_choices[:_k] ]
+    if check_move(top_k, possible_moves[:_k], state):
+        return top_k
+
+    # slow path:
+    # further possible optimizations if performance becomes a bottleneck again:
+    # 1. binary search to find the longest prefix of sorted_choices we can retract
+    # 2. best effort search for up to k retractable cells:
+    #    pessimistically terminate search when we fail @m check_moves in a roll
     retract, i = [], 0
     while len(retract) < k and i < len(sorted_choices):
         cell, _ = sorted_choices[i]
@@ -484,15 +494,23 @@ class BucketAttack(Strategy):
                         .                 .      .
                       (xmax)
         """
-        ameoba_xs, _ = np.where(curr_state.amoeba_map == State.ameoba.value)
-        xmin, xmax = min(ameoba_xs), max(ameoba_xs)
 
-        # TODO: 5 is a magic number that should work... This is hacky though.
-        if xmax == 99 and xmin < 5:
-            xs = ameoba_xs[ameoba_xs <= 5]
-            return max(xs)
+        # we concatenate the ameoba map along the x-axis forming a 200 * 100 map
+        #               x = 0 ... x = 99 x=100 ... x=199
 
-        return xmax
+        ameoba_map = np.vstack((curr_state.amoeba_map, curr_state.amoeba_map))
+        ameoba_xs, _ = np.where(ameoba_map == State.ameoba.value)
+
+        # we operate a subset (x=50 -> x=149) of this new map to find @xmax by
+        # searching from xmax=xmin, and increment xmax whenever we see a x-value
+        # immediately larger by 1
+        x_filter = (ameoba_xs >= constants.map_dim / 2) & (ameoba_xs < constants.map_dim * 1.5)
+        xs = sorted(set(ameoba_xs[x_filter]))
+        xmax = min(xs)
+        for x in xs:
+            xmax += int(x == xmax + 1)
+
+        return xmax % constants.map_dim
 
     def _in_shape(self, curr_state: AmoebaState) -> bool:
         """Returns a bool indicating if our bucket arms are in shape.
