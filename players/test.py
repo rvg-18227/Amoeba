@@ -132,7 +132,7 @@ class Player:
         #print(retract)
         #print(movable)
 
-        return retract, movable, info
+        return retract[:2], movable[:2], info
 
     """def mend_retract_movable(self, retract, movable, current_percept):
         ret_i = 0
