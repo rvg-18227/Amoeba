@@ -20,7 +20,7 @@ MAP_DIM = 100
 MAX_BASE_LEN = min(MAP_DIM, 100)
 TOOTH_SPACING = 1       # 1 best
 SHIFTING_FREQ = 6       # 6 best for high metabolisms, 4 better for low
-SIZE_MULTIPLIER = 6     # 4 best for density = 0.1 metabolism = 0.1
+SIZE_MULTIPLIER = 4     # 4 best for density = 0.1 metabolism = 0.1
 MOVING_TYPE = 'center'  # 'center' best for low metabolisms - 'center_teeth_first' better for high
 TWO_RAKE = True
 
@@ -421,11 +421,16 @@ class Player:
         possible_moves = min(len(potential_retracts), len(potential_extends), self.num_available_moves)
         retracts = potential_retracts[:possible_moves]
         extends = potential_extends[:possible_moves]
+        retr_reserve = potential_retracts[possible_moves:][::-1]
+        ext_reserve = potential_extends[possible_moves:][::-1]
 
         print('Search started')
         while not self.check_move(retracts, extends):
             retracts = binary_search(retracts, lambda r: self.check_move(r, extends[:len(r)]))
             extends.pop()
+            if retr_reserve and ext_reserve:
+                retracts.append(retr_reserve.pop())
+                extends.append(ext_reserve.pop())
         print('Search ended')
 
         # show_amoeba_map(self.amoeba_map, retracts, extends)
