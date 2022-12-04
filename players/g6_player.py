@@ -61,14 +61,30 @@ class Player:
         info_binary  = format(info, '04b')
         
 
-        stage = 0 if info < 10 else 1 # hard-coded
+        if info < 20:
+            # expand
+            stage = 0
+        elif info >= 20 and info < 25:
+            # forward
+            stage = 1
+        elif info >= 25:
+            stage = 2
+        #stage = 0 if info < 10 else 1 # hard-coded
         if stage == 0:
             retract_list, expand_list = self.reorganize(
                 current_percept.amoeba_map, current_percept.periphery, current_percept.bacteria)
         elif stage == 1:
             retract_list, expand_list = self.forward(
                 current_percept.amoeba_map, current_percept.periphery, current_percept.bacteria)
-
+        else:
+            expand_list = self.box_to_sweeper_expand(
+                    current_percept.amoeba_map, mini)
+            retract_list = self.box_to_sweeper_retract(
+                    current_percept.amoeba_map, current_percept.periphery, mini)
+            if stage == 2 and len(expand_list) == 0:  
+                expand_list = None
+                retract_list = None
+            
         mini = min(mini, len(retract_list), len(expand_list))
 
         self.logger.info(f'retract: {retract_list}')
