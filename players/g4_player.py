@@ -379,6 +379,10 @@ class RandomWalk(Strategy):
         return retract, movable, info
 
 class BucketAttack(Strategy):
+
+    def __init__(self, metabolism, bucket_width=1):
+        super().__init__(metabolism)
+        self.bucket_width = bucket_width
     
     def _spread_vertically(
         self,
@@ -409,23 +413,25 @@ class BucketAttack(Strategy):
         @size: current size of ameoba
         @cog: center of gravity for the target shape (only y-value used currently)
         """
+        wall_cost = self.bucket_width + 1
+        bucket_cost = 2 * wall_cost + 1 # 2 * wall_cost + arm_cost
 
         _, y_cog = cog
-        buckets, orphans = divmod(size - 3, 7)
+        buckets, orphans = divmod(size - 3, bucket_cost)
         upper_buckets, lower_buckets = math.ceil(buckets / 2), math.floor(buckets / 2)
 
         inner_wall_cell_ys = self._spread_vertically(
             y_cog,
-            3 * upper_buckets,
-            3 * lower_buckets
+            wall_cost * upper_buckets,
+            wall_cost * lower_buckets
         )
         outer_wall_cell_ys = self._spread_vertically(
             y_cog,
-            3 * upper_buckets,
-            3 * lower_buckets + orphans
+            wall_cost * upper_buckets,
+            wall_cost * lower_buckets + orphans
         )
         arm_cell_ys = self._spread_vertically(
-            y_cog, upper_buckets, lower_buckets , step=3
+            y_cog, upper_buckets, lower_buckets , step=wall_cost
         )
 
         if self.shifted == 1:
@@ -584,6 +590,9 @@ class BucketAttack(Strategy):
 #  Group 3 Ameoba
 #------------------------------------------------------------------------------
 
+BUCKET_WIDTH = 2
+
+
 class Player:
     def __init__(
         self,
@@ -612,7 +621,7 @@ class Player:
 
         self.strategies = dict(
             random_walk=RandomWalk(metabolism, rng),
-            bucket_attack=BucketAttack(metabolism)
+            bucket_attack=BucketAttack(metabolism, bucket_width=BUCKET_WIDTH)
         )
 
     def move(
