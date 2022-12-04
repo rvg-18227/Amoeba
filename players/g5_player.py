@@ -97,14 +97,25 @@ def binary_search(li, check):
 
     if not check(li[:mid]):
         return binary_search(li[:mid], check) + li[mid:]
-
     elif not check(li[mid + 1:]):
         return li[:mid + 1] + binary_search(li[mid + 1:], check)
-
     elif not check(li):
         return li[:mid] + li[mid + 1:]
     else:
         return li
+
+
+def binary_search_item(li, check):
+    mid = len(li) // 2
+
+    if not check(li[:mid]):
+        return binary_search_item(li[:mid], check)
+    elif not check(li[mid + 1:]):
+        return binary_search_item(li[mid + 1:], check)
+    elif not check(li):
+        return li[mid]
+    else:
+        return None
 
 
 def iter_from_middle(lst):
@@ -205,6 +216,7 @@ class Player:
         self.retractable_cells: List[Tuple[int, int]] = None
         self.extendable_cells: List[Tuple[int, int]] = None
         self.num_available_moves: int = None
+        self.map_state: npt.NDArray = None
 
     def generate_tooth_formation(self, amoeba_size: int) -> npt.NDArray:
         formation = np.zeros((MAP_DIM, MAP_DIM), dtype=np.int8)
@@ -372,6 +384,30 @@ class Player:
             ranked_cells.append(((x, y), score))
         return [cell for cell, score in sorted(ranked_cells, key=lambda t: t[1])]
 
+    def get_retracts_neighbors(self, potential_retracts):
+        ranked_cells_dict = {}
+        for x, y in potential_retracts:
+            neighbors = [((x-1) % 100, y), ((x+1) % 100, y), (x, (y-1) % 100), (x, (y+1) % 100)]
+            score = 0
+            for neighbor in neighbors:
+                if self.amoeba_map[neighbor] == 1:
+                    score += 1
+            ranked_cells_dict[(x, y)] = score
+        return ranked_cells_dict
+
+    def sort_retracts(self, retracts, ranked_cells_dict):
+        retracts = sorted(retracts, key=lambda r: (ranked_cells_dict[r], -abs(r[0]-50)), reverse=True)
+        return retracts
+
+    def get_neighbors(self, cell):
+        x, y = cell
+        neighbors = [((x - 1) % 100, y), ((x + 1) % 100, y), (x, (y - 1) % 100), (x, (y + 1) % 100)]
+        valid_neighbors = []
+        for neighbor in neighbors:
+            if self.amoeba_map[neighbor] == 1:
+                valid_neighbors.append(neighbor)
+        return valid_neighbors
+
     # copied from G2
     def get_morph_moves(self, desired_amoeba: npt.NDArray) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
         """ Function which takes a starting amoeba state and a desired amoeba state and generates a set of retracts and extends
@@ -387,7 +423,6 @@ class Player:
                              p in self.extendable_cells]
 
         # potential_retracts.sort(key=lambda pos: pos[1])
-        potential_retracts = self.sort_retracts(potential_retracts)
         if MOVING_TYPE == 'top_down':
             potential_extends.sort(key=lambda pos: pos[1])
         elif MOVING_TYPE == 'top_down_teeth_first':
@@ -417,24 +452,53 @@ class Player:
         #             # potential_extends.remove(potential_extend)
         #             change = True
         #             break
+        ranked_cells_dict = self.get_retracts_neighbors(potential_retracts)
+        # potential_retracts.sort(key=lambda r: (ranked_cells_dict[r], -r[0]), reverse=True)
+        # potential_retracts = self.sort_retracts(potential_retracts)
+        potential_retracts = self.sort_retracts(potential_retracts, ranked_cells_dict)
 
         possible_moves = min(len(potential_retracts), len(potential_extends), self.num_available_moves)
-        retracts = potential_retracts[:possible_moves]
-        extends = potential_extends[:possible_moves]
-        retr_reserve = potential_retracts[possible_moves:][::-1]
-        ext_reserve = potential_extends[possible_moves:][::-1]
+        potential_extends.reverse()
+
+        for _ in range(possible_moves):
+            next_ret = potential_retracts.pop()
+            retracts.append(next_ret)
+            extends.append(potential_extends.pop())
+
+            for neighbor in self.get_neighbors(next_ret):
+                if neighbor in ranked_cells_dict:
+                    ranked_cells_dict[neighbor] -= 1
+            # potential_retracts.sort(key=lambda r: ranked_cells_dict[r], reverse=True)
+            # potential_retracts.sort(key=lambda r: (ranked_cells_dict[r], -r[0]), reverse=True)
+            potential_retracts = self.sort_retracts(potential_retracts, ranked_cells_dict)
+
+        # retracts = potential_retracts[:possible_moves]
+        # extends = potential_extends[:possible_moves]
 
         print('Search started')
         while not self.check_move(retracts, extends):
-            retracts = binary_search(retracts, lambda r: self.check_move(r, extends[:len(r)]))
+            # retracts = binary_search(retracts, lambda r: self.check_move(r, extends[:len(r)]))
+            bad_retract = binary_search_item(retracts, lambda r: self.check_move(r, extends[:len(r)]))
+
+            for neighbor in self.get_neighbors(bad_retract):
+                if neighbor in ranked_cells_dict:
+                    ranked_cells_dict[neighbor] += 1
+
+            retracts.remove(bad_retract)
             extends.pop()
-            if retr_reserve and ext_reserve:
-                retracts.append(retr_reserve.pop())
-                extends.append(ext_reserve.pop())
+
+            # potential_retracts.sort(key=lambda r: ranked_cells_dict[r], reverse=True)
+            # potential_retracts.sort(key=lambda r: (ranked_cells_dict[r], -r[0]), reverse=True)
+            potential_retracts = self.sort_retracts(potential_retracts, ranked_cells_dict)
+
+            if potential_retracts and potential_extends:
+                retracts.append(potential_retracts.pop())
+                extends.append(potential_extends.pop())
         print('Search ended')
 
         # show_amoeba_map(self.amoeba_map, retracts, extends)
         # truncate to account for smaller metabolism
+        print(self.check_move(retracts, extends))
         return retracts, extends
 
     # adapted from amoeba game code
@@ -452,7 +516,7 @@ class Player:
         if not set(extends).issubset(set(movable)):
             return False
 
-        amoeba = np.copy(self.amoeba_map)
+        amoeba = np.copy(self.map_state)
         amoeba[amoeba < 0] = 0
         amoeba[amoeba > 0] = 1
 
@@ -490,6 +554,9 @@ class Player:
         self.bacteria_cells = current_percept.bacteria
         self.extendable_cells = current_percept.movable_cells
         self.num_available_moves = int(np.ceil(self.metabolism * current_percept.current_size))
+        self.map_state = np.copy(self.amoeba_map)
+        for bacteria in self.bacteria_cells:
+            self.map_state[bacteria] = -1
 
     def move(self, last_percept: AmoebaState, current_percept: AmoebaState, info: int) -> Tuple[
         List[Tuple[int, int]], List[Tuple[int, int]], int]:
@@ -552,7 +619,11 @@ class Player:
                 target_formation = self.generate_tworake_formation(self.current_size, x_val, offset_y + 1)
                 # target_formation = self.generate_tworake_formation(target_size, x_val, offset_y + 1)
 
-            retracts, moves = self.get_morph_moves(target_formation)
+            diff = np.count_nonzero(target_formation & self.amoeba_map != target_formation)
+            if diff/self.current_size <= 0.05 and diff <= 10:
+                retracts, moves = [], []
+            else:
+                retracts, moves = self.get_morph_moves(target_formation)
 
             if len(retracts) == 0 and len(moves) == 0:
                 if mem.tooth_shift == 1:
