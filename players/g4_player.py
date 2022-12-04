@@ -302,6 +302,13 @@ class Strategy(ABC):
     ) -> tuple[list[cell], list[cell], int]:
 
         pass
+
+    def _get_cog(self, curr_state: AmoebaState) -> tuple[int, int]:
+        """Compute center of gravity of current Ameoba."""
+        ameoba_cells = np.array(list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value))))
+        cog = (round(np.average(ameoba_cells[:,0])),round(np.average(ameoba_cells[:,1])))
+
+        return cog
     
     def _reshape(
         self,
@@ -330,6 +337,7 @@ class Strategy(ABC):
         ) 
 
         ameoba_cells = list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value)))
+        #print(ameoba_cells)
         unoccupied_target_cells = target - set(ameoba_cells)
         to_occupy = set(occupiable_cells).intersection(unoccupied_target_cells)
 
@@ -378,6 +386,137 @@ class RandomWalk(Strategy):
         info = 0
 
         return retract, movable, info
+
+class BoxFarm(Strategy):
+
+    def _make_box(self, size, top_left_corner):
+        #perimeter = math.floor(size/4)
+        square_length = math.floor(math.sqrt(size)) + 1
+       # square_length = perimeter 
+        print(square_length)
+        box_cells = []
+        for i in range(square_length):
+            for j in range(square_length):
+                if i == 0 or i == square_length - 1 or j == 0 or j == square_length - 1:
+                    box_cells.append((i + top_left_corner[0], j + top_left_corner[1]))
+        for i in range(size - len(box_cells)):
+            box_cells.append((top_left_corner[0], top_left_corner[1] + square_length + i))
+        return box_cells
+
+    def _sweep(self, size, ameoba_cells):
+        left_x = min(ameoba_cells[:,0])
+        left_ind = np.where(ameoba_cells[:,0]==left_x)
+        sweep_arm = ameoba_cells[left_ind]
+        return sweep_arm
+
+    def _init(self, ameoba_cells, size, corner):
+        square_length = math.floor(math.sqrt(size)) + 1
+        minx, miny = min(ameoba_cells[:,0]), min(ameoba_cells[:,1])
+        if corner == 0:
+            top_right_corner = (minx+square_length-2,miny)
+            print(top_right_corner)
+        else:
+            top_right_corner = (corner, miny)
+        box_cells = self._make_box(size, top_right_corner)
+        return box_cells, top_right_corner
+
+    def move(
+        self, prev_state: AmoebaState, state: AmoebaState, memory: int
+    ) -> tuple[list[cell], list[cell], int]:
+
+        size = (state.current_size)
+        ameoba_cells = np.array(list(zip(*np.where(state.amoeba_map == State.ameoba.value))))
+
+        ameoba_cells_set = list(set([tuple(ti) for ti in ameoba_cells]))
+        loop = True
+        while loop:
+            loop = False
+            mem = f'{memory:b}'
+            while len(mem) < 8:
+                mem = '0' + mem
+            initialize = int(mem[0])
+            corner = int(mem[1:],2)
+            if initialize == 0:
+                target_cells, corner = self._init(ameoba_cells,size,corner)
+                #print(target_cells)
+                mem_corner = f'{corner[0]:b}'
+                while len(mem_corner) < 8:
+                    mem_corner = '0' + mem_corner
+                mem = mem_corner
+                over = len(set(ameoba_cells_set))
+                leftover = math.sqrt(over) % 1
+                counter = 0
+                # while leftover > 0:
+                #     target_cells.append((corner[0],corner[1]-counter))
+                #     counter += 1
+                #     over -= 1
+                #     leftover = math.sqrt(over) % 1
+                if set(target_cells) == set(ameoba_cells_set):
+                    initialize = 1
+                    mem_initialize = f'{initialize:b}'
+                    mem = mem_initialize + mem[1:]
+
+            if initialize == 1:
+                print("SWEEP")
+                sweep_cells = self._sweep(size, ameoba_cells)
+                sweep_cells_set = list(set([tuple(ti) for ti in sweep_cells]))
+                target_cells = list(set(ameoba_cells_set) - set(sweep_cells_set))
+                x = sweep_cells[0][0]
+                y = min(ameoba_cells[:,1])
+                square_length = math.floor(math.sqrt(size)) + 1
+                middle_points = []
+                for i in range(square_length-2):
+                    point = ((x+1,y+1+i))
+                    target_cells.append(point)
+                    middle_points.append(point)
+                
+                target_cells.append((x+square_length,y))
+                target_cells.append((x+square_length,y+square_length-1))
+                
+                sq = math.sqrt(size)
+                closest = math.floor(sq)**2
+                for i in range(size-closest):
+                    target_cells.append((x+1,y+square_length+i))
+                    middle_points.append((x+1,y+square_length+i))
+                middle_cells_set = list(set([tuple(ti) for ti in middle_points]))
+                ready = False
+                if len(set(middle_cells_set) - set(ameoba_cells_set)) == 0:
+                    ready = True
+                    #print("READY")
+                #for i in range(size - len(target_cells)):
+                    # point = (x+1,y+square_length + i)
+                    # count = i
+                    # while point in target_cells:
+                    #     count += 1
+                    #     point = (x+1,y+square_length + count)
+                    # print("appending")
+                    # target_cells.append(point)
+                if (set(target_cells)) == (set(ameoba_cells_set)) or ready:#or set(target_cells) < set(ameoba_cells_set):
+                    #print("TESTING TESTING")
+                    min_y = min(ameoba_cells[:,1])
+                    min_ind = np.where(ameoba_cells[:,1]==min_y)
+                    top = ameoba_cells[min_ind]
+                    corner = min(ameoba_cells[:,0]) + 1
+                #     initialize = 0
+                    mem_corner = f'{corner:b}'
+                    while len(mem_corner) < 8:
+                        mem_corner = '0' + mem_corner
+                    mem = mem_corner
+                    memory = int(mem,2)
+                    loop = True
+            
+            # for cell in sweep_cells:
+            #     if cell[1] == miny or cell[1] == maxy:
+            #         target_cells.append((cell[0],cell[1]))
+            #     else:
+            #         target_cells.append((cell[0]+1,cell[1]))
+
+        #target_cells = self._get_target_cells(size, ameoba_cells)
+
+        memory = int(mem,2)
+        #print(target_cells)
+        return self._reshape(state, memory, set(target_cells))
+
 
 class BucketAttack(Strategy):
 
@@ -553,7 +692,6 @@ class BucketAttack(Strategy):
         )
         return wall_cells
 
-
     def _get_bridge_V_target_cells(self, size: int, cog: cell, xmax: int) -> list[cell]:
         _, y_cog = cog
         comb_size=min(290,size)
@@ -584,8 +722,6 @@ class BucketAttack(Strategy):
 
         return comb_targets
 
-
-
     def _get_Vshpae_target(self, size: int, cog: cell) -> list[cell]:
         arm_length =size//2
         print("upper")
@@ -603,7 +739,6 @@ class BucketAttack(Strategy):
             bridge_cells.append((cur_x, y_cog))
             cur_x-=1
         return bridge_cells
-
 
     def _get_cog(self, curr_state: AmoebaState) -> tuple[int, int]:
         """Compute center of gravity of current Ameoba."""
@@ -666,17 +801,13 @@ class BucketAttack(Strategy):
 
         return arms_got >= arms_expected
 
-
     def _reach_border(self, curr_state: AmoebaState) -> bool:
         ameoba_xs, ameoba_ys = np.where(curr_state.amoeba_map == State.ameoba.value)
-        #print(ameoba_ys)
         lower_bound=min(ameoba_ys)
         upper_bound=max(ameoba_ys)
-        #print(upper_bound, lower_bound)
         if abs(upper_bound-lower_bound)>= 98:
             return True
         return False
-
 
     def move(
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
@@ -767,6 +898,7 @@ class Player:
 
         self.strategies = dict(
             random_walk=RandomWalk(metabolism, rng),
+            box_farm=BoxFarm(metabolism),
             bucket_attack=BucketAttack(
                 metabolism, bucket_width=BUCKET_WIDTH, shift_n=SHIFT_CYCLE
             )
@@ -805,6 +937,7 @@ class Player:
         strategy = "bucket_attack"
 
         return self.strategies[strategy].move(last_percept, current_percept, info)
+
 
 #------------------------------------------------------------------------------
 #  Unit Tests
