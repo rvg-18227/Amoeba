@@ -50,11 +50,12 @@ def visualize_reshape(
     occupiable: list[cell], retractable: list[cell],
     retract: list[cell], extend: list[cell]):
 
+    global turns
+    turns += 1
+
     if not debug:
         return
 
-    global turns
-    turns += 1
 
     axes = []
     for fig_no in [2, 3]:
@@ -542,6 +543,10 @@ class BucketAttack(Strategy):
         self.bucket_width = bucket_width
         self.shift_enabled = shift_n >= 1 and shift_n <= 16
         self.shift_n = shift_n
+
+        # derived statistics
+        self.wall_cost = self.bucket_width + 1
+        self.bucket_cost = 2 * self.wall_cost + 1 # 1 is cost of bucket arm
     
     def _spread_vertically(
         self,
@@ -578,9 +583,8 @@ class BucketAttack(Strategy):
         x_spreads = np.linspace(x_left, x_right, cnt, True, dtype=int)
         return x_spreads
 
-
-    #TODO
     def _spread_diagonally(self,size: int, cog: cell, up_or_down: int)-> list[cell]:
+        # TODO
         x_cog,y_cog = cog
         cur = 0
         cur_x = x_cog
@@ -600,7 +604,6 @@ class BucketAttack(Strategy):
         print(targets)
         return targets
 
-
     def _get_target_cells(self, size: int, cog: cell, xmax: int) -> list[cell]:
         """Returns the cells of the target shape by centering vertically on
         the y-value of Ameoba's center of gravity and placing the bucket arms
@@ -609,8 +612,8 @@ class BucketAttack(Strategy):
         @size: current size of ameoba
         @cog: center of gravity for the target shape (only y-value used currently)
         """
-        wall_cost = self.bucket_width + 1
-        bucket_cost = 2 * wall_cost + 1 # 2 * wall_cost + arm_cost
+        wall_cost = self.wall_cost
+        bucket_cost = self.bucket_cost
 
         _, y_cog = cog
         buckets, orphans = divmod(size - 3, bucket_cost)
@@ -678,7 +681,6 @@ class BucketAttack(Strategy):
         arm_cells = [ ( x % 100, (ymax+1) % 100 ) for x in arm_cell_xs ]
 
         return wall_cells + arm_cells
-
 
     def _get_rectangle_target(self, size: int, cog: cell, xmax: int) -> list[cell]:
         _, y_cog = cog
@@ -791,6 +793,12 @@ class BucketAttack(Strategy):
 
         return xmax % constants.map_dim
 
+    def _reach_border(self, curr_state: AmoebaState) -> bool:
+        _, ameoba_ys = np.where(curr_state.amoeba_map == State.ameoba.value)
+        lower_bound, upper_bound = min(ameoba_ys), max(ameoba_ys)
+
+        return abs(upper_bound - lower_bound) >= 98
+
     def _in_shape(self, curr_state: AmoebaState) -> bool:
         """Returns a bool indicating if our bucket arms are in shape.
         
@@ -808,18 +816,14 @@ class BucketAttack(Strategy):
         way.
         """
         xmax = self._get_xmax(curr_state)
-        arms_expected = 1 + math.floor((curr_state.current_size - 3) / 7)
         arms_got = len(np.where(curr_state.amoeba_map[xmax,:] == State.ameoba.value)[0])
 
-        return arms_got >= arms_expected
+        if not self._reach_border:
+            arms_expected = 1 + math.floor((curr_state.current_size - 3) / self.bucket_cost)
+        else:
+            arms_expected = 2 * ((constants.map_dim / 2 - 1) // (self.bucket_width + 1) + 1)
 
-    def _reach_border(self, curr_state: AmoebaState) -> bool:
-        ameoba_xs, ameoba_ys = np.where(curr_state.amoeba_map == State.ameoba.value)
-        lower_bound=min(ameoba_ys)
-        upper_bound=max(ameoba_ys)
-        if abs(upper_bound-lower_bound)>= 98:
-            return True
-        return False
+        return arms_got >= arms_expected
 
     def move(
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
@@ -836,8 +840,6 @@ class BucketAttack(Strategy):
         if self.shift_enabled and rotation == 0:
             shifted = shifted ^ 1
             
-
-
 
         size = state.current_size
         # TODO: maybe not always moving horizontally?
