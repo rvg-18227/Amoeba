@@ -531,7 +531,7 @@ class BoxFarm(Strategy):
 
 class BucketAttack(Strategy):
 
-    def __init__(self, metabolism, bucket_width=1, shift_n=-1):
+    def __init__(self, metabolism, bucket_width=1, shift_n=-1, v_size=200):
         """Initializes BucketAttack.
         
         kwargs:
@@ -543,6 +543,7 @@ class BucketAttack(Strategy):
         self.bucket_width = bucket_width
         self.shift_enabled = shift_n >= 1 and shift_n <= 16
         self.shift_n = shift_n
+        self.v_size = v_size
 
         # derived statistics
         self.wall_cost = self.bucket_width + 1
@@ -724,7 +725,7 @@ class BucketAttack(Strategy):
                 lower_bridge_cells = [(cur_x, y_cog - 1) for cur_x in range(xmax-bridge_length, xmax)]
                 bridge_targets = upper_bridge_cells + lower_bridge_cells
                 bridge_size=len(bridge_targets)
-                v_size=min(200, size-comb_size-bridge_size)
+                v_size=min(self.v_size, size-comb_size-bridge_size)
                 v_targets=self._get_Vshpae_target(v_size,(50,50))
                 print("Grow V", size, comb_size, bridge_size, v_size)
                 horizontal_comb_size = size- comb_size - bridge_size - v_size
@@ -829,17 +830,44 @@ class BucketAttack(Strategy):
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
     ) -> tuple[list[cell], list[cell], int]:
 
+        # ----------------
+        #  Decode Memory
+        # ----------------
         mem = f'{memory:b}'.rjust(8, '0')
         print("Start mem",mem)
         old_xmax = int(mem[:7], 2)
         shifted = int(mem[-1])
 
-        # increment rotation counter
+        # ---------------
+        #  State Update
+        # ---------------
+        # rotation counter & shifted
         rotation = (old_xmax + 1) % self.shift_n
-
         if self.shift_enabled and rotation == 0:
             shifted = shifted ^ 1
-            
+
+        # arm_xval
+        if not self._reach_border(state):
+            xmax = self._get_xmax(state)
+            print("xmax (normal)", xmax, '{0:07b}'.format(xmax), mem)
+        else:
+            xmax = old_xmax + 1
+            print("xmax (reached border)", xmax, '{0:07b}'.format(xmax), mem)
+
+        if not self._in_shape(state):
+            arm_xval = (xmax - 1) % 100
+            print("not in shape", xmax,'{0:07b}'.format(xmax))
+        else:
+            arm_xval = xmax % 100
+
+        # ----------------
+        #  Update Memory
+        # ----------------
+        arm_xval_bin = '{0:07b}'.format(arm_xval)
+        shifted_bin  = '{0:01b}'.format(shifted)
+        memory = int(arm_xval_bin + shifted_bin, 2)
+        print("update memory", arm_xval_bin + shifted_bin)
+
 
         size = state.current_size
         # TODO: maybe not always moving horizontally?
@@ -848,39 +876,20 @@ class BucketAttack(Strategy):
         else:
             cog  = (50, 50)
 
-        # x-value of bucket arms
-        arm_xval = old_xmax + 1
-
-        if not self._reach_border(state):
-            arm_xval = self._get_xmax(state)
-            print("This is normal xval",arm_xval,'{0:07b}'.format(arm_xval),mem)
-        else:
-            arm_xval=old_xmax+1
-            print("memory reach border", arm_xval,'{0:07b}'.format(arm_xval),mem)
-
-        print("This is x_max",arm_xval)
-        if not self._in_shape(state):
-            arm_xval -= 1
-            print("not in shape",arm_xval,'{0:07b}'.format(arm_xval))
-
-        # update memory
-        arm_xval_bin='{0:07b}'.format(arm_xval)
-        shifted_bin='{0:01b}'.format(shifted)
-        memory = int(arm_xval_bin+shifted_bin, 2)
-        print("update memory", arm_xval_bin+shifted_bin)
-
-        # compute moves
-        target_cells = self._get_target_cells(size, cog, arm_xval)
- 
+        # -----------------------
+        #  compute target shape
+        # -----------------------
         # TODO: if reach boder, return comb+1cell each step as the bridge + Vshape
         # need about 290 cells to reach border
         if self._reach_border(state):
-             print("reach border")
-             print(state.current_size)
-             target_cells = self._get_bridge_V_target_cells(size,cog,arm_xval)
+            print(f"reach border, current size: {state.current_size}")
+            target_cells = self._get_bridge_V_target_cells(size, cog, arm_xval)
         else:
             target_cells = self._get_target_cells(size, cog, arm_xval)
 
+        # ----------------------------------
+        #  compute moves: retract & extend
+        # ----------------------------------
         # TODO: need to modify normal_retract to fit the V_shape
         retract, extend, memory = self._reshape(state, memory, set(target_cells))
 
@@ -897,6 +906,7 @@ class BucketAttack(Strategy):
 
 BUCKET_WIDTH = 1
 SHIFT_CYCLE  = -1
+V_SIZE = 200
 
 
 class Player:
@@ -929,7 +939,10 @@ class Player:
             random_walk=RandomWalk(metabolism, rng),
             box_farm=BoxFarm(metabolism),
             bucket_attack=BucketAttack(
-                metabolism, bucket_width=BUCKET_WIDTH, shift_n=SHIFT_CYCLE
+                metabolism,
+                bucket_width=BUCKET_WIDTH,
+                shift_n=SHIFT_CYCLE,
+                v_size=V_SIZE
             )
         )
 
