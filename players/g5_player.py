@@ -21,8 +21,8 @@ MAX_BASE_LEN = min(MAP_DIM, 100)
 TOOTH_SPACING = 1       # 1 best
 SHIFTING_FREQ = 6       # 6 best for high metabolisms, 4 better for low
 SIZE_MULTIPLIER = 6     # 4 best for density = 0.1 metabolism = 0.1
-MOVING_TYPE = 'top_down'  # 'center' best for low metabolisms - 'center_teeth_first' better for high
-TWO_RAKE = False
+MOVING_TYPE = 'center'  # 'center' best for low metabolisms - 'center_teeth_first' better for high
+TWO_RAKE = True
 
 # Best configs so far #
 # m = 0.1; A = 5; s = 2 -> 1 6 4 'center' -> 202 moves
@@ -255,13 +255,17 @@ class Player:
         center_y = MAP_DIM // 2
         spacing = TOOTH_SPACING + 1
         # if amoeba_size > 300 and (abs(curr_x - 50) < 3 or abs(curr_x - 100) < 3):
+
+        # PREVENT RAKES FROM COLLIDING
         d50 = lambda x: abs(x - (50 * round(x / 50)))
+        # print(amoeba_size)
         if amoeba_size > 350 and d50(curr_x) < 3:
-            curr_x = ((50 * round(curr_x / 50)) + 4) % 100
+            curr_x = ((50 * round(curr_x / 50)) + 3) % 100
             teeth = False
         else:
             teeth = True
 
+        # ADD FIRST RAKE
         # print('gtf x: ', curr_x)
         # find the number of complete 5-cell modules
         complete_modules = amoeba_size // 5
@@ -280,19 +284,29 @@ class Player:
         start_x = curr_x
 
         # add the 2-cell-wide base and teeth
+        cells_used = 0
         for y in range(start_y, start_y + base_len):
             formation[start_x, y % 100] = 1
             formation[(start_x - 1) % 100, y % 100] = 1
-            if teeth and y % 100 % spacing == shift:
+            cells_used += 2
+            if y % 100 % spacing == shift:
                 formation[(start_x + 1) % 100, y % 100] = 1
+                cells_used += 1
 
+        # ADD THE MIDDLE BAR
         cells_used = (formation == 1).sum()
         available = amoeba_size - cells_used
 
-        bar_length = min(100, available)
-        for offset in range(1, bar_length + 1):
-            formation[(start_x - offset) % 100, center_y] = 1
+        # bar_length = min(100, available)
+        if curr_x < 50:
+            bar_length = min(100, available)
+        else:
+            bar_length = min((curr_x - 50) * 2, available)
 
+        for offset in range(1, bar_length + 1):
+            formation[(curr_x - offset) % 100, center_y] = 1
+
+        # ADD THE SECOND RAKE
         cells_used = (formation == 1).sum()
         available = amoeba_size - cells_used
 
@@ -314,34 +328,34 @@ class Player:
         for y in range(start_y, start_y + base_len):
             formation[start_x, y % 100] = 1
             formation[(start_x + 1) % 100, y % 100] = 1
-            if teeth and y % 100 % spacing == shift ^ 1:
+            if y % 100 % spacing == shift ^ 1:
                 formation[(start_x - 1) % 100, y % 100] = 1
 
+        # DO SOMETHING WITH EXCESS CELLS
         cells_used = (formation == 1).sum()
         available = amoeba_size - cells_used
-        cube_side = math.ceil((available ** 0.5))
+        # cube_side = math.ceil((available ** 0.5))
 
-        for y in iter_from_middle(list(range(0, 50)) + list(range(51, 100))):
-            for x in range(center_x-cube_side//2, center_x-cube_side//2+cube_side):
-                if available <= 0:
-                    break
-                formation[x, y] = 1
-                available -= 1
-            if available <= 0:
-                break
+        # for y in iter_from_middle(list(range(0, 50)) + list(range(51, 100))):
+        #     for x in iter_from_middle(range(0, 100)):
+        #     # for x in range(center_x-cube_side//2, center_x-cube_side//2+cube_side):
+        #         if available <= 0:
+        #             break
+        #         formation[x, y] = 1
+        #         available -= 1
+        #     if available <= 0:
+        #         break
 
-        # add the teeth
-        # start_modules = start_y  # +(additional_sections+1)//2
-        # for y in range(start_modules, start_y + teeth_len * spacing):
-        #     # if (y - start_modules) % spacing == 0:
-        #     if y%100 % spacing == 0:
-        #         formation[center_x + 1, y%100] = 1
+        # for x in iter_from_middle(range(0, 100)):
+        #     for y in iter_from_middle(list(range(0, 50)) + list(range(51, 100))):
+        #     # for x in range(center_x-cube_side//2, center_x-cube_side//2+cube_side):
+        #         if available <= 0:
+        #             break
+        #         formation[x, y] = 1
+        #         available -= 1
+        #     if available <= 0:
+        #         break
 
-        # # add the "reserve" cell at the back
-        # for i in range(reserve):
-        #     row = i//base_len
-        #     col = i % base_len
-        #     formation[center_x-2-row, start_y+col] = 1
 
         # show_amoeba_map(formation)
         return formation
@@ -410,13 +424,13 @@ class Player:
 
         print('Search started')
         while not self.check_move(retracts, extends):
-            retracts = binary_search(retracts, lambda r: self.check_move(r, extends[-len(r):]))
+            retracts = binary_search(retracts, lambda r: self.check_move(r, extends[:len(r)]))
             extends.pop()
         print('Search ended')
 
         # show_amoeba_map(self.amoeba_map, retracts, extends)
         # truncate to account for smaller metabolism
-        return retracts[:self.num_available_moves], extends[:self.num_available_moves]
+        return retracts, extends
 
     # adapted from amoeba game code
     def check_move(self, retracts: List[Tuple[int, int]], extends: List[Tuple[int, int]]) -> bool:
@@ -525,7 +539,13 @@ class Player:
                 target_formation = np.roll(target_formation, offset_x, 0)
                 target_formation = np.roll(target_formation, offset_y, 1)
             else:
+                target_size = self.goal_size // 4 + SIZE_MULTIPLIER * (
+                            (100 + offset_x) % 100)  # calculate the desired size with regard
+                # if target_size // self.current_size < 0.8:
+                #     target_size = self.current_size
+
                 target_formation = self.generate_tworake_formation(self.current_size, x_val, offset_y + 1)
+                # target_formation = self.generate_tworake_formation(target_size, x_val, offset_y + 1)
 
             retracts, moves = self.get_morph_moves(target_formation)
 
