@@ -192,6 +192,23 @@ class Player:
         bottom_side = np.max(amoeba_loc[:, 1])
         retract_list = []
 
+        max_row_length = np.NINF
+        max_row = np.NINF
+        for row in range(top_side, bottom_side - 1):
+            row_array = np.where(amoeba_loc[:, 1] == row)[0]
+            row_cells = amoeba_loc[row_array]
+            row_len = len(row_cells)
+            if row_len > max_row_length:
+                max_row_length = row_len
+                max_row = row
+
+        row_use = np.where(amoeba_loc[:, 1] == max_row)[0]
+        row_cells = amoeba_loc[row_use]
+        row_cells = row_cells[row_cells[:, 0].argsort()]
+
+        tentacle_one = row_cells[1]
+        tentacle_two = row_cells[-2]
+
         for row in range(top_side, bottom_side - 1):
             if len(retract_list) == 2:
                 break
@@ -205,7 +222,7 @@ class Player:
                     break
                 num_column = np.size(np.where(amoeba_loc[:, 0] == col)[0])
                 self.logger.info(f'num_col: {num_column}')
-                if num_column > 2:
+                if num_column > 2 and col != tentacle_one and col != tentacle_two:
                     cell = (col, row)
                     if cell in periphery:
                         retract_list.append(cell)
