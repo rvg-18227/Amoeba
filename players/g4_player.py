@@ -294,6 +294,7 @@ class Strategy(ABC):
         self.metabolism = metabolism
         self.shifted = 1
         self.rotation = 0
+        self.vertical_comb_center = 50
 
     @abstractmethod
     def move(
@@ -411,8 +412,45 @@ class BucketAttack(Strategy):
         y_top    = y_center + step * upper_cnt
         y_bottom = y_center - step * lower_cnt
         y_spreads = np.linspace(y_bottom, y_top, cnt, True, dtype=int)
-
         return y_spreads
+
+    def _spread_horizontally(
+            self,
+            x_center: int,
+            left_cnt: int,
+            right_cnt: int,
+            step=1
+    ) -> np.ndarray:
+        """Returns a list of x-values by spreading around x_center."""
+
+        cnt = right_cnt + 1 + left_cnt
+        x_right = x_center + step * right_cnt
+        x_left = x_center - step * left_cnt
+        x_spreads = np.linspace(x_left, x_right, cnt, True, dtype=int)
+        return x_spreads
+
+
+    #TODO
+    def _spread_diagonally(self,size: int, cog: cell, up_or_down: int)-> list[cell]:
+        x_cog,y_cog = cog
+        cur = 0
+        cur_x = x_cog
+        cur_y = y_cog
+        targets = []
+        while cur < size:
+            cur_x -= 1
+            targets.append(((cur_x) % 100, cur_y % 100))
+            cur += 1
+
+            if cur < size:
+                cur_y += up_or_down
+                targets.append(((cur_x) % 100, cur_y % 100))
+                cur += 1
+            if cur_x%100 == 0:
+                print("reach edge",len(targets))
+        print(targets)
+        return targets
+
 
     def _get_target_cells(self, size: int, cog: cell, xmax: int) -> list[cell]:
         """Returns the cells of the target shape by centering vertically on
@@ -451,6 +489,48 @@ class BucketAttack(Strategy):
 
         return wall_cells + arm_cells
 
+    def _get_horizontal_comb_target_cells(self, size: int, cog: cell, ymax: int) -> list[cell]:
+        """Returns the cells of the target shape by centering vertically on
+        the y-value of Ameoba's center of gravity and placing the bucket arms
+        on the column of Ameoba's rightmost cell.
+
+        @size: current size of ameoba
+        @cog: center of gravity for the target shape (only y-value used currently)
+        """
+
+        x_cog, _ = cog
+        buckets, orphans = divmod(size - 3, 7)
+        left_buckets, right_buckets = math.ceil(buckets / 2), math.floor(buckets / 2)
+
+        inner_wall_cell_xs = self._spread_horizontally(
+            x_cog,
+            3 * left_buckets,
+            3 * right_buckets
+        )
+        outer_wall_cell_xs = self._spread_horizontally(
+            x_cog,
+            3 * left_buckets,
+            3 * right_buckets+ orphans
+        )
+        arm_cell_xs = self._spread_horizontally(
+            x_cog, left_buckets, right_buckets , step=3
+        )
+
+        if self.shifted == 1:
+            min_x = min(arm_cell_xs)
+            max_x = max(arm_cell_xs)
+            arm_cell_xs = [x - 1 for x in arm_cell_xs if x != min_x and x != max_x] + [max_x, min_x]
+            print("SHIFTED")
+
+        wall_cells = (
+            [ ( x % 100,       ymax % 100 ) for x in inner_wall_cell_xs ] +
+            [ ( x % 100,  (ymax-1) % 100 ) for x in outer_wall_cell_xs ]
+        )
+        arm_cells = [ ( x % 100, (ymax+1) % 100 ) for x in arm_cell_xs ]
+
+        return wall_cells + arm_cells
+
+
     def _get_rectangle_target(self, size: int, cog: cell, xmax: int) -> list[cell]:
         _, y_cog = cog
         wall_length, orphans=int(size/4),size%4
@@ -471,8 +551,59 @@ class BucketAttack(Strategy):
                 [(xmax % 100, y % 100) for y in inner_wall_cell_ys] +
                 [((xmax + 1) % 100, y % 100) for y in outer_wall_cell_ys]
         )
-
         return wall_cells
+
+
+    def _get_bridge_V_target_cells(self, size: int, cog: cell, xmax: int) -> list[cell]:
+        _, y_cog = cog
+        comb_size=min(290,size)
+        bridge_size=size-comb_size
+
+        comb_targets=self._get_target_cells(comb_size,cog,xmax)
+        if bridge_size>0:
+            print("have bridge",size, comb_size,bridge_size)
+            bridge_length,orphan=divmod(bridge_size,2)
+            if xmax-bridge_length > 50:
+                upper_bridge_cells=[(cur_x,y_cog) for cur_x in range(xmax-bridge_length,xmax)]
+                lower_bridge_cells=[(cur_x,y_cog-1) for cur_x in range(xmax-bridge_length-orphan,xmax)]
+                bridge_targets= upper_bridge_cells+lower_bridge_cells
+                return comb_targets + bridge_targets
+            else:
+                bridge_length=xmax-50
+                upper_bridge_cells = [(cur_x, y_cog) for cur_x in range(xmax-bridge_length, xmax)]
+                lower_bridge_cells = [(cur_x, y_cog - 1) for cur_x in range(xmax-bridge_length, xmax)]
+                bridge_targets = upper_bridge_cells + lower_bridge_cells
+                bridge_size=len(bridge_targets)
+                v_size=min(200, size-comb_size-bridge_size)
+                v_targets=self._get_Vshpae_target(v_size,(50,50))
+                print("Grow V", size, comb_size, bridge_size, v_size)
+                horizontal_comb_size = size- comb_size - bridge_size - v_size
+                if horizontal_comb_size > 0:
+                    comb_targets=self._get_target_cells(comb_size+horizontal_comb_size,cog,xmax)
+                return comb_targets + bridge_targets+v_targets
+
+        return comb_targets
+
+
+
+    def _get_Vshpae_target(self, size: int, cog: cell) -> list[cell]:
+        arm_length =size//2
+        print("upper")
+        upper_arm= self._spread_diagonally(arm_length, cog, 1)
+        print("lower")
+        lower_arm= self._spread_diagonally(arm_length, cog, -1)
+        arm_cells= upper_arm+lower_arm
+        return arm_cells
+
+    def _get_bridge_target(self, size: int, cog: cell) -> list[cell]:
+        bridge_cells=[]
+        x_cog,y_cog= cog
+        cur_x=x_cog
+        for i in range(size):
+            bridge_cells.append((cur_x, y_cog))
+            cur_x-=1
+        return bridge_cells
+
 
     def _get_cog(self, curr_state: AmoebaState) -> tuple[int, int]:
         """Compute center of gravity of current Ameoba."""
@@ -493,7 +624,7 @@ class BucketAttack(Strategy):
                                           .      .
                                           .      .
                         .                 .      .
-                      (xmax)
+                      (xmax
         """
 
         # we concatenate the ameoba map along the x-axis forming a 200 * 100 map
@@ -535,6 +666,18 @@ class BucketAttack(Strategy):
 
         return arms_got >= arms_expected
 
+
+    def _reach_border(self, curr_state: AmoebaState) -> bool:
+        ameoba_xs, ameoba_ys = np.where(curr_state.amoeba_map == State.ameoba.value)
+        #print(ameoba_ys)
+        lower_bound=min(ameoba_ys)
+        upper_bound=max(ameoba_ys)
+        #print(upper_bound, lower_bound)
+        if abs(upper_bound-lower_bound)>= 98:
+            return True
+        return False
+
+
     def move(
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
     ) -> tuple[list[cell], list[cell], int]:
@@ -562,11 +705,23 @@ class BucketAttack(Strategy):
 
         # x-value of bucket arms
         arm_xval = self._get_xmax(state)
+        print("This is x_max",arm_xval)
         if not self._in_shape(state):
             arm_xval -= 1
 
         # compute moves
         target_cells = self._get_target_cells(size, cog, arm_xval)
+ 
+        # TODO: if reach boder, return comb+1cell each step as the bridge + Vshape
+        # need about 290 cells to reach border
+        if self._reach_border(state):
+             print("reach border")
+             print(state.current_size)
+             target_cells = self._get_bridge_V_target_cells(size,cog,arm_xval)
+        else:
+            target_cells = self._get_target_cells(size, cog, arm_xval)
+
+        # TODO: need to modify normal_retract to fit the V_shape
         retract, extend, memory = self._reshape(state, memory, set(target_cells))
 
         if len(retract) > 0:
@@ -650,7 +805,6 @@ class Player:
         strategy = "bucket_attack"
 
         return self.strategies[strategy].move(last_percept, current_percept, info)
-
 
 #------------------------------------------------------------------------------
 #  Unit Tests
