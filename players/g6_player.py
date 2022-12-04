@@ -211,7 +211,7 @@ class Player:
 
         max_row_length = np.NINF
         max_row = np.NINF
-        for row in range(top_side, bottom_side - 1):
+        for row in range(top_side, bottom_side):
             row_array = np.where(amoeba_loc[:, 1] == row)[0]
             row_cells = amoeba_loc[row_array]
             row_len = len(row_cells)
@@ -224,9 +224,11 @@ class Player:
         row_cells = row_cells[row_cells[:, 0].argsort()]
 
         tentacle_one = row_cells[1]
+        tentacle_one = tentacle_one[0]
         tentacle_two = row_cells[-2]
+        tentacle_two = tentacle_two[0]
 
-        for row in range(top_side, bottom_side - 1):
+        for row in range(top_side, bottom_side):
             if len(retract_list) == 2:
                 break
 
@@ -239,7 +241,7 @@ class Player:
                     break
                 num_column = np.size(np.where(amoeba_loc[:, 0] == col)[0])
                 self.logger.info(f'num_col: {num_column}')
-                if num_column > 2 and col != tentacle_one and col != tentacle_two:
+                if num_column > 1 and col != tentacle_one and col != tentacle_two:
                     cell = (col, row)
                     if cell in periphery:
                         retract_list.append(cell)
@@ -248,6 +250,7 @@ class Player:
                         self.logger.info(f'cell idx : {np.where(cell_idx == True)[0]}')
                         amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx == True)[0], axis=0)
 
+        #print("retract", retract_list)
         return retract_list
 
     def box_to_sweeper_expand(self, amoeba_map, mini):
@@ -260,10 +263,11 @@ class Player:
 
         max_row_length = np.NINF
         max_row = np.NINF
-        for row in range(top_side, bottom_side - 1):
+        for row in range(top_side, bottom_side):
             row_array = np.where(amoeba_loc[:, 1] == row)[0]
             row_cells = amoeba_loc[row_array]
             row_len = len(row_cells)
+
             if row_len > max_row_length:
                 max_row_length = row_len
                 max_row = row
@@ -298,6 +302,7 @@ class Player:
             expand_cell = (col_two, expand_cell + 1)
             expand_cells.append(expand_cell)
 
+        #print("expand", expand_cells)
         return expand_cells
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria):
