@@ -194,7 +194,7 @@ class Player:
         # Class accessible percept variables, written at the start of each turn
         self.current_size: int = None
         self.amoeba_map: npt.NDArray = None
-        self.bacteria_cells: List[Tuple[int, int]] = None
+        self.bacteria_cells: set[Tuple[int, int]] = None
         self.retractable_cells: List[Tuple[int, int]] = None
         self.extendable_cells: List[Tuple[int, int]] = None
         self.num_available_moves: int = None
@@ -274,6 +274,7 @@ class Player:
         # Loop through potential extends, searching for a matching retract
         retracts = []
         extends = []
+        check_calls = 0
         for potential_extend in [p for p in potential_extends]:
             # Ensure we only move as much as possible given our current metabolism
             if len(extends) >= self.num_available_moves:
@@ -286,11 +287,14 @@ class Player:
                 retract = matching_retracts[i]
                 # Matching retract found, add the extend and retract to our lists
                 if self.check_move(retracts + [retract], extends + [potential_extend]):
+                    check_calls += 1
                     retracts.append(retract)
                     potential_retracts.remove(retract)
                     extends.append(potential_extend)
                     potential_extends.remove(potential_extend)
                     break
+                check_calls += 1
+        print(f"Check calls: {check_calls} / {self.current_size}")
 
         # If we have moves remaining, try and get closer to the desired formation
         # if len(extends) < self.num_available_moves and len(potential_retracts):
@@ -329,7 +333,7 @@ class Player:
         return movable[:mini]
 
     def find_movable_neighbor(
-        self, x: int, y: int, amoeba_map: npt.NDArray, bacteria: List[Tuple[int, int]]
+        self, x: int, y: int, amoeba_map: npt.NDArray, bacteria: set[Tuple[int, int]]
     ) -> List[Tuple[int, int]]:
         out = []
         if (x, y) not in bacteria:
@@ -350,15 +354,15 @@ class Player:
         if not set(retracts).issubset(set(self.retractable_cells)):
             return False
 
-        movable = retracts[:]
+        movable = set(retracts[:])
         new_periphery = list(set(self.retractable_cells).difference(set(retracts)))
         for i, j in new_periphery:
             nbr = self.find_movable_neighbor(i, j, self.amoeba_map, self.bacteria_cells)
             for x, y in nbr:
                 if (x, y) not in movable:
-                    movable.append((x, y))
+                    movable.add((x, y))
 
-        if not set(extends).issubset(set(movable)):
+        if not set(extends).issubset(movable):
             return False
 
         amoeba = np.copy(self.amoeba_map)
@@ -376,6 +380,7 @@ class Player:
         check = np.zeros((constants.map_dim, constants.map_dim), dtype=int)
 
         stack = result[0:1]
+        result = set(result)
         while len(stack):
             a, b = stack.pop()
             check[a][b] = 1
@@ -403,7 +408,7 @@ class Player:
         self.current_size = current_percept.current_size
         self.amoeba_map = current_percept.amoeba_map
         self.retractable_cells = current_percept.periphery
-        self.bacteria_cells = current_percept.bacteria
+        self.bacteria_cells = set(current_percept.bacteria)
         self.extendable_cells = current_percept.movable_cells
         self.num_available_moves = int(
             np.ceil(self.metabolism * current_percept.current_size)
@@ -449,11 +454,11 @@ class Player:
             next_comb = self.generate_comb_formation(
                 self.current_size, vertical_shift, curr_backbone_col, CENTER_Y
             )
-            retracts, moves = self.get_morph_moves(next_comb)
-
-            # When we "settle" into the target backbone column, no moves are generated
-            if len(moves) == 0:
-                # So we advance the backbone column by 1
+            # Check if current comb formation is filled
+            if not self.amoeba_map[next_comb].all():
+                retracts, moves = self.get_morph_moves(next_comb)
+            else:
+                # When we "settle" into the target backbone column, advance the backbone column by 1
                 prev_backbone_col = curr_backbone_col
                 new_backbone_col = (prev_backbone_col + 1) % 100
                 vertical_shift = VERTICAL_SHIFT_LIST[new_backbone_col]
