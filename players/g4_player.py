@@ -12,6 +12,7 @@ import numpy as np
 
 sys.path.append(os.getcwd())
 from amoeba_state import AmoebaState
+import constants
 
 
 #------------------------------------------------------------------------------
@@ -37,7 +38,7 @@ class State(Enum):
 #------------------------------------------------------------------------------
 
 def visualize_reshape(
-    target: list[cell], ameoba: list[cell],
+    target: list[cell], ameoba: list[cell], bacteria: list[cell],
     occupiable: list[cell], retractable: list[cell],
     retract: list[cell], extend: list[cell]):
 
@@ -56,63 +57,59 @@ def visualize_reshape(
     
     fig, (ax1, ax2) = debug_fig
 
+    # marker sizes
+    size_s = (mpl.rcParams['lines.markersize'] + 1.5) ** 2
+    size_m = (mpl.rcParams['lines.markersize'] + 2.5) ** 2
+    size_l = (mpl.rcParams['lines.markersize'] + 4) ** 2
+
     # common: ameoba & target
-    for x, y in target:
-        ax1.plot(x, y, 'r.')
-        ax2.plot(x, y, 'r.')
+    for ax in [ax1, ax2]:
+        ax.plot(*list(zip(*target)), 'r.', label='target')
+        ax.plot(*list(zip(*ameoba)), 'g.', label='ameoba')
 
-    for x, y in ameoba:
-        ax1.plot(x, y, 'g.')
-        ax2.plot(x, y, 'g.')
+    def scatter(ax: plt.Axes, pts: list[cell], **kwargs) -> None:
+        if len(pts) == 0:
+            return
 
-    # subplot 1: occupiable & retractable
-    for x, y in occupiable:
-        size = (mpl.rcParams['lines.markersize'] + 1.5) ** 2
-        ax1.scatter(x, y, facecolors='none', edgecolors='tab:purple', s=size)
+        ax.scatter(*list(zip(*pts)), **kwargs)
 
-    for x, y in retractable:
-        size = (mpl.rcParams['lines.markersize'] + 4) ** 2
-        ax1.scatter(x, y, facecolors='none', edgecolors='forestgreen', marker='s', s=size)
 
-    # subplot 2: retract & extend
-    for x, y in retract:
-        size = (mpl.rcParams['lines.markersize'] + 4) ** 2
-        ax2.scatter(x, y, facecolors='none', edgecolors='forestgreen', marker='s', s=size)
-
-    for x, y in extend:
-        size = (mpl.rcParams['lines.markersize'] + 1.5) ** 2
-        ax2.scatter(x, y, facecolors='none', edgecolors='tab:purple', s=size)
-
-    # markers
-    mlines = mpl.lines
-    red_dot = mlines.Line2D(
-        [], [], color='g', marker='.', linestyle='None', markersize=5, label='ameoba')
-    green_dot = mlines.Line2D(
-        [], [], color='r', marker='.', linestyle='None', markersize=5, label='target')
-
-    purpule_circle = mlines.Line2D(
-        [], [], color='tab:purple', marker='o', linestyle='None',
-        markerfacecolor='none', markersize=5, label='occupiable')
-    green_square = mlines.Line2D(
-        [], [], color='forestgreen', marker='s', linestyle='None',
-        markerfacecolor='none', markersize=5, label='retractable'
+    # subplot 1: occupiable, retractable
+    scatter(
+        ax1, occupiable, label='occupiable',
+        facecolors='none', edgecolors='tab:purple', s=size_s
+    )
+    scatter(
+        ax1, retractable, label='retractable',
+        facecolors='none', edgecolors='forestgreen', marker='s', s=size_l
     )
 
-    green_square2 = mlines.Line2D(
-        [], [], color='forestgreen', marker='s', linestyle='None',
-        markerfacecolor='none', markersize=5, label='retract')
-    purpule_circle2 = mlines.Line2D(
-        [], [], color='tab:purple', marker='o', linestyle='None',
-        markerfacecolor='none', markersize=5, label='extend')
+    # subplot 2: retract, extend, bacteria
+    scatter(
+        ax2, retract, label='retract',
+        facecolors='none', edgecolors='forestgreen', marker='s', s=size_l
+    )
+    scatter(
+        ax2, extend, label='extend',
+        facecolors='none', edgecolors='tab:purple', s=size_s
+    )
+    scatter(
+        ax2, bacteria, label='bacteria',
+        facecolors='none', edgecolors='orange', marker='s', s=size_m
+    )
 
-    # plotting
+    # legend
     ax1.legend(
-        handles=[red_dot, green_dot, purpule_circle, green_square],
-        loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=4, fancybox=True, shadow=True)
+        loc='upper center', bbox_to_anchor=(0.5, 1.1),
+        ncol=4, fancybox=True, shadow=True
+    )
     ax2.legend(
-        handles=[red_dot, green_dot, purpule_circle2, green_square2],
-        loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=4, fancybox=True, shadow=True)
+        loc='upper center', bbox_to_anchor=(0.5, 1.1),
+        ncol=5, fancybox=True, shadow=True
+    )
     fig.tight_layout()
+
+    # switch back to figure 1: ameoba simulator
     plt.figure(1)
 
 
@@ -165,9 +162,24 @@ def find_movable_cells(
         else movable_list
     )
 
-def retract_k(k: int, choices: list[cell], amoeba_map: np.ndarray) -> list[cell]:
-    """Select k cells to retract from choices (list of retractable cells) that
-    ensures the ameoba will stay connected after retraction."""
+def retract_k(
+    k: int,
+    choices: list[cell],
+    possible_moves: list[cell],
+    state: AmoebaState
+) -> list[cell]:
+    """Select up to k cells to retract from choices (list of retractable cells) that
+    ensures the ameoba will stay connected after retraction.
+
+    Args:
+        k: ideal number of cells to retract
+        choices: cells we want to retract from
+        possible_moves: cells we can extend our ameoba to
+        state: the current state of the ameoba
+    
+    Note: This function might return n < k cells to retract because retracting any
+    more cells would cause separation.
+    """
     if k >= len(choices):
         return choices
 
@@ -182,7 +194,7 @@ def retract_k(k: int, choices: list[cell], amoeba_map: np.ndarray) -> list[cell]
             ((x-1) % 100, y),
             ((x+1) % 100, y)
         ]:
-            if amoeba_map[xn][yn] == State.empty.value:
+            if state.amoeba_map[xn][yn] == State.empty.value:
                 exposure += 1
 
         return exposure
@@ -193,7 +205,73 @@ def retract_k(k: int, choices: list[cell], amoeba_map: np.ndarray) -> list[cell]
         reverse=True
     )
 
-    return [cell for cell, _ in sorted_choices[:k]]
+    retract, i = [], 0
+    while len(retract) < k and i < len(sorted_choices):
+        cell, _ = sorted_choices[i]
+        _retract = retract + [cell]
+        _moves = possible_moves[:len(_retract)]
+
+        # only add a cell to retract if it doesn't cause separation
+        if check_move(_retract, _moves, state):
+            retract.append(cell)
+
+        i += 1
+
+    return retract
+
+def check_move(
+    retract: list[cell],
+    move: list[cell],
+    state: AmoebaState
+) -> bool:
+
+    periphery = state.periphery
+    amoeba_map = state.amoeba_map
+    bacteria = state.bacteria
+
+    if not set(retract).issubset(set(periphery)):
+        return False
+
+    movable = retract[:]
+    new_periphery = list(set(periphery).difference(set(retract)))
+    for i, j in new_periphery:
+        nbr = find_movable_neighbor(i, j, amoeba_map, bacteria)
+        for x, y in nbr:
+            if (x, y) not in movable:
+                movable.append((x, y))
+
+    if not set(move).issubset(set(movable)):
+        return False
+
+    amoeba = np.copy(amoeba_map)
+    amoeba[amoeba < 0] = 0
+    amoeba[amoeba > 0] = 1
+
+    for i, j in retract:
+        amoeba[i][j] = 0
+
+    for i, j in move:
+        amoeba[i][j] = 1
+
+    tmp = np.where(amoeba == 1)
+    result = list(zip(tmp[0], tmp[1]))
+    check = np.zeros((constants.map_dim, constants.map_dim), dtype=int)
+
+    stack = result[0:1]
+    while len(stack):
+        a, b = stack.pop()
+        check[a][b] = 1
+
+        if (a, (b - 1) % constants.map_dim) in result and check[a][(b - 1) % constants.map_dim] == 0:
+            stack.append((a, (b - 1) % constants.map_dim))
+        if (a, (b + 1) % constants.map_dim) in result and check[a][(b + 1) % constants.map_dim] == 0:
+            stack.append((a, (b + 1) % constants.map_dim))
+        if ((a - 1) % constants.map_dim, b) in result and check[(a - 1) % constants.map_dim][b] == 0:
+            stack.append(((a - 1) % constants.map_dim, b))
+        if ((a + 1) % constants.map_dim, b) in result and check[(a + 1) % constants.map_dim][b] == 0:
+            stack.append(((a + 1) % constants.map_dim, b))
+
+    return (amoeba == check).all()
 
 
 #------------------------------------------------------------------------------
@@ -248,12 +326,16 @@ class Strategy(ABC):
             int(self.metabolism * curr_state.current_size), # max retractable cells
             len(to_occupy), len(retractable_cells)
         )
-        retract = retract_k(k, list(retractable_cells), curr_state.amoeba_map)
-        extend = list(to_occupy)[:k]
+        retract = retract_k(k, list(retractable_cells), list(to_occupy), curr_state)
+        extend = list(to_occupy)[:len(retract)]
+
+        # for debugging: stop when a move causes separation
+        if debug and not check_move(retract, extend, curr_state):
+            print("[ G4 ] problematic move")
 
         # debug
         visualize_reshape(
-            list(target), ameoba_cells,
+            list(target), ameoba_cells, curr_state.bacteria,
             occupiable_cells, list(retractable_cells),
             retract, extend
         )
@@ -358,6 +440,29 @@ class BucketAttack(Strategy):
     #             cell[1] -= 1
     #     return target_cells
 
+    def _get_rectangle_target(self, size: int, cog: cell, xmax: int) -> list[cell]:
+        _, y_cog = cog
+        wall_length, orphans=int(size/4),size%4
+        upper=y_cog+wall_length
+        lower=y_cog-wall_length
+
+        inner_wall_cell_ys = self._spread_vertically(
+            y_cog,
+            upper,
+            lower+orphans
+        )
+        outer_wall_cell_ys = self._spread_vertically(
+            y_cog,
+            upper,
+            lower
+        )
+        wall_cells = (
+                [(xmax % 100, y % 100) for y in inner_wall_cell_ys] +
+                [((xmax + 1) % 100, y % 100) for y in outer_wall_cell_ys]
+        )
+
+        return wall_cells
+
     def _get_cog(self, curr_state: AmoebaState) -> tuple[int, int]:
         """Compute center of gravity of current Ameoba."""
         ameoba_cells = np.array(list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value))))
@@ -449,6 +554,11 @@ class BucketAttack(Strategy):
             mem  = mem[:-5] + f'{self.shifted:b}' + mem[-4:]
         target_cells = self._get_target_cells(size, cog, arm_xval)
         memory = int(mem,2)
+
+        normal_retract, _,_=self._reshape(state, memory, set(target_cells))
+        if len(normal_retract)==0:
+            target_cells = self._get_rectangle_target(size, cog, arm_xval)
+
         return self._reshape(state, memory, set(target_cells))
 
 
