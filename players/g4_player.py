@@ -380,9 +380,18 @@ class RandomWalk(Strategy):
 
 class BucketAttack(Strategy):
 
-    def __init__(self, metabolism, bucket_width=1):
+    def __init__(self, metabolism, bucket_width=1, shift_n=-1):
+        """Initializes BucketAttack.
+        
+        kwargs:
+          bucket_width: # cells between bucket arms, default to 1
+          shift_n: shift bucket arms up/down every n turns, acceptable n value
+                   is [1, 16], otherwise the shifting behavior is disabled
+        """
         super().__init__(metabolism)
         self.bucket_width = bucket_width
+        self.shift_enabled = shift_n >= 1 and shift_n <= 16
+        self.shift_n = shift_n
     
     def _spread_vertically(
         self,
@@ -434,12 +443,6 @@ class BucketAttack(Strategy):
             y_cog, upper_buckets, lower_buckets , step=wall_cost
         )
 
-        if self.shifted == 1:
-            min_y = min(arm_cell_ys)
-            max_y = max(arm_cell_ys)
-            arm_cell_ys = [y - 1 for y in arm_cell_ys if y != min_y and y != max_y] + [max_y, min_y]
-            print("SHIFTED")
-
         wall_cells = (
             [ ( xmax % 100,       y % 100 ) for y in inner_wall_cell_ys ] +
             [ ( (xmax - 1) % 100, y % 100 ) for y in outer_wall_cell_ys ]
@@ -447,14 +450,6 @@ class BucketAttack(Strategy):
         arm_cells = [ ( (xmax + 1) % 100, y % 100 ) for y in arm_cell_ys ]
 
         return wall_cells + arm_cells
-
-    # def _shift(self, target_cells:list[cell], xmax: int) -> list[cell]:
-    #     """Shift arm down"""
-        
-    #     for cell in target_cells:
-    #         if cell[1] == xmax:
-    #             cell[1] -= 1
-    #     return target_cells
 
     def _get_rectangle_target(self, size: int, cog: cell, xmax: int) -> list[cell]:
         _, y_cog = cog
@@ -544,53 +539,49 @@ class BucketAttack(Strategy):
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
     ) -> tuple[list[cell], list[cell], int]:
 
-        size = (state.current_size)
+        mem = f'{memory:b}'.rjust(8, '0')
+        rotation = int(mem[-4:], 2)
+        shifted = int(mem[-5])
 
-        SHIFTING = True
-        SHIFT_N = 16 #must be <= 16 currently
+        # increment rotation counter
+        rotation = (rotation + 1) % self.shift_n
 
-        # TODO: maybe not always shifting horizontally?
-        # cog = self._get_cog(state if np.any(prev_state.amoeba_map) else prev_state)
-        cog  = (50, 50)
+        if self.shift_enabled and rotation == 0:
+            shifted = shifted ^ 1
+            
+        # update memory
+        memory = int(f'{mem[:-5]}{shifted:b}{rotation:04b}', 2)
+
+
+        size = state.current_size
+        # TODO: maybe not always moving horizontally?
+        if shifted:
+            cog = (50, 49)
+        else:
+            cog  = (50, 50)
 
         # x-value of bucket arms
         arm_xval = self._get_xmax(state)
         if not self._in_shape(state):
             arm_xval -= 1
 
- 
-        mem = f'{memory:b}'
-        while len(mem) < 8:
-            mem = '0' + mem
-        self.rotation = int(mem[-4:],2)
-        self.shifted = int(mem[-5])
-        if arm_xval >= 0:
-            self.rotation = (self.rotation + 1) % SHIFT_N
-            lsb2 = f'{self.rotation:b}'
-            #if len(lsb2) == 1:
-            while len(lsb2) < 4:
-                lsb2 = '0' + lsb2
-            mem = mem[:-4] + lsb2
-        if self.rotation == 0 and arm_xval >= 0:
-            self.shifted = self.shifted ^ 1
-            if not(SHIFTING):
-                self.shifted = 0
-            mem  = mem[:-5] + f'{self.shifted:b}' + mem[-4:]
+        # compute moves
         target_cells = self._get_target_cells(size, cog, arm_xval)
-        memory = int(mem,2)
+        retract, extend, memory = self._reshape(state, memory, set(target_cells))
 
-        normal_retract, _,_=self._reshape(state, memory, set(target_cells))
-        if len(normal_retract)==0:
+        if len(retract) > 0:
+            return retract, extend, memory
+        else:
             target_cells = self._get_rectangle_target(size, cog, arm_xval)
-
-        return self._reshape(state, memory, set(target_cells))
+            return self._reshape(state, memory, set(target_cells))
 
 
 #------------------------------------------------------------------------------
 #  Group 3 Ameoba
 #------------------------------------------------------------------------------
 
-BUCKET_WIDTH = 2
+BUCKET_WIDTH = 1
+SHIFT_CYCLE  = 16 
 
 
 class Player:
@@ -621,7 +612,9 @@ class Player:
 
         self.strategies = dict(
             random_walk=RandomWalk(metabolism, rng),
-            bucket_attack=BucketAttack(metabolism, bucket_width=BUCKET_WIDTH)
+            bucket_attack=BucketAttack(
+                metabolism, bucket_width=BUCKET_WIDTH, shift_n=SHIFT_CYCLE
+            )
         )
 
     def move(
