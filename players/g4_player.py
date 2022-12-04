@@ -21,7 +21,7 @@ import constants
 #------------------------------------------------------------------------------
 
 debug_png_dir = "render/debug"
-debug = 1
+debug = 0
 turns = 0
 
 if debug:
@@ -224,24 +224,20 @@ def retract_k(
     if check_move(top_k, possible_moves[:_k], state):
         return top_k
 
-    # slow path:
-    # further possible optimizations if performance becomes a bottleneck again:
-    # 1. binary search to find the longest prefix of sorted_choices we can retract
-    # 2. best effort search for up to k retractable cells:
-    #    pessimistically terminate search when we fail @m check_moves in a roll
-    retract, i = [], 0
-    while len(retract) < k and i < len(sorted_choices):
-        cell, _ = sorted_choices[i]
-        _retract = retract + [cell]
-        _moves = possible_moves[:len(_retract)]
+    # slow path: use binary search to find the first prefix that passes
+    # check_move. With a maximum ameoba size of 10,000, the number of
+    # invocations to check_move is capped at around 14 ~ log_2(10,000)
+    lo, hi = 0, _k
+    while lo <= hi:
+        mid = math.floor((lo + hi) / 2)
+        prefix = [ cell for cell, _ in sorted_choices[:mid] ]
 
-        # only add a cell to retract if it doesn't cause separation
-        if check_move(_retract, _moves, state):
-            retract.append(cell)
+        if check_move(prefix, possible_moves[:mid], state):
+            return prefix
+        else:
+            hi = mid - 1
 
-        i += 1
-
-    return retract
+    return []
 
 def check_move(
     retract: list[cell],
