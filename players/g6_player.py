@@ -180,3 +180,111 @@ class Player:
 
         return split, split_col
 
+    def locate_tenticle(self, amoeba_map, tenticle_column, split=False):
+        """Locate the moving tenticle of the amoeba
+        
+        Args:
+            amoeba_map (np.array): The current amoeba map
+            tenticle_length (int): The length of the tenticle
+            
+        
+        Returns:
+            list: The location of the cell on tenticle
+        """
+        # check for column that has legnth AT LEAST tenticle_length (size * metabolism)
+        # and has continuous structure
+        # def is_continuous(array, split=False):
+        #     """Check if a given array has continuous chunk
+
+        #     Args:
+        #         array (np.array): 1D np array
+        #         split (bool, optional): if the array is split
+
+        #     Returns:
+        #         bool: if the array is continuous
+        #     """
+        #     length = np.sum(array)
+        #     if length == array.shape[0]:
+        #         # Special cases: its wrap around
+        #         return True
+        #     if not split:
+        #         start = np.argmax(array)
+        #     else:
+        #         start = None
+        #         # find the first 1
+        #         for i in range(100, 0, -1):
+        #             next_i = (i - 1) % 100
+        #             if array[i] == 1 and array[next_i] == 0:
+        #                 start = i
+        #                 break
+        #     # loop from start to start + length
+        #     # if every position is 1, then return True
+        #     for i in range(start, (start + length)):
+        #         if array[i % 100] == 0:
+        #             return False
+        #     return True
+        
+        def get_continuous_chunk(array, start):
+            """Get continuous chunk of an array starting from start
+
+            Args:
+                array (np.array): 1D np array
+                start (int): where to start
+            """
+            assert(array[start] == 1)
+            chunks = []
+            for i in range(100):
+                if array[(start + i) % 100] == 1:
+                    chunks.append((start + i) % 100)
+            return chunks
+                
+        # ASSUMPTION: the based row is the one with the maximum number of cell
+        base_row = np.argmax(np.sum(amoeba_map, axis=0))
+        tenticle_start_row = (base_row + 1) % 100
+        # get the chunk of the moving tenticle
+        chunk = get_continuous_chunk(amoeba_map[tenticle_column, :], tenticle_start_row)
+        return None
+        
+    def is_singular(self, amoeba_map, tenticle_column, chunks):
+        """Check if the tenticle is singular
+
+        Args:
+            amoeba_map (np.array): 2d np array
+            tenticle_column (int): column of the moving tenticle (0 - 99)
+            chunks (list[int]): rows of the moving tenticle
+        """
+        # check two side of the column
+        for i in chunks:
+            if amoeba_map[(tenticle_column + 1) % 100, i] == 1 or amoeba_map[(tenticle_column - 1) % 100, i] == 1:
+                return False
+        # check tip of the column
+        if amoeba_map[tenticle_column, chunks[-1] + 1] == 1:
+            return False 
+        return True
+    
+    def relocate_extra_cells(self, amoeba_map, tenticle_column, chunks):
+        pass    
+    
+    def move_tenticle(self, amoeba_map, tenticle_column, chunks):
+        pass
+    
+    def close_in(self, amoeba_map, tenticle_column):
+        """Close in function for clashing formation
+
+        Args:
+            amoeba_map (_type_): 2d np array
+            tenticle_column(int): column of the moving tenticle (0 - 99)
+        """
+        # locate the moving tenticle
+        #tenticle_length = self.size * self.metabolism
+        #moving_tenticle = None
+        # possible for new cell eaten such that tenticle_length increases between moves
+        #while moving_tenticle is None:
+        moving_chunks = self.locate_tenticle(amoeba_map, tenticle_column)
+        # check for singular column
+        if self.is_singular(amoeba_map, tenticle_column, moving_chunks):
+            # move the tenticle 1 step forward
+            return self.move_tenticle(amoeba_map, tenticle_column, moving_chunks)
+        else:
+            # relocate the extra cell
+            pass
