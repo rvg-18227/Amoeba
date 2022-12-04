@@ -3,6 +3,7 @@ from enum import Enum
 import logging
 import math
 import os
+import shutil
 import sys
 from typing import Optional
 
@@ -19,8 +20,15 @@ import constants
 #  Miscellaneous
 #------------------------------------------------------------------------------
 
-debug = 0
-debug_fig = None
+debug_png_dir = "render/debug"
+debug = 1
+turns = 0
+
+if debug:
+    if os.path.exists(debug_png_dir):
+        shutil.rmtree(debug_png_dir)
+
+    os.mkdir(debug_png_dir)
 
 
 #------------------------------------------------------------------------------
@@ -45,27 +53,29 @@ def visualize_reshape(
     if not debug:
         return
 
-    # make sure we only create one plot for debugging
-    # before creating a new one, clear the old one for redrawing
-    global debug_fig
-    if debug_fig is None:
-        debug_fig = plt.subplots(1, 2)
-    else:
-        fig, _ = debug_fig
-        fig.clear()
-        debug_fig = fig, fig.subplots(1, 2)
-    
-    fig, (ax1, ax2) = debug_fig
+    global turns
+    turns += 1
 
+    axes = []
+    for fig_no in [2, 3]:
+        plt.figure(fig_no)
+        plt.cla()
+        plt.title(f"turn {turns}")
+        ax = plt.gca()
+        axes.append(ax)
+
+    ax1, ax2 = axes
+    
     # marker sizes
-    size_s = (mpl.rcParams['lines.markersize'] + 1.5) ** 2
-    size_m = (mpl.rcParams['lines.markersize'] + 2.5) ** 2
-    size_l = (mpl.rcParams['lines.markersize'] + 4) ** 2
+    size_xs = mpl.rcParams['lines.markersize'] / 4
+    size_s = (mpl.rcParams['lines.markersize'] + 0.5) ** 2
+    size_m = (mpl.rcParams['lines.markersize'] + 0.75) ** 2
+    size_l = (mpl.rcParams['lines.markersize'] + 1) ** 2
 
     # common: ameoba & target
     for ax in [ax1, ax2]:
-        ax.plot(*list(zip(*target)), 'r.', label='target')
-        ax.plot(*list(zip(*ameoba)), 'g.', label='ameoba')
+        ax.plot(*list(zip(*target)), 'r.', label='target', markersize=size_xs)
+        ax.plot(*list(zip(*ameoba)), 'g.', label='ameoba', markersize=size_xs)
 
     def scatter(ax: plt.Axes, pts: list[cell], **kwargs) -> None:
         if len(pts) == 0:
@@ -107,7 +117,11 @@ def visualize_reshape(
         loc='upper center', bbox_to_anchor=(0.5, 1.1),
         ncol=5, fancybox=True, shadow=True
     )
-    #fig.tight_layout()
+
+    plt.figure(2)
+    plt.savefig(f"render/debug/fig2_{turns}", dpi=300)
+    plt.figure(3)
+    plt.savefig(f"render/debug/fig3_{turns}", dpi=300)
 
     # switch back to figure 1: ameoba simulator
     plt.figure(1)
