@@ -107,7 +107,7 @@ def visualize_reshape(
         loc='upper center', bbox_to_anchor=(0.5, 1.1),
         ncol=5, fancybox=True, shadow=True
     )
-    fig.tight_layout()
+    #fig.tight_layout()
 
     # switch back to figure 1: ameoba simulator
     plt.figure(1)
@@ -726,9 +726,11 @@ class BucketAttack(Strategy):
         arm_length =size//2
         print("upper")
         upper_arm= self._spread_diagonally(arm_length, cog, 1)
+        print(f"len(upper bridge cells): {len(set(upper_arm))}")
         print("lower")
         lower_arm= self._spread_diagonally(arm_length, cog, -1)
-        arm_cells= upper_arm+lower_arm
+        print(f"len(upper bridge cells): {len(set(lower_arm))}")
+        arm_cells = upper_arm+lower_arm
         return arm_cells
 
     def _get_bridge_target(self, size: int, cog: cell) -> list[cell]:
@@ -814,17 +816,17 @@ class BucketAttack(Strategy):
     ) -> tuple[list[cell], list[cell], int]:
 
         mem = f'{memory:b}'.rjust(8, '0')
-        rotation = int(mem[-4:], 2)
-        shifted = int(mem[-5])
+        print("Start mem",mem)
+        old_xmax = int(mem[:7], 2)
+        shifted = int(mem[-1])
 
         # increment rotation counter
-        rotation = (rotation + 1) % self.shift_n
+        rotation = (old_xmax + 1) % self.shift_n
 
         if self.shift_enabled and rotation == 0:
             shifted = shifted ^ 1
             
-        # update memory
-        memory = int(f'{mem[:-5]}{shifted:b}{rotation:04b}', 2)
+
 
 
         size = state.current_size
@@ -835,10 +837,25 @@ class BucketAttack(Strategy):
             cog  = (50, 50)
 
         # x-value of bucket arms
-        arm_xval = self._get_xmax(state)
+        arm_xval = old_xmax + 1
+
+        if not self._reach_border(state):
+            arm_xval = self._get_xmax(state)
+            print("This is normal xval",arm_xval,'{0:07b}'.format(arm_xval),mem)
+        else:
+            arm_xval=old_xmax+1
+            print("memory reach border", arm_xval,'{0:07b}'.format(arm_xval),mem)
+
         print("This is x_max",arm_xval)
         if not self._in_shape(state):
             arm_xval -= 1
+            print("not in shape",arm_xval,'{0:07b}'.format(arm_xval))
+
+        # update memory
+        arm_xval_bin='{0:07b}'.format(arm_xval)
+        shifted_bin='{0:01b}'.format(shifted)
+        memory = int(arm_xval_bin+shifted_bin, 2)
+        print("update memory", arm_xval_bin+shifted_bin)
 
         # compute moves
         target_cells = self._get_target_cells(size, cog, arm_xval)
@@ -863,11 +880,11 @@ class BucketAttack(Strategy):
 
 
 #------------------------------------------------------------------------------
-#  Group 3 Ameoba
+#  Group 4 Ameoba
 #------------------------------------------------------------------------------
 
 BUCKET_WIDTH = 1
-SHIFT_CYCLE  = 16 
+SHIFT_CYCLE  = -1
 
 
 class Player:
