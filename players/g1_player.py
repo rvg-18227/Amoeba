@@ -58,7 +58,6 @@ class Player:
                     2. A list of positions the retracted cells have moved to
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
-        #print(current_percept.amoeba_map)
 
         #store center as information. Center would be (info, info)
         #close cavities left of the center
@@ -96,7 +95,6 @@ class Player:
         next_center = ((center[0]+info)%100, (center[1]+info)%100)
         
         formation_needed = self.find_surround_cells(info, info, center)
-        #print(formation_needed)
         #check = self.formation_secured(current_percept.amoeba_map, formation_needed)
 
         movable = None
@@ -110,7 +108,6 @@ class Player:
 
         #holes behind center
         cavity_cells = self.find_island(current_percept.amoeba_map, (center[0]-1%100, center[1]-1%100))
-        print(len(cavity_cells))
         shrink_cells = []
 
         for i in cavity_cells:
@@ -125,50 +122,73 @@ class Player:
         else:
             movable = list(shrink_cells) + formation_moves
 
-
-        #print(retract)
-        #print(movable)
-            
+        max_count = 0
 
         if len(retract) > len(movable):
-            retract = retract[:len(movable)]
-        elif len(retract) < len(movable):
-            movable = movable[:len(retract)]
+            max_count = len(movable)
+        else:
+            max_count = len(retract)
 
-        if len(retract) > self.metabolism*current_percept.current_size:
-            retract = retract[:int(self.metabolism*current_percept.current_size)]
+        max_count = min(max_count, int(self.metabolism*current_percept.current_size))
 
-        if len(movable) > self.metabolism*current_percept.current_size:
-            movable = movable[:int(self.metabolism*current_percept.current_size)]
-
-        print(retract)
-        print(current_percept.movable_cells)
-        print(movable)
+        retract, movable = self.mend(retract, movable, max_count, current_percept)
 
         return retract, movable, info
 
-    """def mend_retract_movable(self, retract, movable, current_percept):
-        ret_i = 0
-        move_i = 0
+    def mend(self, retract, movable, max_count, current_percept):
 
-        move = []
-        ret = []
+        count = max_count
 
-        while ret_i < len(retract) and move_i < len(movable):
-            ret.append(retract[ret_i])
+        while not self.check_move_full(retract[:count], movable[:count], current_percept) and count > 0:
+            count -= 1
 
-            while move_i < len(movable) and len(move) < len(ret):
-                if self.check_move(ret, move + [movable[move_i]], current_percept):
-                    move.append(movable[move_i])
-                
-                move_i += 1
+        return retract[:count], movable[:count]
 
-        if len(ret) > len(move):
-            ret = ret[:len(move)]
-        elif len(ret) < len(move):
-            move = move[:len(ret)]
+    def check_move_full(self, retract, move, current_precept):
+        periphery = current_precept.periphery
+        if not set(retract).issubset(set(periphery)):
+            return False
 
-        return ret, move"""
+        movable = retract[:]
+        new_periphery = list(set(periphery).difference(set(retract)))
+        for i, j in new_periphery:
+            nbr = self.find_movable_neighbor(i, j, current_precept.amoeba_map, current_precept.bacteria )
+            for x, y in nbr:
+                if (x, y) not in movable:
+                    movable.append((x, y))
+
+        if not set(move).issubset(set(movable)):
+            return False
+
+        amoeba = np.copy(current_precept.amoeba_map)
+        amoeba[amoeba < 0] = 0
+        amoeba[amoeba > 0] = 1
+
+        for i, j in retract:
+            amoeba[i][j] = 0
+
+        for i, j in move:
+            amoeba[i][j] = 1
+
+        tmp = np.where(amoeba == 1)
+        result = list(zip(tmp[0], tmp[1]))
+        check = np.zeros((100, 100), dtype=int)
+
+        stack = result[0:1]
+        while len(stack):
+            a, b = stack.pop()
+            check[a][b] = 1
+
+            if (a, (b - 1) % 100) in result and check[a][(b - 1) % 100] == 0:
+                stack.append((a, (b - 1) % 100))
+            if (a, (b + 1) % 100) in result and check[a][(b + 1) % 100] == 0:
+                stack.append((a, (b + 1) % 100))
+            if ((a - 1) % 100, b) in result and check[(a - 1) % 100][b] == 0:
+                stack.append(((a - 1) % 100, b))
+            if ((a + 1) % 100, b) in result and check[(a + 1) % 100][b] == 0:
+                stack.append(((a + 1) % 100, b))
+
+        return (amoeba == check).all()
         
     def manhattan_distance(self, src, trgt):
         x1 = src[0]
@@ -178,13 +198,27 @@ class Player:
         y2 = trgt[1]
 
 
-        #0,90 = min(90-0, 100-(90-0)) = min(90,10)
-        #90,0 = min(0-90, 100-(0-90)) = min()
+        
         x_diff = abs(x2-x1)
         y_diff = abs(y2-y1)
-        
+
+        #0,90 = min(90-0, 100-(90-0)) = min(90,10)
+        #90,0 = min(0-90, 100-(0-90)) = min(90,10)        
+
         x_dist = min(x_diff, 100-x_diff)
         y_dist = min(y_diff, 100-y_diff)
+
+        return x_dist**2 + y_dist**2
+
+    def distance_behind(self, src, trgt):
+        x1 = src[0]
+        y1 = src[1]
+
+        x2 = trgt[0] if trgt[0]>=x1 else trgt[0]+100
+        y2 = trgt[1] if trgt[1]>=y1 else trgt[1]+100
+
+        x_dist = abs(x2-x1)
+        y_dist = abs(y2-y1)
 
         return x_dist**2 + y_dist**2
 
@@ -235,7 +269,7 @@ class Player:
         pq = PriorityQueue()
 
         for cell in retractable:
-            pq.put((-self.manhattan_distance(cell, target), cell))
+            pq.put((-self.distance_behind(cell, target), cell))
 
         retract = []
         for i in range(pq.qsize()):
