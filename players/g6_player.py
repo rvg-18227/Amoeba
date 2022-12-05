@@ -132,7 +132,7 @@ class Player:
                     amoeba_map, current_percept.periphery, int(self.current_size*self.metabolism))
             if stage == 2 and len(retract_list) == 0:  
                 # Close in
-                retract_list, expand_list = self.close_in(current_percept.amoeba_map)
+                retract_list, expand_list = self.close_in(amoeba_map)
             
             if len(retract_list) == 0:
                 info = 0
