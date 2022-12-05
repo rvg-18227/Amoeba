@@ -22,7 +22,7 @@ MAX_BASE_LEN = min(MAP_DIM, 100)
 TOOTH_SPACING = 1       # 1 best
 SHIFTING_FREQ = 6       # 6 best for high metabolisms, 4 better for low
 SIZE_MULTIPLIER = 4     # 4 best for density = 0.1 metabolism = 0.1
-MOVING_TYPE = 'center'  # 'center' best for low metabolisms - 'center_teeth_first' better for high
+MOVING_TYPE = 'center_teeth_first'  # 'center' best for low metabolisms - 'center_teeth_first' better for high
 TWO_RAKE = True
 
 # Best configs so far #
@@ -626,19 +626,20 @@ class Player:
                 # target_formation = self.generate_tworake_formation(target_size, x_val, offset_y + 1)
 
             diff = np.count_nonzero(target_formation & self.amoeba_map != target_formation)
-            if diff/self.current_size <= 0.05 and diff <= 10:
+            if diff/self.current_size <= 0.15 and diff <= 30:
                 retracts, moves = [], []
             else:
                 retracts, moves = self.get_morph_moves(target_formation)
 
             if len(retracts) == 0 and len(moves) == 0:
+            # if random.random() < 0.5 or (len(retracts) == 0 and len(moves) == 0):
                 if mem.tooth_shift == 1:
                     mem.x_val = (mem.x_val + 1) % 100
                     if mem.x_val % SHIFTING_FREQ == 0:
                         mem.tooth_shift = 0
                 else:
                     mem.tooth_shift = 1
-                # mem.x_val = (mem.x_val + 1) % 100
+                    # mem.x_val = (mem.x_val + 1) % 100
 
         info = mem.get_byte()
         print('Move ended')
