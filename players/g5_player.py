@@ -14,6 +14,7 @@ from enum import Enum
 import sys
 import random as rnd
 
+
 # CONSTS #
 
 MAP_DIM = 100
@@ -399,7 +400,7 @@ class Player:
         retracts = sorted(retracts, key=lambda r: (ranked_cells_dict[r], -abs(r[0]-50)), reverse=True)
         return retracts
 
-    def get_neighbors(self, cell):
+    def get_valid_neighbors(self, cell):
         x, y = cell
         neighbors = [((x - 1) % 100, y), ((x + 1) % 100, y), (x, (y - 1) % 100), (x, (y + 1) % 100)]
         valid_neighbors = []
@@ -407,6 +408,11 @@ class Player:
             if self.amoeba_map[neighbor] == 1:
                 valid_neighbors.append(neighbor)
         return valid_neighbors
+
+    def get_neighbors(self, cell):
+        x, y = cell
+        neighbors = [((x - 1) % 100, y), ((x + 1) % 100, y), (x, (y - 1) % 100), (x, (y + 1) % 100)]
+        return neighbors
 
     # copied from G2
     def get_morph_moves(self, desired_amoeba: npt.NDArray) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
@@ -418,7 +424,7 @@ class Player:
         desired_points = map_to_coords(desired_amoeba)
 
         potential_retracts = [p for p in list(set(current_points).difference(set(desired_points))) if
-                              p in self.retractable_cells]
+                              (p in self.retractable_cells) and not any([neighbor in self.bacteria_cells for neighbor in self.get_neighbors(p)])]
         potential_extends = [p for p in list(set(desired_points).difference(set(current_points))) if
                              p in self.extendable_cells]
 
@@ -508,7 +514,7 @@ class Player:
         movable = retracts[:]
         new_periphery = list(set(self.retractable_cells).difference(set(retracts)))
         for i, j in new_periphery:
-            nbr = self.find_movable_neighbor(i, j, self.amoeba_map, self.bacteria_cells)
+            nbr = self.find_movable_neighbor(i, j)
             for x, y in nbr:
                 if (x, y) not in movable:
                     movable.append((x, y))
@@ -556,7 +562,7 @@ class Player:
         self.num_available_moves = int(np.ceil(self.metabolism * current_percept.current_size))
         self.map_state = np.copy(self.amoeba_map)
         for bacteria in self.bacteria_cells:
-            self.map_state[bacteria] = -1
+            self.map_state[bacteria] = 1
 
     def move(self, last_percept: AmoebaState, current_percept: AmoebaState, info: int) -> Tuple[
         List[Tuple[int, int]], List[Tuple[int, int]], int]:
@@ -678,17 +684,30 @@ class Player:
 
         return movable[:mini]
 
-    def find_movable_neighbor(self, x, y, amoeba_map, bacteria):
+    # def find_movable_neighbor(self, x, y, amoeba_map, bacteria):
+    #     out = []
+    #     if (x, y) not in bacteria:
+    #         if amoeba_map[x][(y - 1) % 100] == 0:
+    #             out.append((x, (y - 1) % 100))
+    #         if amoeba_map[x][(y + 1) % 100] == 0:
+    #             out.append((x, (y + 1) % 100))
+    #         if amoeba_map[(x - 1) % 100][y] == 0:
+    #             out.append(((x - 1) % 100, y))
+    #         if amoeba_map[(x + 1) % 100][y] == 0:
+    #             out.append(((x + 1) % 100, y))
+    #
+    #     return out
+
+    def find_movable_neighbor(self, x, y):
         out = []
-        if (x, y) not in bacteria:
-            if amoeba_map[x][(y - 1) % 100] == 0:
-                out.append((x, (y - 1) % 100))
-            if amoeba_map[x][(y + 1) % 100] == 0:
-                out.append((x, (y + 1) % 100))
-            if amoeba_map[(x - 1) % 100][y] == 0:
-                out.append(((x - 1) % 100, y))
-            if amoeba_map[(x + 1) % 100][y] == 0:
-                out.append(((x + 1) % 100, y))
+        if self.map_state[x][(y - 1) % MAP_DIM] < 1:
+            out.append((x, (y - 1) % MAP_DIM))
+        if self.map_state[x][(y + 1) % MAP_DIM] < 1:
+            out.append((x, (y + 1) % MAP_DIM))
+        if self.map_state[(x - 1) % MAP_DIM][y] < 1:
+            out.append(((x - 1) % MAP_DIM, y))
+        if self.map_state[(x + 1) % MAP_DIM][y] < 1:
+            out.append(((x + 1) % MAP_DIM, y))
 
         return out
 
