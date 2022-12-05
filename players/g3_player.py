@@ -154,7 +154,7 @@ class Player:
         return out
 
     # Find shape given size of anoemba, in the form of a list of offsets from center
-    def get_desired_shape(self, shape=1):
+    def get_desired_shape(self, shape=2):
         # Assume base shape given size is always > 5
         offsets = {(0,0), (0,1), (0,-1), (1,1), (1,-1)}
         total_cells = self.current_size-5
@@ -222,6 +222,91 @@ class Player:
                     j += 1
 
                 step += 1
+                total_cells-=1
+
+        elif shape == 2:
+            j = 2
+            step = 0
+            while total_cells > 0:
+                if step % 14 == 0:
+                    offsets.add((1, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((1, -j))
+                elif step % 14 == 1:
+                    offsets.add((2, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((2, -j))
+                elif step % 14 == 2:
+                    offsets.add((3, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((3, -j))
+                    j += 1
+                elif step % 14 == 3:
+                    offsets.add((3, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((3, -j))
+                elif step % 14 == 4:
+                    offsets.add((4, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((4, -j))
+                elif step % 14 == 5:
+                    offsets.add((5, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((5, -j))
+                    j+=1
+                elif step % 14 == 6:
+                    offsets.add((3, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((3, -j))
+                elif step % 14 == 7:
+                    offsets.add((2, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((2, -j))
+                elif step % 14 == 8:
+                    offsets.add((1, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((1, -j))
+                    j+=1
+                elif step % 14 == 9:
+                    offsets.add((1, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((1, -j))
+                elif step % 14 == 10:
+                    offsets.add((0, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((0, -j))
+                    j+=1
+                elif step % 14 == 11:
+                    offsets.add((0, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((0, -j))
+                    j+=1
+                elif step % 14 == 12:
+                    offsets.add((0, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((0, -j))
+                elif step % 14 == 13:
+                    offsets.add((1, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((1, -j))
+                    j+=1
+                total_cells -= 1
+                step += 1
+        
         return offsets
 
     def get_center_point(self, current_percept, info) -> int:
