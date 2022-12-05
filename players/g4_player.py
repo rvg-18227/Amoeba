@@ -402,22 +402,27 @@ class BoxFarm(Strategy):
 
     def _make_box(self, size, top_left_corner):
         #perimeter = math.floor(size/4)
-        square_length = math.floor(math.sqrt(size)) + 1
-       # square_length = perimeter 
-        print(square_length)
+        square_length = (size // 4) + 1
+        extra = size % 4
         box_cells = []
         for i in range(square_length):
             for j in range(square_length):
                 if i == 0 or i == square_length - 1 or j == 0 or j == square_length - 1:
                     box_cells.append((i + top_left_corner[0], j + top_left_corner[1]))
-        for i in range(size - len(box_cells)):
+        for i in range(extra):
             box_cells.append((top_left_corner[0], top_left_corner[1] + square_length + i))
         return box_cells
 
     def _sweep(self, size, ameoba_cells):
+        # print('sweep')
         left_x = min(ameoba_cells[:,0])
+        # print(left_x)
         left_ind = np.where(ameoba_cells[:,0]==left_x)
+        # print(left_ind)
         sweep_arm = ameoba_cells[left_ind]
+        # print(sweep_arm)
+        # print(ameoba_cells)
+        # print()
         return sweep_arm
 
     def _init(self, ameoba_cells, size, corner):
@@ -425,7 +430,7 @@ class BoxFarm(Strategy):
         minx, miny = min(ameoba_cells[:,0]), min(ameoba_cells[:,1])
         if corner == 0:
             top_right_corner = (minx+square_length-2,miny)
-            print(top_right_corner)
+           # print(top_right_corner)
         else:
             top_right_corner = (corner, miny)
         box_cells = self._make_box(size, top_right_corner)
@@ -434,7 +439,7 @@ class BoxFarm(Strategy):
     def move(
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
     ) -> tuple[list[cell], list[cell], int]:
-
+        
         size = (state.current_size)
         ameoba_cells = np.array(list(zip(*np.where(state.amoeba_map == State.ameoba.value))))
 
@@ -448,20 +453,13 @@ class BoxFarm(Strategy):
             initialize = int(mem[0])
             corner = int(mem[1:],2)
             if initialize == 0:
-                target_cells, corner = self._init(ameoba_cells,size,corner)
+                target_cells, corner_new = self._init(ameoba_cells,size,corner)
                 #print(target_cells)
-                mem_corner = f'{corner[0]:b}'
+                mem_corner = f'{corner_new[0]:b}'
                 while len(mem_corner) < 8:
                     mem_corner = '0' + mem_corner
                 mem = mem_corner
                 over = len(set(ameoba_cells_set))
-                leftover = math.sqrt(over) % 1
-                counter = 0
-                # while leftover > 0:
-                #     target_cells.append((corner[0],corner[1]-counter))
-                #     counter += 1
-                #     over -= 1
-                #     leftover = math.sqrt(over) % 1
                 if set(target_cells) == set(ameoba_cells_set):
                     initialize = 1
                     mem_initialize = f'{initialize:b}'
@@ -471,44 +469,56 @@ class BoxFarm(Strategy):
                 print("SWEEP")
                 sweep_cells = self._sweep(size, ameoba_cells)
                 sweep_cells_set = list(set([tuple(ti) for ti in sweep_cells]))
-                target_cells = list(set(ameoba_cells_set) - set(sweep_cells_set))
+                #target_cells = list(set(ameoba_cells_set) - set(sweep_cells_set))
+                target_cells, corner_new2 = self._init(ameoba_cells,size,corner)
+                # print(target_cells)
+
                 x = sweep_cells[0][0]
+                res = [list(ele) for ele in target_cells]
+                res = np.array(res)
+             
+                ind = np.where(res[:,0]<=x)
+                #past_cells = np.array(list(zip(*np.where(ameoba_cells[:,0]<=x))))
+                #print(past_cells)
+                # print(res)
+
+                past_cells = res[ind]
+                # print(past_cells)
+                past_cells_set = list(set([tuple(ti) for ti in past_cells]))
+                target_cells_set = list(set([tuple(ti) for ti in target_cells]))
+                target_cells = list(set(target_cells_set) - set(past_cells_set))
+                # print(target_cells)
                 y = min(ameoba_cells[:,1])
-                square_length = math.floor(math.sqrt(size)) + 1
-                middle_points = []
+                square_length = (size // 4) + 1
+                leftover = (size % 4)
+                ready = False
                 for i in range(square_length-2):
                     point = ((x+1,y+1+i))
+                    if point in target_cells:
+                        ready = True
                     target_cells.append(point)
-                    middle_points.append(point)
-                
-                target_cells.append((x+square_length,y))
-                target_cells.append((x+square_length,y+square_length-1))
-                
-                sq = math.sqrt(size)
-                closest = math.floor(sq)**2
-                for i in range(size-closest):
-                    target_cells.append((x+1,y+square_length+i))
-                    middle_points.append((x+1,y+square_length+i))
-                middle_cells_set = list(set([tuple(ti) for ti in middle_points]))
-                ready = False
-                if len(set(middle_cells_set) - set(ameoba_cells_set)) == 0:
-                    ready = True
-                    #print("READY")
-                #for i in range(size - len(target_cells)):
-                    # point = (x+1,y+square_length + i)
-                    # count = i
-                    # while point in target_cells:
-                    #     count += 1
-                    #     point = (x+1,y+square_length + count)
-                    # print("appending")
-                    # target_cells.append(point)
+                    
+                for i in range(leftover):
+                    point = ((x+1,y+square_length+i))
+                    target_cells.append(point)
+                # print(leftover)
+                # print(len(past_cells))
+                # print(square_length-2)
+                # print((len(past_cells) - (square_length - 2) - leftover)//2)
+                for i in range((len(past_cells) - (square_length-2)-leftover)//2):
+                    print(i)
+                    target_cells.append((corner+square_length+i,y))
+                    target_cells.append((corner+square_length+i,y+square_length-1))
+                # print(target_cells)
+                print(target_cells)
+                print(ameoba_cells)
                 if (set(target_cells)) == (set(ameoba_cells_set)) or ready:#or set(target_cells) < set(ameoba_cells_set):
-                    #print("TESTING TESTING")
+                    print("TESTING TESTING")
                     min_y = min(ameoba_cells[:,1])
                     min_ind = np.where(ameoba_cells[:,1]==min_y)
                     top = ameoba_cells[min_ind]
                     corner = min(ameoba_cells[:,0]) + 1
-                #     initialize = 0
+                    initialize = 0
                     mem_corner = f'{corner:b}'
                     while len(mem_corner) < 8:
                         mem_corner = '0' + mem_corner
@@ -976,7 +986,7 @@ class Player:
 
         # TODO: dynamically select a strategy, possible factors:
         # current_size, metabolism, etc
-        strategy = "bucket_attack"
+        strategy = "box_farm"
 
         return self.strategies[strategy].move(last_percept, current_percept, info)
 
