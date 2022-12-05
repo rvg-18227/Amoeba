@@ -141,8 +141,8 @@ class Player:
             
         mini = min(int(self.current_size*self.metabolism), len(retract_list), len(expand_list))
         
-        self.logger.info(f'retract: {retract_list}')
-        self.logger.info(f'expand: {expand_list}')
+        self.logger.info(f'retract: {retract_list[:mini]}')
+        self.logger.info(f'expand: {expand_list[:mini]}')
 
         self.drawer.draw(current_percept, retract_list[:mini], expand_list[:mini])
         return retract_list[:mini], expand_list[:mini], info+1
@@ -174,6 +174,8 @@ class Player:
         retract_list = self.reorganize_retract(amoeba_map, periphery)
         movable = self.find_movable_cells(retract_list, periphery, amoeba_map, bacteria)
         expand_list = self.reorganize_expand(amoeba_map, movable, split_row)
+        print('retract:', retract_list)
+        print('expand:', expand_list)
         return retract_list, expand_list
 
     def forward_expand(self, amoeba_map, movable, split_row):
@@ -271,6 +273,8 @@ class Player:
             priorize_columns = sorted(priorize_columns, reverse=True) 
 
             for col in priorize_columns:
+                # if row > bottom_side - 7: # do not retract bottom 7 rows, hardcoded
+                #     continue
                 cell = (col%100, row%100)
                 if cell in periphery:
                     retract_list.append(cell)
@@ -294,15 +298,15 @@ class Player:
 
         max_row = movable[:, 1].max()
         movable = movable[movable[:, 1]!=max_row]
-        movable = movable[movable[:, 1].argsort()[::-1]][:10]
+        movable = movable[movable[:, 1].argsort()[::-1]]
 
         for i in range(movable.shape[0]):
             cell = movable[i]
-            if cell[0] < 4 or cell[0] > 95:
+            if cell[0] < 4 or cell[0] > 95 or amoeba_map[cell[0], cell[1]] == 1:
                 continue
             expand_cells.append(tuple(cell%100))
 
-        return expand_cells
+        return expand_cells[:10]
 
     def organize_expand(self, amoeba_map, movable):
         amoeba_loc = np.stack(np.where(amoeba_map==1)).T.astype(int)
