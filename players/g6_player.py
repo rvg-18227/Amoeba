@@ -132,6 +132,7 @@ class Player:
                     amoeba_map, current_percept.periphery, int(self.current_size*self.metabolism))
             if stage == 2 and len(retract_list) == 0:  
                 # Close in
+                print('close_in')
                 retract_list, expand_list = self.close_in(amoeba_map)
             
             if len(retract_list) == 0:
@@ -429,7 +430,7 @@ class Player:
         #mini = 100
         if tentacle_one_len < mini:
             expand_cell = np.max(tentacle_one_column[:, 1])
-            expand_cell = (col_one, expand_cell+1)
+            expand_cell = (col_one % 100, (expand_cell + 1) % 100)
             expand_cells.append(expand_cell)
 
         tentacle_two = row_cells[-2]
@@ -442,7 +443,7 @@ class Player:
         # mini = 100
         if tentacle_two_len < mini:
             expand_cell = np.max(tentacle_two_column[:, 1])
-            expand_cell = (col_two, expand_cell + 1)
+            expand_cell = (col_two % 100, (expand_cell + 1) % 100)
             expand_cells.append(expand_cell)
 
         tentacle_three = row_cells[-3]
