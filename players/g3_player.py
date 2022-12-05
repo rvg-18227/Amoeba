@@ -160,37 +160,85 @@ class Player:
         self.movable_cells = set(current_percept.movable_cells)
         self.num_available_moves = int(np.ceil(self.metabolism * self.current_size))
 
-        desired_shape_offsets = self.get_desired_shape()
+        # cur_ameoba_points = self.map_to_coords(self.amoeba_map)
+        # desired_ameoba_points = self.offset_to_absolute(desired_shape_offsets, self.static_center)
 
-        cur_ameoba_points = self.map_to_coords(self.amoeba_map)
-        desired_ameoba_points = self.offset_to_absolute(desired_shape_offsets, self.static_center)
+        # potential_retracts = list(self.periphery.intersection((cur_ameoba_points.difference(desired_ameoba_points))))
 
-        potential_retracts = list(self.periphery.intersection((cur_ameoba_points.difference(desired_ameoba_points))))
+        
 
         # if self.turn < 50:
         #     center_point = self.get_center_point(current_percept, 0)
-        if len(potential_retracts) > 5:
-            center_point = self.static_center
-        else:
-            #center_point = self.get_center_point(current_percept, 1)
-            #center_point = (center_point[0] + 1, center_point[1])
-            if self.turn % 4 == 0:
-                self.static_center[0] += 1
-                self.static_center[0] %= 100
-            center_point = self.static_center
-            print(center_point)
+        
+        ### PARSE INFO BYTE ###
+        info_bin = format(info, '08b')
+        info_first_bit = info_bin[0]    # first bit of the info byte
+        info_L7_bits = info_bin[1:]     # last 7 bits of the info byte
+        info_L7_int = int(info_L7_bits, 2)  # info_L7_int holds int value of last 7 bits (stores coordinate)
+
+
+        ### GET DESIRED OFFSETS FOR CURRENT MORPH ###
+        desired_shape_offsets = self.get_desired_shape()
+
+
+        ### INCREMENT CENTER POINT PHASE ###
+        # move amoeba: x_cord is info_L7_int because initial info_L7_int val is 0, indicating initialization/building phase
+        init_phase = info_L7_int == 0
+        x_cord = info_L7_int - 1
+
+        # move under these 2 conditions
+        # 1: end of initialization phase
+        if init_phase:
+            x_cord = 50
+
+            if self.in_formation(desired_shape_offsets, [x_cord, 50]):
+                init_phase = False
+                x_cord = 51
+        
+        # 2: not in initialization phase, and in formation
+        elif self.in_formation(desired_shape_offsets, [x_cord, 50], err=0.2):
+            x_cord += 1
+            x_cord %= 100
+
+
+        ### MORPH PHASE ###
+        center_point = [x_cord, 50]
         retracts, moves = self.morph(desired_shape_offsets, center_point)
 
+        # catch error (if moves == 0, no move was made, so we should step back until we can move)
+        if len(moves) == 0:
+            while len(moves) == 0:
+                x_cord = ((x_cord + 100) - 1) % 100
+                center_point = [x_cord, 50]
+                retracts, moves = self.morph(desired_shape_offsets, center_point)
+            x_cord = ((x_cord + 100) - 1) % 100
 
-        # check if in formation or moving phase
 
-        ## formation
+        ### INFO BYTE ###
+        # first bit == nothing right now
+        # 0 == initialization
+        # 1 - 100 => 0 - 99 == x_cord
+        if init_phase:
+            info_L7_bits = format(0, '07b')
+        else:
+            info_L7_bits = format(x_cord + 1, '07b')
+        
+        info_bin = info_first_bit + info_L7_bits
+        info = int(info_bin, 2)
 
-        ## move amoeba
-
-        info = 0 # delete later
         return retracts, moves, info
     
+
+    def in_formation(self, desired_shape_offsets, cur_center, err=0.0) -> bool:
+        cur_ameoba_points = self.map_to_coords(self.amoeba_map)
+        desired_ameoba_points = self.offset_to_absolute(desired_shape_offsets, cur_center)
+
+        num_potential_retracts = len(self.periphery.intersection((cur_ameoba_points.difference(desired_ameoba_points))))
+        num_total_periphery = len(cur_ameoba_points)
+
+        return (num_potential_retracts / num_total_periphery) <= err
+
+
     # Adapted from G2 aka from amoeba_game.py
     def check_move(
         self, retracts: List[Tuple[int, int]], extends: List[Tuple[int, int]]
