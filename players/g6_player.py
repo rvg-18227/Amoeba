@@ -388,7 +388,7 @@ class Player:
 
                 num_column = np.size(np.where(amoeba_loc[:, 0] == col)[0])
 
-                if num_column > 1 and col != tentacle_one and col != tentacle_two and col != tentacle_three:
+                if num_column > 1:# and col != tentacle_one and col != tentacle_two and col != tentacle_three:
                     #cell = (col, row)
                     cell = (col % 100, row % 100)
                     if cell in periphery:
