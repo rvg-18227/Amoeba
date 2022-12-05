@@ -313,12 +313,13 @@ class Player:
                 num_column = np.size(np.where(amoeba_loc[:, 0] == col)[0])
 
                 if num_column > 1 and col != tentacle_one and col != tentacle_two:
-                    cell = (col, row)
+                    #cell = (col, row)
+                    cell = (col % 100, row % 100)
                     if cell in periphery:
                         retract_list.append(cell)
-                        self.logger.info(f'cell retract: {cell}')
+                        #self.logger.info(f'cell retract: {cell}')
                         cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
-                        self.logger.info(f'cell idx : {np.where(cell_idx == True)[0]}')
+                        #self.logger.info(f'cell idx : {np.where(cell_idx == True)[0]}')
                         amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx == True)[0], axis=0)
 
        # print("retract", retract_list)
@@ -386,7 +387,7 @@ class Player:
         # mini = 100
         if tentacle_three_len < mini:
             expand_cell = np.max(tentacle_three_column[:, 1])
-            expand_cell = (col_three, expand_cell + 1)
+            expand_cell = (col_three % 100, (expand_cell + 1) % 100)
             expand_cells.append(expand_cell)
             #quit()
 
