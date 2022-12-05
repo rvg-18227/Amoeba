@@ -1,14 +1,16 @@
+import logging
+import math
 import os
 import pickle
-import numpy as np
-import logging
-from amoeba_state import AmoebaState
-from typing import Tuple, List
-import numpy.typing as npt
-import constants
-import matplotlib.pyplot as plt
 from enum import Enum
-import math
+from typing import List, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
+import numpy.typing as npt
+
+import constants
+from amoeba_state import AmoebaState
 
 turn = 0
 
@@ -21,7 +23,16 @@ CENTER_X = constants.map_dim // 2
 CENTER_Y = constants.map_dim // 2
 
 COMB_SEPARATION_DIST = 24
+TEETH_GAP = 1
 
+VERTICAL_SHIFT_PERIOD = 4
+VERTICAL_SHIFT_LIST = (
+    (
+        [0 for i in range(VERTICAL_SHIFT_PERIOD)]
+        + [1 for i in range(VERTICAL_SHIFT_PERIOD)]
+    )
+    * (round(np.ceil(100 / (VERTICAL_SHIFT_PERIOD * 2))))
+)[:100]
 
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
@@ -39,7 +50,7 @@ def coords_to_map(coords: list[tuple[int, int]], size=constants.map_dim) -> npt.
     return amoeba_map
 
 
-def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[]) -> None:
+def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[], title="") -> None:
     retracts_map = coords_to_map(retracts)
     extends_map = coords_to_map(extends)
 
@@ -58,6 +69,7 @@ def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[]) -> None:
     plt.pcolormesh(map, edgecolors="k", linewidth=1)
     ax = plt.gca()
     ax.set_aspect("equal")
+    plt.title(title)
     # plt.savefig(f"debug/{turn}.png")
     plt.show()
 
@@ -114,26 +126,30 @@ if __name__ == "__main__":
     assert fields[MemoryFields.Translating] == False
 
 
-
 # ---------------------------------------------------------------------------- #
 #                               Formation Class                                #
 # ---------------------------------------------------------------------------- #
 
-class Formation:        
+
+class Formation:
     def __init__(self, initial_formation=None) -> None:
-        self.map = initial_formation if initial_formation else np.zeros((constants.map_dim, constants.map_dim), dtype=np.int8)
-    
+        self.map = (
+            initial_formation
+            if initial_formation
+            else np.zeros((constants.map_dim, constants.map_dim), dtype=np.int8)
+        )
+
     def add_cell(self, x, y):
         self.map[x % constants.map_dim, y % constants.map_dim] = 1
-    
+
     def merge_formation(self, formation_map: npt.NDArray):
         self.map = np.logical_or(self.map, formation_map)
-
 
 
 # ---------------------------------------------------------------------------- #
 #                               Main Player Class                              #
 # ---------------------------------------------------------------------------- #
+
 
 class Player:
     def __init__(
@@ -182,20 +198,29 @@ class Player:
         self.retractable_cells: List[Tuple[int, int]] = None
         self.extendable_cells: List[Tuple[int, int]] = None
         self.num_available_moves: int = None
-        
-    def generate_comb_formation(self, size: int, tooth_offset=0, center_x=CENTER_X, center_y=CENTER_Y) -> npt.NDArray:
+
+    def generate_comb_formation(
+        self, size: int, tooth_offset=0, center_x=CENTER_X, center_y=CENTER_Y
+    ) -> npt.NDArray:
         formation = Formation()
-        
+
         if size < 2:
             return formation.map
 
-        teeth_size = min((size // 5), 49)
+        teeth_size = min((size // ((TEETH_GAP + 1) * 2 + 1)), 49)
         backbone_size = min((size - teeth_size) // 2, 99)
         cells_used = backbone_size * 2 + teeth_size
-        
+
         # If we have hit our max size, form an additional comb and connect it via a bridge
         if backbone_size == 99:
-            formation.merge_formation(self.generate_comb_formation(size - cells_used - COMB_SEPARATION_DIST + 2, tooth_offset, center_x + COMB_SEPARATION_DIST, center_y))
+            formation.merge_formation(
+                self.generate_comb_formation(
+                    size - cells_used - COMB_SEPARATION_DIST + 2,
+                    tooth_offset,
+                    center_x + COMB_SEPARATION_DIST,
+                    center_y,
+                )
+            )
             for i in range(center_x, center_x + COMB_SEPARATION_DIST):
                 formation.add_cell(i, center_y)
 
@@ -210,10 +235,13 @@ class Player:
             # second layer of backbone
             formation.add_cell(center_x - 1, center_y + i)
             formation.add_cell(center_x - 1, center_y - i)
-        for i in range(1, min(teeth_size + 1, backbone_size // 2), 2): 
+        for i in range(
+            1,
+            round(min((teeth_size * (TEETH_GAP + 1)) / 2, backbone_size / 2) + 0.1),
+            TEETH_GAP + 1,
+        ):
             formation.add_cell(center_x + 1, center_y + tooth_offset + i)
             formation.add_cell(center_x + 1, center_y + tooth_offset - i)
-
 
         # show_amoeba_map(formation.map)
         return formation.map
@@ -238,6 +266,10 @@ class Player:
             for p in list(set(desired_points).difference(set(current_points)))
             if p in self.extendable_cells
         ]
+        potential_extends.sort(key=lambda p: p[1])
+
+        # show_amoeba_map(desired_amoeba, title="Desired Amoeba")
+        # show_amoeba_map(self.amoeba_map, potential_retracts, potential_extends, title="Current Amoeba, Potential Retracts and Extends")
 
         # Loop through potential extends, searching for a matching retract
         retracts = []
@@ -280,7 +312,7 @@ class Player:
         #                 unused_extends.remove(matching_extends[0])
         #                 break
 
-        # show_amoeba_map(self.amoeba_map, retracts, extends)
+        # show_amoeba_map(self.amoeba_map, retracts, extends, title="Current Amoeba, Selected Retracts and Extends")
         return retracts, extends
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
@@ -407,28 +439,28 @@ class Player:
             )
             if len(moves) == 0:
                 info = change_memory_field(info, MemoryFields.Initialized, True)
-                info = change_memory_field(info, MemoryFields.Translating, True)
+                info = (50 << 1) | info
                 memory_fields = read_memory(info)
 
         if memory_fields[MemoryFields.Initialized]:
-            curr_coords = map_to_coords(self.amoeba_map)
-            curr_backbone_col = min(x for x, y in curr_coords if y == max(y for x, y in curr_coords))
-            
-            right_edge_cells = [(x, y) for x, y in curr_coords if x == constants.map_dim - 1]
-            left__edge_cells = [(x, y) for x, y in curr_coords if x == 0]
-            if len(right_edge_cells) and len(left__edge_cells):
-               curr_backbone_col = min(x for x, _ in curr_coords if x > CENTER_X) 
-            
-            vertical_shift = int(np.ceil(curr_backbone_col / 2) + 1) % 2
-            if memory_fields[MemoryFields.Translating]:
-                offset = (curr_backbone_col + 1) - CENTER_X + 1
-                info = change_memory_field(info, MemoryFields.Translating, False)
-            else: 
-                offset = (curr_backbone_col + 1) - CENTER_X
-                info = change_memory_field(info, MemoryFields.Translating, True)
-
-            next_comb = self.generate_comb_formation(self.current_size, vertical_shift, CENTER_X + offset, CENTER_Y)
+            # Extract backbone column from memory
+            curr_backbone_col = info >> 1
+            vertical_shift = VERTICAL_SHIFT_LIST[curr_backbone_col]
+            next_comb = self.generate_comb_formation(
+                self.current_size, vertical_shift, curr_backbone_col, CENTER_Y
+            )
             retracts, moves = self.get_morph_moves(next_comb)
 
+            # When we "settle" into the target backbone column, no moves are generated
+            if len(moves) == 0:
+                # So we advance the backbone column by 1
+                prev_backbone_col = curr_backbone_col
+                new_backbone_col = (prev_backbone_col + 1) % 100
+                vertical_shift = VERTICAL_SHIFT_LIST[new_backbone_col]
+                next_comb = self.generate_comb_formation(
+                    self.current_size, vertical_shift, prev_backbone_col, CENTER_Y
+                )
+                retracts, moves = self.get_morph_moves(next_comb)
+                info = new_backbone_col << 1 | 1
 
         return retracts, moves, info

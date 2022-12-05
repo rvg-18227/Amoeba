@@ -18,8 +18,8 @@ import random as rnd
 
 MAP_DIM = 100
 MAX_BASE_LEN = min(MAP_DIM, 100)
-TOOTH_SPACING = 0
-SHIFTING_FREQ = 10
+TOOTH_SPACING = 1
+SHIFTING_FREQ = 6
 # MAX_BASE_LEN = min(MAP_DIM, 100)
 
 
@@ -104,7 +104,7 @@ class Memory:
             self.tooth_shift = vals[1]
         else:
             self.x_val = 50
-            self.tooth_shift = 0
+            self.tooth_shift = 1
 
     def get_byte(self):
         return set_byte_info([self.x_val, self.tooth_shift])
@@ -177,7 +177,6 @@ class Player:
         center_y = MAP_DIM // 2
         spacing = TOOTH_SPACING + 1
 
-
         # find the number of complete 5-cell modules
         complete_modules = amoeba_size // 5
         # find the number of unfinished sections
@@ -191,29 +190,39 @@ class Player:
         teeth_len = base_len//spacing
         reserve = max(reserve, amoeba_size-(base_len*2 + teeth_len))
         start_y = center_y - base_len // 2
+        # start_y = 50
 
         # add the 2-cell-wide base
         for y in range(start_y, start_y + base_len):
-            formation[center_x, y] = 1
-            formation[center_x - 1, y] = 1
+            formation[center_x, y%100] = 1
+            formation[center_x - 1, y%100] = 1
 
         # add the teeth
         start_modules = start_y  # +(additional_sections+1)//2
         for y in range(start_modules, start_y + teeth_len * spacing):
             # if (y - start_modules) % spacing == 0:
-            if y % spacing == 0:
-                formation[center_x + 1, y] = 1
+            if y%100 % spacing == 0:
+                formation[center_x + 1, y%100] = 1
 
         # # add the "reserve" cell at the back
-        for i in range(reserve):
-            row = i//base_len
-            col = i % base_len
-            formation[center_x-2-row, start_y+col] = 1
-        # if reserve:
-        #     formation[center_x - 2, start_y] = 1
+        # for i in range(reserve):
+        #     row = i//base_len
+        #     col = i % base_len
+        #     formation[center_x-2-row, start_y+col] = 1
 
         # show_amoeba_map(formation)
         return formation
+
+    def sort_retracts(self, potential_retracts):
+        ranked_cells = []
+        for x, y in potential_retracts:
+            neighbors = [((x-1) % 100, y), ((x+1) % 100, y), (x, (y-1) % 100), (x, (y+1) % 100)]
+            score = 0
+            for neighbor in neighbors:
+                if self.amoeba_map[neighbor] == 1:
+                    score += 1
+            ranked_cells.append(((x, y), score))
+        return [cell for cell, score in sorted(ranked_cells, key=lambda t: t[1])]
 
     # copied from G2
     def get_morph_moves(self, desired_amoeba: npt.NDArray) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
@@ -229,8 +238,9 @@ class Player:
         potential_extends = [p for p in list(set(desired_points).difference(set(current_points))) if
                              p in self.extendable_cells]
 
-        potential_retracts.sort(key=lambda pos: pos[0])
-        potential_extends.sort(key=lambda pos: pos[0])
+        # potential_retracts.sort(key=lambda pos: pos[1])
+        potential_retracts = self.sort_retracts(potential_retracts)
+        potential_extends.sort(key=lambda pos: pos[1])
 
         #print("Potential Retracts", potential_retracts)
         #print("Potential Extends", potential_extends)
@@ -242,15 +252,31 @@ class Player:
         # Loop through potential extends, searching for a matching retract
         retracts = []
         extends = []
-        for potential_extend in potential_extends:
+        while potential_extends and potential_retracts:
+            change = False
+            # for potential_extend in potential_extends:
+            #     for potential_retract in potential_retracts:
             for potential_retract in potential_retracts:
-                if self.check_move(retracts + [potential_retract], extends + [potential_extend]):
-                    # matching retract found, add the extend and retract to our lists
-                    retracts.append(potential_retract)
-                    potential_retracts.remove(potential_retract)
-                    extends.append(potential_extend)
-                    potential_extends.remove(potential_extend)
-                    break
+                for potential_extend in potential_extends:
+                    if self.check_move(retracts + [potential_retract], extends + [potential_extend]):
+                        # matching retract found, add the extend and retract to our lists
+                        retracts.append(potential_retract)
+                        potential_retracts.remove(potential_retract)
+                        extends.append(potential_extend)
+                        potential_extends.remove(potential_extend)
+                        change = True
+                        break
+            if not change:
+                break
+        # for potential_extend in potential_extends:
+        #     for potential_retract in potential_retracts:
+        #         if self.check_move(retracts + [potential_retract], extends + [potential_extend]):
+        #             # matching retract found, add the extend and retract to our lists
+        #             retracts.append(potential_retract)
+        #             potential_retracts.remove(potential_retract)
+        #             extends.append(potential_extend)
+        #             potential_extends.remove(potential_extend)
+        #             break
 
         # show_amoeba_map(self.amoeba_map, retracts, extends)
         return retracts[:self.num_available_moves], extends[:self.num_available_moves]
@@ -259,7 +285,6 @@ class Player:
     def check_move(self, retracts: List[Tuple[int, int]], extends: List[Tuple[int, int]]) -> bool:
         if not set(retracts).issubset(set(self.retractable_cells)):
             return False
-
         movable = retracts[:]
         new_periphery = list(set(self.retractable_cells).difference(set(retracts)))
         for i, j in new_periphery:
@@ -353,24 +378,36 @@ class Player:
         
         if self.is_square(current_percept):
             mem.x_val = 50
-            mem.tooth_shift = 0
+            mem.tooth_shift = 1
 
         while len(retracts) == 0 and len(moves) == 0:
-            offset_x = mem.x_val - MAP_DIM//2
-            offset_y = 0 if (mem.x_val % SHIFTING_FREQ*2) < SHIFTING_FREQ else -1
+            if mem.tooth_shift == 0:
+                offset_x = mem.x_val - MAP_DIM//2 - 1
+            else:
+                offset_x = mem.x_val - MAP_DIM//2
+
+            offset_y = 0 if (mem.x_val % (SHIFTING_FREQ*2)) < SHIFTING_FREQ else -1
             # if random.random() < 0.5:
             #     mem.tooth_shift ^= 1
             # #
             # offset_y = -mem.tooth_shift
             
+            # target_formation = self.generate_tooth_formation(last_percept.current_size)
             target_formation = self.generate_tooth_formation(self.current_size)
             target_formation = np.roll(target_formation, offset_x, 0)
             # target_formation = self.shift_col(target_formation, mem.x_val+1, offset_y)
             target_formation = np.roll(target_formation, offset_y, 1)
+            # show_amoeba_map(target_formation)
+
             retracts, moves = self.get_morph_moves(target_formation)
 
             if len(retracts) == 0 and len(moves) == 0:
-                mem.x_val = (mem.x_val + 1) % 100
+                if mem.tooth_shift == 1:
+                    mem.x_val = (mem.x_val + 1) % 100
+                    if mem.x_val % SHIFTING_FREQ == 0:
+                        mem.tooth_shift = 0
+                else:
+                    mem.tooth_shift = 1
                 print('--------------------')
             # elif mem.x_val > 55 and rnd.choices([True, False], weights=(0.01, 0.99)):
             #     mem.x_val = (mem.x_val + 1) % 100
@@ -405,7 +442,7 @@ class Player:
 
     def shift_col(self, arr, col, shift):
         arr2 = np.copy(arr)
-        arr2[:,col] = np.roll(arr2[:,col], shift)
+        arr2[:, col] = np.roll(arr2[:,col], shift)
         return arr2
     # def move(self, last_percept, current_percept, info) -> (list, list, int):
     #     """Function which retrieves the current state of the amoeba map and returns an amoeba movement
