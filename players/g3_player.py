@@ -50,6 +50,7 @@ class Player:
         self.bacteria = None
         self.movable_cells = None
         self.num_available_moves = 0
+        self.static_center = [50, 50]
 
         self.turn = 0
     
@@ -243,15 +244,170 @@ class Player:
         self.movable_cells = set(current_percept.movable_cells)
         self.num_available_moves = int(np.ceil(self.metabolism * self.current_size))
 
+        # cur_ameoba_points = self.map_to_coords(self.amoeba_map)
+        # desired_ameoba_points = self.offset_to_absolute(desired_shape_offsets, self.static_center)
+
+        # potential_retracts = list(self.periphery.intersection((cur_ameoba_points.difference(desired_ameoba_points))))
+
+        
+
+        # if self.turn < 50:
+        #     center_point = self.get_center_point(current_percept, 0)
+        
+        ### PARSE INFO BYTE ###
+        info_bin = format(info, '08b')
+        info_first_bit = info_bin[0]    # first bit of the info byte
+        info_L7_bits = info_bin[1:]     # last 7 bits of the info byte
+        info_L7_int = int(info_L7_bits, 2)  # info_L7_int holds int value of last 7 bits (stores coordinate)
+
+
+        ### GET DESIRED OFFSETS FOR CURRENT MORPH ###
         desired_shape_offsets = self.get_desired_shape()
-        if self.turn < 50: 
-            info = 0
-            center_point = self.get_center_point(current_percept, info)
-        else:
-            info = 1
-            center_point = self.get_center_point(current_percept, info)
-            center_point = (center_point[0] + 1, center_point[1])
+
+
+        ### INCREMENT CENTER POINT PHASE ###
+        # move amoeba: x_cord is info_L7_int because initial info_L7_int val is 0, indicating initialization/building phase
+        init_phase = info_L7_int == 0
+        x_cord = info_L7_int - 1
+
+        # move under these 2 conditions
+        # 1: end of initialization phase
+        if init_phase:
+            x_cord = 50
+
+            if self.in_formation(desired_shape_offsets, [x_cord, 50]):
+                init_phase = False
+                x_cord = 51
+        
+        # 2: not in initialization phase, and in formation
+        elif self.in_formation(desired_shape_offsets, [x_cord, 50], err=0.2):
+            x_cord += 1
+            x_cord %= 100
+
+
+        ### MORPH PHASE ###
+        center_point = [x_cord, 50]
         retracts, moves = self.morph(desired_shape_offsets, center_point)
+
+        # catch error (if moves == 0, no move was made, so we should step back until we can move)
+        if len(moves) == 0:
+            while len(moves) == 0:
+                x_cord = ((x_cord + 100) - 1) % 100
+                center_point = [x_cord, 50]
+                retracts, moves = self.morph(desired_shape_offsets, center_point)
+            x_cord = ((x_cord + 100) - 1) % 100
+
+
+        ### INFO BYTE ###
+        # first bit == nothing right now
+        # 0 == initialization
+        # 1 - 100 => 0 - 99 == x_cord
+        if init_phase:
+            info_L7_bits = format(0, '07b')
+        else:
+            info_L7_bits = format(x_cord + 1, '07b')
+        
+        info_bin = info_first_bit + info_L7_bits
+        info = int(info_bin, 2)
 
         return retracts, moves, info
     
+
+    def in_formation(self, desired_shape_offsets, cur_center, err=0.0) -> bool:
+        cur_ameoba_points = self.map_to_coords(self.amoeba_map)
+        desired_ameoba_points = self.offset_to_absolute(desired_shape_offsets, cur_center)
+
+        num_potential_retracts = len(self.periphery.intersection((cur_ameoba_points.difference(desired_ameoba_points))))
+        num_total_periphery = len(cur_ameoba_points)
+
+        return (num_potential_retracts / num_total_periphery) <= err
+
+
+    # Adapted from G2 aka from amoeba_game.py
+    def check_move(
+        self, retracts: List[Tuple[int, int]], extends: List[Tuple[int, int]]
+    ) -> bool:
+        if not set(retracts).issubset(self.periphery):
+            return False
+
+        movable = retracts[:]
+        new_periphery = list(self.periphery.difference(set(retracts)))
+        for i, j in new_periphery:
+            nbr = self.find_movable_neighbor(i, j, self.amoeba_map, self.bacteria)
+            for x, y in nbr:
+                if (x, y) not in movable:
+                    movable.append((x, y))
+
+        if not set(extends).issubset(set(movable)):
+            return False
+
+        amoeba = np.copy(self.amoeba_map)
+        amoeba[amoeba < 0] = 0
+        amoeba[amoeba > 0] = 1
+
+        for i, j in retracts:
+            amoeba[i][j] = 0
+
+        for i, j in extends:
+            amoeba[i][j] = 1
+
+        tmp = np.where(amoeba == 1)
+        result = list(zip(tmp[0], tmp[1]))
+        check = np.zeros((constants.map_dim, constants.map_dim), dtype=int)
+
+        stack = result[0:1]
+        while len(stack):
+            a, b = stack.pop()
+            check[a][b] = 1
+
+            if (a, (b - 1) % constants.map_dim) in result and check[a][
+                (b - 1) % constants.map_dim
+            ] == 0:
+                stack.append((a, (b - 1) % constants.map_dim))
+            if (a, (b + 1) % constants.map_dim) in result and check[a][
+                (b + 1) % constants.map_dim
+            ] == 0:
+                stack.append((a, (b + 1) % constants.map_dim))
+            if ((a - 1) % constants.map_dim, b) in result and check[
+                (a - 1) % constants.map_dim
+            ][b] == 0:
+                stack.append(((a - 1) % constants.map_dim, b))
+            if ((a + 1) % constants.map_dim, b) in result and check[
+                (a + 1) % constants.map_dim
+            ][b] == 0:
+                stack.append(((a + 1) % constants.map_dim, b))
+
+        return (amoeba == check).all()
+
+    def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
+        # sort periphery by y coord
+        '''sorted_periphery = sorted(periphery, key=lambda x: x[1])
+        lowest_y = sorted_periphery[0][1]
+        highest_y = sorted_periphery[-1][1]
+        print(lowest_y, highest_y)'''
+
+        movable = []
+        new_periphery = list(set(periphery).difference(set(retract)))
+        for i, j in new_periphery:
+            nbr = self.find_movable_neighbor(i, j, amoeba_map, bacteria)
+            for x, y in nbr:
+                movable.append((x, y))
+
+        movable += retract
+
+        return movable[:mini]
+
+    def find_movable_neighbor(self, x, y, amoeba_map, bacteria):
+        # a cell is on the periphery if it borders (orthogonally) a cell that is not occupied by the amoeba
+        out = []
+        if (x, y) not in bacteria:
+            if amoeba_map[x][(y - 1) % 100] == 0:
+                out.append((x, (y - 1) % 100))
+            if amoeba_map[x][(y + 1) % 100] == 0:
+                out.append((x, (y + 1) % 100))
+            if amoeba_map[(x - 1) % 100][y] == 0:
+                out.append(((x - 1) % 100, y))
+            if amoeba_map[(x + 1) % 100][y] == 0:
+                out.append(((x + 1) % 100, y))
+
+        return out
