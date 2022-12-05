@@ -77,6 +77,11 @@ class Player:
             retract_list, expand_list = self.forward(
                 amoeba_map, current_percept.amoeba_map, current_percept.periphery, current_percept.bacteria, split_row)
         else:
+
+            ##amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
+            #amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
+           # bottom_side = np.max(amoeba_loc[:, 1])
+
             expand_list = self.box_to_sweeper_expand(
                     current_percept.amoeba_map, int(self.current_size*self.metabolism))
             retract_list = self.box_to_sweeper_retract(
@@ -219,11 +224,13 @@ class Player:
 
 
     def box_to_sweeper_retract(self, amoeba_map, periphery, mini):
+
         amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
         amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
         top_side = np.min(amoeba_loc[:, 1])
         bottom_side = np.max(amoeba_loc[:, 1])
         retract_list = []
+
 
         max_row_length = np.NINF
         max_row = np.NINF
@@ -231,7 +238,7 @@ class Player:
             row_array = np.where(amoeba_loc[:, 1] == row)[0]
             row_cells = amoeba_loc[row_array]
             row_len = len(row_cells)
-            if row_len > max_row_length:
+            if row_len >= max_row_length:
                 max_row_length = row_len
                 max_row = row
 
@@ -255,8 +262,12 @@ class Player:
             for col in columns:
                 if len(retract_list) == 2:
                     break
+
+                if row >= max_row:
+                    continue
+
                 num_column = np.size(np.where(amoeba_loc[:, 0] == col)[0])
-                self.logger.info(f'num_col: {num_column}')
+
                 if num_column > 1 and col != tentacle_one and col != tentacle_two:
                     cell = (col, row)
                     if cell in periphery:
@@ -266,7 +277,8 @@ class Player:
                         self.logger.info(f'cell idx : {np.where(cell_idx == True)[0]}')
                         amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx == True)[0], axis=0)
 
-        #print("retract", retract_list)
+       # print("retract", retract_list)
+        #print(amoeba_loc)
         return retract_list
 
     def box_to_sweeper_expand(self, amoeba_map, mini):
