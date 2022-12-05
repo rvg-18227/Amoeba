@@ -731,7 +731,7 @@ class BucketAttack(Strategy):
                     bridge_size = len(bridge_targets)
                     v_size = min(self.v_size, size - comb_size - bridge_size)
                     v_targets = self._get_vshape_target(v_size, (50, 50))
-                    print("Grow V", size, comb_size, bridge_size, v_size)
+                    #print("Grow V", size, comb_size, bridge_size, v_size)
                     horizontal_comb_size = size - comb_size - bridge_size - v_size
                     if horizontal_comb_size > 0:
                          comb_targets = self._get_target_cells(comb_size + horizontal_comb_size, cog, xmax)
@@ -744,8 +744,8 @@ class BucketAttack(Strategy):
                     right_upper_bridge_cells = [(cur_x, y_cog) for cur_x in range(50, 100)]
                     right_lower_bridge_cells = [(cur_x, y_cog - 1) for cur_x in range(50,100)]
                     bridge_targets = left_upper_bridge_cells + left_lower_bridge_cells+right_upper_bridge_cells+right_lower_bridge_cells
-                    print("wrapped around bridge target:",bridge_targets)
-                    print("wrapped around comb target:",comb_targets)
+                    #print("wrapped around bridge target:",bridge_targets)
+                    #print("wrapped around comb target:",comb_targets)
                     bridge_size = len(bridge_targets)
                     v_size = min(self.v_size, size - comb_size - bridge_size)
                     v_targets = self._get_vshape_target(v_size, (50, 50))
@@ -759,12 +759,12 @@ class BucketAttack(Strategy):
 
     def _get_vshape_target(self, size: int, cog: cell) -> list[cell]:
         arm_length =size//2
-        print("upper")
+        #print("upper")
         upper_arm= self._spread_diagonally(arm_length, cog, 1)
-        print(f"len(upper bridge cells): {len(set(upper_arm))}")
-        print("lower")
+        #print(f"len(upper bridge cells): {len(set(upper_arm))}")
+        #print("lower")
         lower_arm= self._spread_diagonally(arm_length, cog, -1)
-        print(f"len(upper bridge cells): {len(set(lower_arm))}")
+        #print(f"len(upper bridge cells): {len(set(lower_arm))}")
         arm_cells = upper_arm+lower_arm
         return arm_cells
 
@@ -850,7 +850,6 @@ class BucketAttack(Strategy):
     def move(
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
     ) -> tuple[list[cell], list[cell], int]:
-        print("IM here")
 
         # ----------------
         #  Decode Memory
@@ -992,7 +991,10 @@ class Player:
 
         # TODO: dynamically select a strategy, possible factors:
         # current_size, metabolism, etc
-        strategy = "bucket_attack"
+        if self.goal_size <= 64:
+            strategy="box_farm"
+        else:
+            strategy = "bucket_attack"
 
         return self.strategies[strategy].move(last_percept, current_percept, info)
 
