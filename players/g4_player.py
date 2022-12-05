@@ -709,30 +709,51 @@ class BucketAttack(Strategy):
     def _get_bridge_V_target_cells(self, size: int, cog: cell, xmax: int) -> list[cell]:
         _, y_cog = cog
         comb_size=min(290,size)
-        bridge_size=size-comb_size
+        bridge_size=min(200,size-comb_size)
+        extra_cells_size=size-comb_size-bridge_size
 
         comb_targets=self._get_target_cells(comb_size,cog,xmax)
+
         if bridge_size>0:
             print("have bridge",size, comb_size,bridge_size)
             bridge_length,orphan=divmod(bridge_size,2)
-            if xmax-bridge_length > 50:
-                upper_bridge_cells=[(cur_x,y_cog) for cur_x in range(xmax-bridge_length,xmax)]
-                lower_bridge_cells=[(cur_x,y_cog-1) for cur_x in range(xmax-bridge_length-orphan,xmax)]
-                bridge_targets= upper_bridge_cells+lower_bridge_cells
-                return comb_targets + bridge_targets
+            if xmax>50:
+                if xmax-bridge_length > 50:
+                    upper_bridge_cells=[(cur_x,y_cog) for cur_x in range(xmax-bridge_length,xmax)]
+                    lower_bridge_cells=[(cur_x,y_cog-1) for cur_x in range(xmax-bridge_length-orphan,xmax)]
+                    bridge_targets= upper_bridge_cells+lower_bridge_cells
+                    return comb_targets + bridge_targets
+                else:
+                    bridge_length = xmax - 50
+                    upper_bridge_cells = [(cur_x, y_cog) for cur_x in range(xmax - bridge_length, xmax)]
+                    lower_bridge_cells = [(cur_x, y_cog - 1) for cur_x in range(xmax - bridge_length, xmax)]
+                    bridge_targets = upper_bridge_cells + lower_bridge_cells
+                    bridge_size = len(bridge_targets)
+                    v_size = min(self.v_size, size - comb_size - bridge_size)
+                    v_targets = self._get_vshape_target(v_size, (50, 50))
+                    print("Grow V", size, comb_size, bridge_size, v_size)
+                    horizontal_comb_size = size - comb_size - bridge_size - v_size
+                    if horizontal_comb_size > 0:
+                         comb_targets = self._get_target_cells(comb_size + horizontal_comb_size, cog, xmax)
+                    return comb_targets + bridge_targets + v_targets
+
             else:
-                bridge_length=xmax-50
-                upper_bridge_cells = [(cur_x, y_cog) for cur_x in range(xmax-bridge_length, xmax)]
-                lower_bridge_cells = [(cur_x, y_cog - 1) for cur_x in range(xmax-bridge_length, xmax)]
-                bridge_targets = upper_bridge_cells + lower_bridge_cells
-                bridge_size=len(bridge_targets)
-                v_size=min(self.v_size, size-comb_size-bridge_size)
-                v_targets=self._get_vshape_target(v_size,(50,50))
-                print("Grow V", size, comb_size, bridge_size, v_size)
-                horizontal_comb_size = size- comb_size - bridge_size - v_size
-                if horizontal_comb_size > 0:
-                    comb_targets=self._get_target_cells(comb_size+horizontal_comb_size,cog,xmax)
-                return comb_targets + bridge_targets+v_targets
+                    left_upper_bridge_cells = [(cur_x, y_cog) for cur_x in range(0, xmax)]
+                    left_lower_bridge_cells = [(cur_x, y_cog - 1) for cur_x in range(0, xmax+orphan)]
+
+                    right_upper_bridge_cells = [(cur_x, y_cog) for cur_x in range(50, 100)]
+                    right_lower_bridge_cells = [(cur_x, y_cog - 1) for cur_x in range(50,100)]
+                    bridge_targets = left_upper_bridge_cells + left_lower_bridge_cells+right_upper_bridge_cells+right_lower_bridge_cells
+                    print("wrapped around bridge target:",bridge_targets)
+                    print("wrapped around comb target:",comb_targets)
+                    bridge_size = len(bridge_targets)
+                    v_size = min(self.v_size, size - comb_size - bridge_size)
+                    v_targets = self._get_vshape_target(v_size, (50, 50))
+                    horizontal_comb_size = size - comb_size - bridge_size - v_size
+                    if horizontal_comb_size > 0:
+                        comb_targets = self._get_target_cells(comb_size + horizontal_comb_size, cog, xmax)
+                    return comb_targets + bridge_targets + v_targets
+
 
         return comb_targets
 
@@ -829,6 +850,7 @@ class BucketAttack(Strategy):
     def move(
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
     ) -> tuple[list[cell], list[cell], int]:
+        print("IM here")
 
         # ----------------
         #  Decode Memory
@@ -900,7 +922,7 @@ class BucketAttack(Strategy):
 
 BUCKET_WIDTH = 1
 SHIFT_CYCLE  = -1
-V_SIZE = 200
+V_SIZE = 400
 
 
 class Player:
@@ -970,7 +992,7 @@ class Player:
 
         # TODO: dynamically select a strategy, possible factors:
         # current_size, metabolism, etc
-        strategy = "box_farm"
+        strategy = "bucket_attack"
 
         return self.strategies[strategy].move(last_percept, current_percept, info)
 
