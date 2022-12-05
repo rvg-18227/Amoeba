@@ -219,13 +219,16 @@ class Player:
         if backbone_size == 99 and comb_idx == 0:
             center_x_offset = np.absolute(center_x - CENTER_X)
 
-            # Offset each comb to the left and right of the map center
-            comb_0_center_x = min(max(CENTER_X - center_x_offset, COMB_SEPARATION_DIST), 50)
-            comb_1_center_x = min(max(CENTER_X + center_x_offset + COMB_SEPARATION_DIST, CENTER_X + COMB_SEPARATION_DIST + 1), 100)
+            if size > cells_used * 2:
+                # Offset each comb to the left and right of the map center
+                comb_0_center_x = min(max(CENTER_X - center_x_offset, COMB_SEPARATION_DIST), 50)
+                comb_1_center_x = min(max(CENTER_X + center_x_offset + COMB_SEPARATION_DIST, CENTER_X + COMB_SEPARATION_DIST + 1), 100)
+            else:
+                comb_1_center_x = center_x + COMB_SEPARATION_DIST
 
             # Generate the second comb
             second_comb = self.generate_comb_formation(
-                cells_used,
+                size - cells_used,
                 tooth_offset,
                 comb_1_center_x % constants.map_dim,
                 center_y,
