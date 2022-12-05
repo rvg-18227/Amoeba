@@ -10,8 +10,3 @@ render/
 .vscode/
 .venv/
 results.log
-players/test.py
-testing.py
-testing.sh
-result.csv
-amoeba_game_test.py

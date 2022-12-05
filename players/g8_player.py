@@ -184,22 +184,33 @@ class Player:
         self.extendable_cells: List[Tuple[int, int]] = None
         self.num_available_moves: int = None
         
-
-
-    # Adapted from Group 2's code
-    
     def generate_comb_formation(self, size: int, tooth_offset=0, center_x=CENTER_X, center_y=CENTER_Y) -> npt.NDArray:
         formation = Formation()
         
         if size < 2:
             return formation.map
 
-        teeth_size = min((size // 6), 24) # new tooth for every 2 backbone
+        teeth_size = min((size // 6), 48) # new tooth for every 2 backbone
         # remaining_cells = size - teeth_size
         # divider = min((int(remaining_cells * 0.66)), 99)
         # backbone_size = min((size - teeth_size - divider), 49)
-        backbone_size = min((teeth_size * 2), 49)
-        divider = min((size - teeth_size - backbone_size), 99)
+        
+        # Worked but needs tweaking
+        # backbone_size = min((teeth_size * 2), 99)
+        # divider = min((size - teeth_size - backbone_size), 99)
+
+        # Revert to this if other fails
+        # divider = min((size - (teeth_size * 2) - teeth_size), 99)
+        # backbone_size = min((size - teeth_size - divider), 99)
+
+        remaining_cells = size - teeth_size
+        divider = min((int(remaining_cells * 0.66)), 99)
+        backbone_size = min((size - teeth_size - divider), 99)
+
+        if divider == 99:
+            remaining_cells = size - divider
+            teeth_size == remaining_cells // 3
+            backbone_size = remaining_cells - teeth_size
         
         cells_used = backbone_size + teeth_size
         
@@ -208,12 +219,14 @@ class Player:
         #     formation.merge_formation(self.generate_comb_formation(size - cells_used - COMB_SEPARATION_DIST + 2, tooth_offset, center_x + COMB_SEPARATION_DIST, center_y))
         #     for i in range(center_x, center_x + COMB_SEPARATION_DIST):
         #         formation.add_cell(i, center_y)
-        if backbone_size == 49:
-            return formation.map
+        
+        # if backbone_size == 99:
+        #     print("REACHED EDGE")
+        #     return formation.map
 
 
 
-        print("size: {}, backbone_size: {}, teeth_size: {}, divider_size: {}".format(size, backbone_size, teeth_size, divider))
+        #print("size: {}, backbone_size: {}, teeth_size: {}, divider_size: {}".format(size, backbone_size, teeth_size, divider))
 
         formation.add_cell(center_x, center_y)
 
@@ -233,8 +246,9 @@ class Player:
             formation.add_cell(center_x + 2 * i, center_y + 1 + tooth_offset)
             formation.add_cell(center_x - 2 * i, center_y - 1 - tooth_offset)
 
-
-        # show_amoeba_map(formation.map)
+        # global turn
+        # if turn > 79:
+        #     show_amoeba_map(formation.map)
         return formation.map
 
     def get_morph_moves(
@@ -257,6 +271,10 @@ class Player:
             for p in list(set(desired_points).difference(set(current_points)))
             if p in self.extendable_cells
         ]
+        potential_extends.sort(key=lambda p: p[1])
+
+        # show_amoeba_map(desired_amoeba, title="Desired Amoeba")
+        # show_amoeba_map(self.amoeba_map, potential_retracts, potential_extends, title="Current Amoeba, Potential Retracts and Extends")
 
         # Loop through potential extends, searching for a matching retract
         retracts = []
@@ -279,6 +297,27 @@ class Player:
                     potential_extends.remove(potential_extend)
                     break
 
+        # If we have moves remaining, try and get closer to the desired formation
+        # if len(extends) < self.num_available_moves and len(potential_retracts):
+        #     desired_extends = [p for p in list(set(desired_points).difference(set(current_points))) if p not in self.extendable_cells]
+        #     unused_extends = [p for p in self.extendable_cells if p not in extends]
+
+        #     for potential_retract in [p for p in potential_retracts]:
+        #         for desired_extend in desired_extends:
+        #             curr_dist = math.dist(potential_retract, desired_extend)
+
+        #             matching_extends = [p for p in unused_extends if self.check_move(retracts + [potential_retract], extends + [p])]
+        #             matching_extends.sort(key=lambda p: math.dist(p, desired_extend))
+
+        #             if len(matching_extends) and  math.dist(potential_retract, matching_extends[0]) < curr_dist:
+        #                 # show_amoeba_map(self.amoeba_map, [potential_retract], [matching_extends[0]])
+        #                 retracts.append(potential_retract)
+        #                 potential_retracts.remove(potential_retract)
+        #                 extends.append(matching_extends[0])
+        #                 unused_extends.remove(matching_extends[0])
+        #                 break
+
+        # show_amoeba_map(self.amoeba_map, retracts, extends, title="Current Amoeba, Selected Retracts and Extends")
         return retracts, extends
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
@@ -392,6 +431,14 @@ class Player:
         global turn
         turn += 1
 
+        if turn == 1:
+            print("Turn #{}".format(turn))
+            a = len(last_percept.bacteria)
+            b = len(last_percept.periphery)
+
+            print("Est. Density: ", (a/b))
+
+
         self.store_current_percept(current_percept)
 
         retracts = []
@@ -417,11 +464,17 @@ class Player:
             # if len(right_edge_cells) and len(left__edge_cells):
             #    curr_backbone_col = min(x for x, _ in curr_coords if x > CENTER_X) 
 
-
-
+            
             curr_coords = map_to_coords(self.amoeba_map)
-            curr_left_backbone = max(y for x, y in curr_coords if x < CENTER_X) # moving upward
-            curr_right_backbone = min(y for x, y in curr_coords if x > CENTER_X) # moving downward
+
+            try:
+                curr_left_backbone = max(y for x, y in curr_coords if x < CENTER_X) # moving upward
+                curr_right_backbone = min(y for x, y in curr_coords if x > CENTER_X) # moving downward
+            except Exception as e:
+                print(e)
+                curr_left_backbone = 0
+                curr_right_backbone = 0
+
 
             left_top_cells = [(x, y) for x, y in curr_coords if x < CENTER_X and y == 0]
             left_bottom_cells = [(x, y) for x, y in curr_coords if x < CENTER_X and y == constants.map_dim-1]

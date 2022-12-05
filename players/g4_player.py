@@ -3,6 +3,7 @@ from enum import Enum
 import logging
 import math
 import os
+import shutil
 import sys
 from typing import Optional
 
@@ -19,8 +20,16 @@ import constants
 #  Miscellaneous
 #------------------------------------------------------------------------------
 
+debug_png_dir = "render/debug"
 debug = 0
-debug_fig = None
+debug_since = 50
+turns = 0
+
+if debug:
+    if os.path.exists(debug_png_dir):
+        shutil.rmtree(debug_png_dir)
+
+    os.mkdir(debug_png_dir)
 
 
 #------------------------------------------------------------------------------
@@ -42,30 +51,30 @@ def visualize_reshape(
     occupiable: list[cell], retractable: list[cell],
     retract: list[cell], extend: list[cell]):
 
-    if not debug:
+    global turns
+    turns += 1
+
+    if not debug or turns < debug_since:
         return
 
-    # make sure we only create one plot for debugging
-    # before creating a new one, clear the old one for redrawing
-    global debug_fig
-    if debug_fig is None:
-        debug_fig = plt.subplots(1, 2)
-    else:
-        fig, _ = debug_fig
-        fig.clear()
-        debug_fig = fig, fig.subplots(1, 2)
+
+    axes = []
+    for fig_no in [2, 3]:
+        plt.figure(fig_no)
+        plt.cla()
+        plt.title(f"turn {turns}")
+        ax = plt.gca()
+        axes.append(ax)
+
+    ax1, ax2 = axes
     
-    fig, (ax1, ax2) = debug_fig
-
     # marker sizes
-    size_s = (mpl.rcParams['lines.markersize'] + 1.5) ** 2
-    size_m = (mpl.rcParams['lines.markersize'] + 2.5) ** 2
-    size_l = (mpl.rcParams['lines.markersize'] + 4) ** 2
+    size_xs = mpl.rcParams['lines.markersize'] / 4
+    size_s = (mpl.rcParams['lines.markersize'] / 4) ** 2
 
-    # common: ameoba & target
+    # common: ameoba
     for ax in [ax1, ax2]:
-        ax.plot(*list(zip(*target)), 'r.', label='target')
-        ax.plot(*list(zip(*ameoba)), 'g.', label='ameoba')
+        ax.plot(*list(zip(*ameoba)), 'g.', label='ameoba', markersize=size_xs)
 
     def scatter(ax: plt.Axes, pts: list[cell], **kwargs) -> None:
         if len(pts) == 0:
@@ -74,20 +83,13 @@ def visualize_reshape(
         ax.scatter(*list(zip(*pts)), **kwargs)
 
 
-    # subplot 1: occupiable, retractable
-    scatter(
-        ax1, occupiable, label='occupiable',
-        facecolors='none', edgecolors='tab:purple', s=size_s
-    )
-    scatter(
-        ax1, retractable, label='retractable',
-        facecolors='none', edgecolors='forestgreen', marker='s', s=size_l
-    )
+    # subplot 1: ameoba & target
+    ax1.plot(*list(zip(*target)), 'rs', label='target', markersize=size_s, markerfacecolor='none')
 
     # subplot 2: retract, extend, bacteria
     scatter(
         ax2, retract, label='retract',
-        facecolors='none', edgecolors='forestgreen', marker='s', s=size_l
+        facecolors='none', edgecolors='forestgreen', marker='s', s=size_s
     )
     scatter(
         ax2, extend, label='extend',
@@ -95,7 +97,7 @@ def visualize_reshape(
     )
     scatter(
         ax2, bacteria, label='bacteria',
-        facecolors='none', edgecolors='orange', marker='s', s=size_m
+        facecolors='none', edgecolors='orange', marker='s', s=size_s
     )
 
     # legend
@@ -107,7 +109,11 @@ def visualize_reshape(
         loc='upper center', bbox_to_anchor=(0.5, 1.1),
         ncol=5, fancybox=True, shadow=True
     )
-    fig.tight_layout()
+
+    plt.figure(2)
+    plt.savefig(f"render/debug/fig2_{turns}", dpi=300)
+    plt.figure(3)
+    plt.savefig(f"render/debug/fig3_{turns}", dpi=300)
 
     # switch back to figure 1: ameoba simulator
     plt.figure(1)
@@ -180,9 +186,6 @@ def retract_k(
     Note: This function might return n < k cells to retract because retracting any
     more cells would cause separation.
     """
-    if k >= len(choices):
-        return choices
-
     def exposure(cell) -> int:
         x, y = cell
         exposure = 0
@@ -205,19 +208,28 @@ def retract_k(
         reverse=True
     )
 
-    retract, i = [], 0
-    while len(retract) < k and i < len(sorted_choices):
-        cell, _ = sorted_choices[i]
-        _retract = retract + [cell]
-        _moves = possible_moves[:len(_retract)]
+    # fast path: optimistically try if selecting topk, return if
+    # it passes check_move, in the best case this reduces # invocations
+    # of check_moves from O(max(len(choices), len(possible_moves))) to 1
+    _k = min(k, len(choices), len(possible_moves))
+    top_k = [ cell for cell, _ in sorted_choices[:_k] ]
+    if check_move(top_k, possible_moves[:_k], state):
+        return top_k
 
-        # only add a cell to retract if it doesn't cause separation
-        if check_move(_retract, _moves, state):
-            retract.append(cell)
+    # slow path: use binary search to find the first prefix that passes
+    # check_move. With a maximum ameoba size of 10,000, the number of
+    # invocations to check_move is capped at around 14 ~ log_2(10,000)
+    lo, hi = 0, _k
+    while lo <= hi:
+        mid = math.floor((lo + hi) / 2)
+        prefix = [ cell for cell, _ in sorted_choices[:mid] ]
 
-        i += 1
+        if check_move(prefix, possible_moves[:mid], state):
+            return prefix
+        else:
+            hi = mid - 1
 
-    return retract
+    return []
 
 def check_move(
     retract: list[cell],
@@ -284,6 +296,7 @@ class Strategy(ABC):
         self.metabolism = metabolism
         self.shifted = 1
         self.rotation = 0
+        self.vertical_comb_center = 50
 
     @abstractmethod
     def move(
@@ -291,6 +304,13 @@ class Strategy(ABC):
     ) -> tuple[list[cell], list[cell], int]:
 
         pass
+
+    def _get_cog(self, curr_state: AmoebaState) -> tuple[int, int]:
+        """Compute center of gravity of current Ameoba."""
+        ameoba_cells = np.array(list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value))))
+        cog = (round(np.average(ameoba_cells[:,0])),round(np.average(ameoba_cells[:,1])))
+
+        return cog
     
     def _reshape(
         self,
@@ -319,6 +339,7 @@ class Strategy(ABC):
         ) 
 
         ameoba_cells = list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value)))
+        #print(ameoba_cells)
         unoccupied_target_cells = target - set(ameoba_cells)
         to_occupy = set(occupiable_cells).intersection(unoccupied_target_cells)
 
@@ -368,7 +389,166 @@ class RandomWalk(Strategy):
 
         return retract, movable, info
 
+class BoxFarm(Strategy):
+
+    def _make_box(self, size, top_left_corner):
+        #perimeter = math.floor(size/4)
+        square_length = (size // 4) + 1
+        extra = size % 4
+        box_cells = []
+        for i in range(square_length):
+            for j in range(square_length):
+                if i == 0 or i == square_length - 1 or j == 0 or j == square_length - 1:
+                    box_cells.append((i + top_left_corner[0], j + top_left_corner[1]))
+        for i in range(extra):
+            box_cells.append((top_left_corner[0], top_left_corner[1] + square_length + i))
+        return box_cells
+
+    def _sweep(self, size, ameoba_cells):
+        # print('sweep')
+        left_x = min(ameoba_cells[:,0])
+        # print(left_x)
+        left_ind = np.where(ameoba_cells[:,0]==left_x)
+        # print(left_ind)
+        sweep_arm = ameoba_cells[left_ind]
+        # print(sweep_arm)
+        # print(ameoba_cells)
+        # print()
+        return sweep_arm
+
+    def _init(self, ameoba_cells, size, corner):
+        square_length = math.floor(math.sqrt(size)) + 1
+        minx, miny = min(ameoba_cells[:,0]), min(ameoba_cells[:,1])
+        if corner == 0:
+            top_right_corner = (minx+square_length-2,miny)
+           # print(top_right_corner)
+        else:
+            top_right_corner = (corner, miny)
+        box_cells = self._make_box(size, top_right_corner)
+        return box_cells, top_right_corner
+
+    def move(
+        self, prev_state: AmoebaState, state: AmoebaState, memory: int
+    ) -> tuple[list[cell], list[cell], int]:
+        
+        size = (state.current_size)
+        ameoba_cells = np.array(list(zip(*np.where(state.amoeba_map == State.ameoba.value))))
+
+        ameoba_cells_set = list(set([tuple(ti) for ti in ameoba_cells]))
+        loop = True
+        while loop:
+            loop = False
+            mem = f'{memory:b}'
+            while len(mem) < 8:
+                mem = '0' + mem
+            initialize = int(mem[0])
+            corner = int(mem[1:],2)
+            if initialize == 0:
+                target_cells, corner_new = self._init(ameoba_cells,size,corner)
+                #print(target_cells)
+                mem_corner = f'{corner_new[0]:b}'
+                while len(mem_corner) < 8:
+                    mem_corner = '0' + mem_corner
+                mem = mem_corner
+                over = len(set(ameoba_cells_set))
+                if set(target_cells) == set(ameoba_cells_set):
+                    initialize = 1
+                    mem_initialize = f'{initialize:b}'
+                    mem = mem_initialize + mem[1:]
+
+            if initialize == 1:
+                print("SWEEP")
+                sweep_cells = self._sweep(size, ameoba_cells)
+                sweep_cells_set = list(set([tuple(ti) for ti in sweep_cells]))
+                #target_cells = list(set(ameoba_cells_set) - set(sweep_cells_set))
+                target_cells, corner_new2 = self._init(ameoba_cells,size,corner)
+                # print(target_cells)
+
+                x = sweep_cells[0][0]
+                res = [list(ele) for ele in target_cells]
+                res = np.array(res)
+             
+                ind = np.where(res[:,0]<=x)
+                #past_cells = np.array(list(zip(*np.where(ameoba_cells[:,0]<=x))))
+                #print(past_cells)
+                # print(res)
+
+                past_cells = res[ind]
+                # print(past_cells)
+                past_cells_set = list(set([tuple(ti) for ti in past_cells]))
+                target_cells_set = list(set([tuple(ti) for ti in target_cells]))
+                target_cells = list(set(target_cells_set) - set(past_cells_set))
+                # print(target_cells)
+                y = min(ameoba_cells[:,1])
+                square_length = (size // 4) + 1
+                leftover = (size % 4)
+                ready = False
+                for i in range(square_length-2):
+                    point = ((x+1,y+1+i))
+                    if point in target_cells:
+                        ready = True
+                    target_cells.append(point)
+                    
+                for i in range(leftover):
+                    point = ((x+1,y+square_length+i))
+                    target_cells.append(point)
+                # print(leftover)
+                # print(len(past_cells))
+                # print(square_length-2)
+                # print((len(past_cells) - (square_length - 2) - leftover)//2)
+                for i in range((len(past_cells) - (square_length-2)-leftover)//2):
+                    print(i)
+                    target_cells.append((corner+square_length+i,y))
+                    target_cells.append((corner+square_length+i,y+square_length-1))
+                # print(target_cells)
+                print(target_cells)
+                print(ameoba_cells)
+                if (set(target_cells)) == (set(ameoba_cells_set)) or ready:#or set(target_cells) < set(ameoba_cells_set):
+                    print("TESTING TESTING")
+                    min_y = min(ameoba_cells[:,1])
+                    min_ind = np.where(ameoba_cells[:,1]==min_y)
+                    top = ameoba_cells[min_ind]
+                    corner = min(ameoba_cells[:,0]) + 1
+                    initialize = 0
+                    mem_corner = f'{corner:b}'
+                    while len(mem_corner) < 8:
+                        mem_corner = '0' + mem_corner
+                    mem = mem_corner
+                    memory = int(mem,2)
+                    loop = True
+            
+            # for cell in sweep_cells:
+            #     if cell[1] == miny or cell[1] == maxy:
+            #         target_cells.append((cell[0],cell[1]))
+            #     else:
+            #         target_cells.append((cell[0]+1,cell[1]))
+
+        #target_cells = self._get_target_cells(size, ameoba_cells)
+
+        memory = int(mem,2)
+        #print(target_cells)
+        return self._reshape(state, memory, set(target_cells))
+
+
 class BucketAttack(Strategy):
+
+    def __init__(self, metabolism, bucket_width=1, shift_n=-1, v_size=200):
+        """Initializes BucketAttack.
+        
+        kwargs:
+          bucket_width: # cells between bucket arms, default to 1
+          shift_n: shift bucket arms up/down every n turns, acceptable n value
+                   is [1, 16], otherwise the shifting behavior is disabled
+        """
+        super().__init__(metabolism)
+        self.bucket_width = bucket_width
+        self.shift_enabled = shift_n >= 1 and shift_n <= 16
+        self.shift_n = shift_n
+        self.v_size = v_size
+
+        # derived statistics
+        self.wall_cost = self.bucket_width + 1
+        self.bucket_cost = 2 * self.wall_cost + 1 # 1 is cost of bucket arm
     
     def _spread_vertically(
         self,
@@ -388,8 +568,43 @@ class BucketAttack(Strategy):
         y_top    = y_center + step * upper_cnt
         y_bottom = y_center - step * lower_cnt
         y_spreads = np.linspace(y_bottom, y_top, cnt, True, dtype=int)
-
         return y_spreads
+
+    def _spread_horizontally(
+            self,
+            x_center: int,
+            left_cnt: int,
+            right_cnt: int,
+            step=1
+    ) -> np.ndarray:
+        """Returns a list of x-values by spreading around x_center."""
+
+        cnt = right_cnt + 1 + left_cnt
+        x_right = x_center + step * right_cnt
+        x_left = x_center - step * left_cnt
+        x_spreads = np.linspace(x_left, x_right, cnt, True, dtype=int)
+        return x_spreads
+
+    def _spread_diagonally(self,size: int, cog: cell, up_or_down: int)-> list[cell]:
+        # TODO
+        x_cog,y_cog = cog
+        cur = 0
+        cur_x = x_cog
+        cur_y = y_cog
+        targets = []
+        while cur < size:
+            cur_x -= 1
+            targets.append(((cur_x) % 100, cur_y % 100))
+            cur += 1
+
+            if cur < size:
+                cur_y += up_or_down
+                targets.append(((cur_x) % 100, cur_y % 100))
+                cur += 1
+            if cur_x%100 == 0:
+                print("reach edge",len(targets))
+        print(targets)
+        return targets
 
     def _get_target_cells(self, size: int, cog: cell, xmax: int) -> list[cell]:
         """Returns the cells of the target shape by centering vertically on
@@ -399,30 +614,26 @@ class BucketAttack(Strategy):
         @size: current size of ameoba
         @cog: center of gravity for the target shape (only y-value used currently)
         """
+        wall_cost = self.wall_cost
+        bucket_cost = self.bucket_cost
 
         _, y_cog = cog
-        buckets, orphans = divmod(size - 3, 7)
+        buckets, orphans = divmod(size - 3, bucket_cost)
         upper_buckets, lower_buckets = math.ceil(buckets / 2), math.floor(buckets / 2)
 
         inner_wall_cell_ys = self._spread_vertically(
             y_cog,
-            3 * upper_buckets,
-            3 * lower_buckets
+            wall_cost * upper_buckets,
+            wall_cost * lower_buckets
         )
         outer_wall_cell_ys = self._spread_vertically(
             y_cog,
-            3 * upper_buckets,
-            3 * lower_buckets + orphans
+            wall_cost * upper_buckets,
+            wall_cost * lower_buckets + orphans
         )
         arm_cell_ys = self._spread_vertically(
-            y_cog, upper_buckets, lower_buckets , step=3
+            y_cog, upper_buckets, lower_buckets , step=wall_cost
         )
-
-        if self.shifted == 1:
-            min_y = min(arm_cell_ys)
-            max_y = max(arm_cell_ys)
-            arm_cell_ys = [y - 1 for y in arm_cell_ys if y != min_y and y != max_y] + [max_y, min_y]
-            print("SHIFTED")
 
         wall_cells = (
             [ ( xmax % 100,       y % 100 ) for y in inner_wall_cell_ys ] +
@@ -432,13 +643,46 @@ class BucketAttack(Strategy):
 
         return wall_cells + arm_cells
 
-    # def _shift(self, target_cells:list[cell], xmax: int) -> list[cell]:
-    #     """Shift arm down"""
-        
-    #     for cell in target_cells:
-    #         if cell[1] == xmax:
-    #             cell[1] -= 1
-    #     return target_cells
+    def _get_horizontal_comb_target_cells(self, size: int, cog: cell, ymax: int) -> list[cell]:
+        """Returns the cells of the target shape by centering vertically on
+        the y-value of Ameoba's center of gravity and placing the bucket arms
+        on the column of Ameoba's rightmost cell.
+
+        @size: current size of ameoba
+        @cog: center of gravity for the target shape (only y-value used currently)
+        """
+
+        x_cog, _ = cog
+        buckets, orphans = divmod(size - 3, 7)
+        left_buckets, right_buckets = math.ceil(buckets / 2), math.floor(buckets / 2)
+
+        inner_wall_cell_xs = self._spread_horizontally(
+            x_cog,
+            3 * left_buckets,
+            3 * right_buckets
+        )
+        outer_wall_cell_xs = self._spread_horizontally(
+            x_cog,
+            3 * left_buckets,
+            3 * right_buckets+ orphans
+        )
+        arm_cell_xs = self._spread_horizontally(
+            x_cog, left_buckets, right_buckets , step=3
+        )
+
+        if self.shifted == 1:
+            min_x = min(arm_cell_xs)
+            max_x = max(arm_cell_xs)
+            arm_cell_xs = [x - 1 for x in arm_cell_xs if x != min_x and x != max_x] + [max_x, min_x]
+            print("SHIFTED")
+
+        wall_cells = (
+            [ ( x % 100,       ymax % 100 ) for x in inner_wall_cell_xs ] +
+            [ ( x % 100,  (ymax-1) % 100 ) for x in outer_wall_cell_xs ]
+        )
+        arm_cells = [ ( x % 100, (ymax+1) % 100 ) for x in arm_cell_xs ]
+
+        return wall_cells + arm_cells
 
     def _get_rectangle_target(self, size: int, cog: cell, xmax: int) -> list[cell]:
         _, y_cog = cog
@@ -460,8 +704,78 @@ class BucketAttack(Strategy):
                 [(xmax % 100, y % 100) for y in inner_wall_cell_ys] +
                 [((xmax + 1) % 100, y % 100) for y in outer_wall_cell_ys]
         )
-
         return wall_cells
+
+    def _get_bridge_V_target_cells(self, size: int, cog: cell, xmax: int) -> list[cell]:
+        _, y_cog = cog
+        comb_size=min(290,size)
+        bridge_size=min(200,size-comb_size)
+        extra_cells_size=size-comb_size-bridge_size
+
+        comb_targets=self._get_target_cells(comb_size,cog,xmax)
+
+        if bridge_size>0:
+            print("have bridge",size, comb_size,bridge_size)
+            bridge_length,orphan=divmod(bridge_size,2)
+            if xmax>50:
+                if xmax-bridge_length > 50:
+                    upper_bridge_cells=[(cur_x,y_cog) for cur_x in range(xmax-bridge_length,xmax)]
+                    lower_bridge_cells=[(cur_x,y_cog-1) for cur_x in range(xmax-bridge_length-orphan,xmax)]
+                    bridge_targets= upper_bridge_cells+lower_bridge_cells
+                    return comb_targets + bridge_targets
+                else:
+                    bridge_length = xmax - 50
+                    upper_bridge_cells = [(cur_x, y_cog) for cur_x in range(xmax - bridge_length, xmax)]
+                    lower_bridge_cells = [(cur_x, y_cog - 1) for cur_x in range(xmax - bridge_length, xmax)]
+                    bridge_targets = upper_bridge_cells + lower_bridge_cells
+                    bridge_size = len(bridge_targets)
+                    v_size = min(self.v_size, size - comb_size - bridge_size)
+                    v_targets = self._get_vshape_target(v_size, (50, 50))
+                    #print("Grow V", size, comb_size, bridge_size, v_size)
+                    horizontal_comb_size = size - comb_size - bridge_size - v_size
+                    if horizontal_comb_size > 0:
+                         comb_targets = self._get_target_cells(comb_size + horizontal_comb_size, cog, xmax)
+                    return comb_targets + bridge_targets + v_targets
+
+            else:
+                    left_upper_bridge_cells = [(cur_x, y_cog) for cur_x in range(0, xmax)]
+                    left_lower_bridge_cells = [(cur_x, y_cog - 1) for cur_x in range(0, xmax+orphan)]
+
+                    right_upper_bridge_cells = [(cur_x, y_cog) for cur_x in range(50, 100)]
+                    right_lower_bridge_cells = [(cur_x, y_cog - 1) for cur_x in range(50,100)]
+                    bridge_targets = left_upper_bridge_cells + left_lower_bridge_cells+right_upper_bridge_cells+right_lower_bridge_cells
+                    #print("wrapped around bridge target:",bridge_targets)
+                    #print("wrapped around comb target:",comb_targets)
+                    bridge_size = len(bridge_targets)
+                    v_size = min(self.v_size, size - comb_size - bridge_size)
+                    v_targets = self._get_vshape_target(v_size, (50, 50))
+                    horizontal_comb_size = size - comb_size - bridge_size - v_size
+                    if horizontal_comb_size > 0:
+                        comb_targets = self._get_target_cells(comb_size + horizontal_comb_size, cog, xmax)
+                    return comb_targets + bridge_targets + v_targets
+
+
+        return comb_targets
+
+    def _get_vshape_target(self, size: int, cog: cell) -> list[cell]:
+        arm_length =size//2
+        #print("upper")
+        upper_arm= self._spread_diagonally(arm_length, cog, 1)
+        #print(f"len(upper bridge cells): {len(set(upper_arm))}")
+        #print("lower")
+        lower_arm= self._spread_diagonally(arm_length, cog, -1)
+        #print(f"len(upper bridge cells): {len(set(lower_arm))}")
+        arm_cells = upper_arm+lower_arm
+        return arm_cells
+
+    def _get_bridge_target(self, size: int, cog: cell) -> list[cell]:
+        bridge_cells=[]
+        x_cog,y_cog= cog
+        cur_x=x_cog
+        for i in range(size):
+            bridge_cells.append((cur_x, y_cog))
+            cur_x-=1
+        return bridge_cells
 
     def _get_cog(self, curr_state: AmoebaState) -> tuple[int, int]:
         """Compute center of gravity of current Ameoba."""
@@ -482,19 +796,33 @@ class BucketAttack(Strategy):
                                           .      .
                                           .      .
                         .                 .      .
-                      (xmax)
+                      (xmax
         """
-        ameoba_xs, _ = np.where(curr_state.amoeba_map == State.ameoba.value)
-        xmin, xmax = min(ameoba_xs), max(ameoba_xs)
 
-        # TODO: 5 is a magic number that should work... This is hacky though.
-        if xmax == 99 and xmin < 5:
-            xs = ameoba_xs[ameoba_xs <= 5]
-            return max(xs)
+        # we concatenate the ameoba map along the x-axis forming a 200 * 100 map
+        #               x = 0 ... x = 99 x=100 ... x=199
 
-        return xmax
+        ameoba_map = np.vstack((curr_state.amoeba_map, curr_state.amoeba_map))
+        ameoba_xs, _ = np.where(ameoba_map == State.ameoba.value)
 
-    def _in_shape(self, curr_state: AmoebaState) -> bool:
+        # we operate a subset (x=50 -> x=149) of this new map to find @xmax by
+        # searching from xmax=xmin, and increment xmax whenever we see a x-value
+        # immediately larger by 1
+        x_filter = (ameoba_xs >= constants.map_dim / 2) & (ameoba_xs < constants.map_dim * 1.5)
+        xs = sorted(set(ameoba_xs[x_filter]))
+        xmax = min(xs)
+        for x in xs:
+            xmax += int(x == xmax + 1)
+
+        return xmax % constants.map_dim
+
+    def _reach_border(self, curr_state: AmoebaState) -> bool:
+        _, ameoba_ys = np.where(curr_state.amoeba_map == State.ameoba.value)
+        lower_bound, upper_bound = min(ameoba_ys), max(ameoba_ys)
+
+        return abs(upper_bound - lower_bound) >= 98
+
+    def _in_shape(self, xmax: int, curr_state: AmoebaState) -> bool:
         """Returns a bool indicating if our bucket arms are in shape.
         
         In our implementation, *no memory bit* is needed to store information
@@ -510,9 +838,12 @@ class BucketAttack(Strategy):
         that we don't risk moving and not able to eat any bacteria along the
         way.
         """
-        xmax = self._get_xmax(curr_state)
-        arms_expected = 1 + math.floor((curr_state.current_size - 3) / 7)
         arms_got = len(np.where(curr_state.amoeba_map[xmax,:] == State.ameoba.value)[0])
+
+        if not self._reach_border:
+            arms_expected = 1 + math.floor((curr_state.current_size - 3) / self.bucket_cost)
+        else:
+            arms_expected = 2 * ((constants.map_dim / 2 - 1) // (self.bucket_width + 1) + 1)
 
         return arms_got >= arms_expected
 
@@ -520,51 +851,78 @@ class BucketAttack(Strategy):
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
     ) -> tuple[list[cell], list[cell], int]:
 
-        size = (state.current_size)
+        # ----------------
+        #  Decode Memory
+        # ----------------
+        mem = f'{memory:b}'.rjust(8, '0')
+        old_xmax = int(mem[:7], 2)
+        shifted = int(mem[-1])
 
-        SHIFTING = True
-        SHIFT_N = 16 #must be <= 16 currently
+        # ---------------
+        #  State Update
+        # ---------------
+        # rotation counter & shifted
+        rotation = (old_xmax + 1) % self.shift_n
+        if self.shift_enabled and rotation == 0:
+            shifted = shifted ^ 1
 
-        # TODO: maybe not always shifting horizontally?
-        # cog = self._get_cog(state if np.any(prev_state.amoeba_map) else prev_state)
-        cog  = (50, 50)
+        # arm_xval
+        if not self._reach_border(state):
+            xmax = self._get_xmax(state)
+        else:
+            xmax = old_xmax + 1
 
-        # x-value of bucket arms
-        arm_xval = self._get_xmax(state)
-        if not self._in_shape(state):
-            arm_xval -= 1
+        if not self._in_shape(xmax % 100, state):
+            arm_xval = (xmax - 1) % 100
+        else:
+            arm_xval = xmax % 100
 
- 
-        mem = f'{memory:b}'
-        while len(mem) < 8:
-            mem = '0' + mem
-        self.rotation = int(mem[-4:],2)
-        self.shifted = int(mem[-5])
-        if arm_xval >= 0:
-            self.rotation = (self.rotation + 1) % SHIFT_N
-            lsb2 = f'{self.rotation:b}'
-            #if len(lsb2) == 1:
-            while len(lsb2) < 4:
-                lsb2 = '0' + lsb2
-            mem = mem[:-4] + lsb2
-        if self.rotation == 0 and arm_xval >= 0:
-            self.shifted = self.shifted ^ 1
-            if not(SHIFTING):
-                self.shifted = 0
-            mem  = mem[:-5] + f'{self.shifted:b}' + mem[-4:]
-        target_cells = self._get_target_cells(size, cog, arm_xval)
-        memory = int(mem,2)
+        # ----------------
+        #  Update Memory
+        # ----------------
+        arm_xval_bin = '{0:07b}'.format(arm_xval)
+        shifted_bin  = '{0:01b}'.format(shifted)
+        memory = int(arm_xval_bin + shifted_bin, 2)
 
-        normal_retract, _,_=self._reshape(state, memory, set(target_cells))
-        if len(normal_retract)==0:
+
+        size = state.current_size
+        # TODO: maybe not always moving horizontally?
+        if shifted:
+            cog = (50, 49)
+        else:
+            cog  = (50, 50)
+
+        # -----------------------
+        #  compute target shape
+        # -----------------------
+        # TODO: if reach boder, return comb+1cell each step as the bridge + Vshape
+        # need about 290 cells to reach border
+        if self._reach_border(state):
+            target_cells = self._get_bridge_V_target_cells(size, cog, arm_xval)
+        else:
+            target_cells = self._get_target_cells(size, cog, arm_xval)
+
+        # ----------------------------------
+        #  compute moves: retract & extend
+        # ----------------------------------
+        # TODO: need to modify normal_retract to fit the V_shape
+        retract, extend, memory = self._reshape(state, memory, set(target_cells))
+
+        if len(retract) > 0:
+            return retract, extend, memory
+        else:
             target_cells = self._get_rectangle_target(size, cog, arm_xval)
-
-        return self._reshape(state, memory, set(target_cells))
+            return self._reshape(state, memory, set(target_cells))
 
 
 #------------------------------------------------------------------------------
-#  Group 3 Ameoba
+#  Group 4 Ameoba
 #------------------------------------------------------------------------------
+
+BUCKET_WIDTH = 1
+SHIFT_CYCLE  = -1
+V_SIZE = 400
+
 
 class Player:
     def __init__(
@@ -594,7 +952,13 @@ class Player:
 
         self.strategies = dict(
             random_walk=RandomWalk(metabolism, rng),
-            bucket_attack=BucketAttack(metabolism)
+            box_farm=BoxFarm(metabolism),
+            bucket_attack=BucketAttack(
+                metabolism,
+                bucket_width=BUCKET_WIDTH,
+                shift_n=SHIFT_CYCLE,
+                v_size=V_SIZE
+            )
         )
 
     def move(
@@ -627,7 +991,10 @@ class Player:
 
         # TODO: dynamically select a strategy, possible factors:
         # current_size, metabolism, etc
-        strategy = "bucket_attack"
+        if self.goal_size <= 64:
+            strategy="box_farm"
+        else:
+            strategy = "bucket_attack"
 
         return self.strategies[strategy].move(last_percept, current_percept, info)
 
