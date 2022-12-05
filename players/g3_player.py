@@ -250,7 +250,19 @@ class Player:
                 break
 
             matching_retracts = list(potential_retracts)
+
+            # 1
             matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))
+
+            # 2
+            # slows down dramatically...sometimes better/worse score
+            '''neighbors = {}
+            for retract in matching_retracts:
+                get_neighbors = self.find_movable_neighbor(retract[0], retract[1], 
+                    self.amoeba_map, self.bacteria)
+                neighbors[retract] = len(get_neighbors)
+
+            matching_retracts = list(dict(sorted(neighbors.items(), key=lambda x: x[1])).keys())'''
 
             for i in range(len(matching_retracts)):
                 retract = matching_retracts[i]
