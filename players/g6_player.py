@@ -366,6 +366,8 @@ class Player:
         tentacle_one = tentacle_one[0]
         tentacle_two = row_cells[-2]
         tentacle_two = tentacle_two[0]
+        tentacle_three = row_cells[-3]
+        tentacle_three = tentacle_three[0]
 
         for row in range(top_side, bottom_side):
            # print(row)
@@ -386,7 +388,7 @@ class Player:
 
                 num_column = np.size(np.where(amoeba_loc[:, 0] == col)[0])
 
-                if num_column > 1 and col != tentacle_one and col != tentacle_two:
+                if num_column > 1 and col != tentacle_one and col != tentacle_two and col != tentacle_three:
                     #cell = (col, row)
                     cell = (col % 100, row % 100)
                     if cell in periphery:
@@ -396,7 +398,7 @@ class Player:
                         #self.logger.info(f'cell idx : {np.where(cell_idx == True)[0]}')
                         amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx == True)[0], axis=0)
 
-        print("retract", retract_list)
+        print("retract sweep", retract_list)
         #print(amoeba_loc)
         #quit()
         return retract_list
