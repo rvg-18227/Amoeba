@@ -350,7 +350,7 @@ class Player:
             row_array = np.where(amoeba_loc[:, 1] == row)[0]
             row_cells = amoeba_loc[row_array]
             row_len = len(row_cells)
-            if row_len >= max_row_length:
+            if row_len >= max_row_length -1:
                 max_row_length = row_len
                 max_row = row
 
