@@ -23,19 +23,19 @@ class Drawer:
         self.save()
     
     def _draw_extend(self, coord):
-        x = np.array(coord)[:, 0] % 100
-        y = np.array(coord)[:, 1] % 100
+        x = np.array(coord)[:, 0]
+        y = np.array(coord)[:, 1]
         self.base[x, y] = EXTEND_COLOR
     
     def _draw_retract(self, coord):
-        x = np.array(coord)[:, 0] % 100
-        y = np.array(coord)[:, 1] % 100
+        x = np.array(coord)[:, 0]
+        y = np.array(coord)[:, 1]
         self.base[x, y] = RETRACT_COLOR
     
     def _draw_amoeba(self, current_percept):
         coord = np.stack(np.where(current_percept.amoeba_map != 0), axis= 1)
-        x = np.array(coord)[:, 0] % 100
-        y = np.array(coord)[:, 1] % 100
+        x = np.array(coord)[:, 0]
+        y = np.array(coord)[:, 1]
         self.base[x, y] = AMOEABA_COLOR
     
     def clear_graph(self):
@@ -44,13 +44,10 @@ class Drawer:
     def save(self, name='tmp.png'):
         plt.imsave(name, self.base.astype(np.uint8))
 
-drawer = Drawer()
-
 class Player:
     def __init__(self, rng: np.random.Generator, logger: logging.Logger, metabolism: float, goal_size: int,
                  precomp_dir: str) -> None:
         """Initialise the player with the basic amoeba information
-
             Args:
                 rng (np.random.Generator): numpy random number generator, use this for same player behavior across run
                 logger (logging.Logger): logger use this like logger.info("message")
@@ -79,10 +76,10 @@ class Player:
         self.metabolism = metabolism
         self.goal_size = goal_size
         self.current_size = goal_size / 4
+        self.drawer = Drawer()
 
     def move(self, last_percept, current_percept, info) -> (list, list, int):
         """Function which retrieves the current state of the amoeba map and returns an amoeba movement
-
             Args:
                 last_percept (AmoebaState): contains state information after the previous move
                 current_percept(AmoebaState): contains current state information
@@ -126,6 +123,7 @@ class Player:
             ##amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
             #amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
            # bottom_side = np.max(amoeba_loc[:, 1])
+
             expand_list = self.box_to_sweeper_expand(
                     amoeba_map, int(self.current_size*self.metabolism))
             retract_list = self.box_to_sweeper_retract(
@@ -144,7 +142,7 @@ class Player:
         self.logger.info(f'retract: {retract_list}')
         self.logger.info(f'expand: {expand_list}')
 
-        drawer.draw(current_percept, retract_list[:mini], expand_list[:mini])
+        self.drawer.draw(current_percept, retract_list[:mini], expand_list[:mini])
         return retract_list[:mini], expand_list[:mini], info+1
 
     def concat_map(self, amoeba_map, split, split_row):
@@ -350,7 +348,7 @@ class Player:
             row_array = np.where(amoeba_loc[:, 1] == row)[0]
             row_cells = amoeba_loc[row_array]
             row_len = len(row_cells)
-            if row_len >= max_row_length:
+            if row_len >= max_row_length -1:
                 max_row_length = row_len
                 max_row = row
 
@@ -513,9 +511,63 @@ class Player:
                     amoeba_end = True
 
         return split, split_row
+
+    def get_continuous_chunk(self, array, start):
+            """Get continuous chunk of an array starting from start
+            Args:
+                array (np.array): 1D np array
+                start (int): where to start
+            """
+            assert(array[start] == 1)
+            chunks = []
+            for i in range(100):
+                if array[(start + i) % 100] == 1:
+                    chunks.append((start + i) % 100)
+                else:
+                    break
+            return chunks
+    
+    def locate_tenticle(self, amoeba_map, tentacle_column, split=False):
+        """Locate the moving tenticle of the amoeba
+        
+        Args:
+            amoeba_map (np.array): The current amoeba map
+            tenticle_length (int): The length of the tenticle
+            
+        
+        Returns:
+            list: The location of the cell on tenticle
+        """
+        # ASSUMPTION: the based row is the one with the maximum number of cell
+        base_row = np.argmax(np.sum(amoeba_map, axis=0))
+        tenticle_start_row = (base_row + 1) % 100
+        # get the chunk of the moving tenticle
+        chunk = self.get_continuous_chunk(amoeba_map[tentacle_column, :], tenticle_start_row)
+        return chunk
+        
+    def is_singular(self, amoeba_map, tentacle_column, chunks):
+        """Check if the tenticle is singular
+        Args:
+            amoeba_map (np.array): 2d np array
+            tenticle_column (int): column of the moving tenticle (0 - 99)
+            chunks (list[int]): rows of the moving tenticle
+        """
+        # check two side of the column
+        for i in chunks:
+            if amoeba_map[(tentacle_column + 1) % 100, i] == 1 or amoeba_map[(tentacle_column - 1) % 100, i] == 1:
+                return False
+        # check tip of the column
+        if amoeba_map[tentacle_column, chunks[-1] + 1] == 1:
+            return False 
+        return True
     
     def relocate_extra_cells(self, amoeba_map, tentacle_column, chunks):
         pass    
+    
+    def move_tenticle(self, tentacle_column, chunks):
+        retract = [(tentacle_column, i) for i in chunks]
+        extend = [((tentacle_column + 1) % 100, i) for i in chunks]
+        return retract, extend
     
     def is_singular_chunk(self, array):
         start = array.argmax()
@@ -526,22 +578,28 @@ class Player:
     
     def close_in(self, amoeba_map):
         """Close in function for clashing formation
-
         Args:
             amoeba_map (_type_): 2d np array
             tenticle_column(int): column of the moving tenticle (0 - 99)
         """
+        # locate the moving tenticle
+        #tenticle_length = self.size * self.metabolism
+        #moving_tenticle = None
+        # possible for new cell eaten such that tenticle_length increases between moves
+        #while moving_tenticle is None:
         start_row = np.argmax(np.sum(amoeba_map, axis=0)) + 1
+        # assume no spliting
+        # move right most cell to the adjacent left location
         extract = []
         extend = []
         for i in range(start_row, start_row+100):
-            if amoeba_map[:, i % 100].sum() == 0:
+            if amoeba_map[:, i].sum() == 0:
                 # reach the end
                 break
-            if self.is_singular_chunk(amoeba_map[:, i % 100]):
+            if self.is_singular_chunk(amoeba_map[:, i]):
                 # singular chunk, no need to move
                 continue
-            row_reverse = amoeba_map[:, i % 100][::-1]
+            row_reverse = amoeba_map[:, i][::-1]
             right_most_cell = len(row_reverse) - np.argmax(row_reverse) - 1
             for j in range(right_most_cell, -1, -1):
                 curr_cell = amoeba_map[(j)%100, i]
@@ -551,5 +609,3 @@ class Player:
                     extend.append((j-1, i % 100))
                     break
         return extract, extend
-            
-            
