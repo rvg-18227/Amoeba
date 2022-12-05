@@ -159,25 +159,25 @@ class Player:
         offsets = {(0,0), (0,1), (0,-1), (1,1), (1,-1)}
         total_cells = self.current_size-5
         if shape == 0:
-            i = 2
-            j = 1
+            i = 1
+            j = 2
             while total_cells > 0:
                 if total_cells < 6:
                     if total_cells > 1:
                         # If possible add evenly
-                        offsets.update({(i,j), (-i,j)})
+                        offsets.update({(i,j), (i,-j)})
                         total_cells-=2
-                        j+=1
+                        i+=1
                     else:
                         # Add last remaining to left arm
                         offsets.update({(i, j)})
                         total_cells-=1
                 else:
                     # if there are at least 6 add 3 to each side
-                    offsets.update({(i, j), (i,j+1), (i, j+2), (-i, j), (-i,j+1), (-i, j+2)})
+                    offsets.update({(i, j), (i+1,j), (i+2, j), (i, -j), (i+1,-j), (i+2, -j)})
                     total_cells -= 6
-                    i+=1
-                    j+=2
+                    i+=2
+                    j+=1
         elif shape == 1:
             j = 2
             step = 0
