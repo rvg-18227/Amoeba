@@ -130,6 +130,8 @@ class Player:
                     amoeba_map, current_percept.periphery, int(self.current_size*self.metabolism))
             if stage == 2 and len(retract_list) == 0:  
                 # Close in
+                col_one = self.find_first_tentacle(amoeba_map)
+                print(col_one)
                 print('close_in')
                 retract_list, expand_list = self.close_in(amoeba_map)
             
@@ -462,6 +464,32 @@ class Player:
 
         print("expand", expand_cells)
         return expand_cells
+
+    def find_first_tentacle(self, amoeba_map):
+        amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
+        amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
+        top_side = np.min(amoeba_loc[:, 1])
+        bottom_side = np.max(amoeba_loc[:, 1])
+
+        max_row_length = np.NINF
+        max_row = np.NINF
+        for row in range(top_side, bottom_side + 1):
+            row_array = np.where(amoeba_loc[:, 1] == row)[0]
+            row_cells = amoeba_loc[row_array]
+            row_len = len(row_cells)
+
+            if row_len >= max_row_length:
+                max_row_length = row_len
+                max_row = row
+
+        row_use = np.where(amoeba_loc[:, 1] == max_row)[0]
+        row_cells = amoeba_loc[row_use]
+        row_cells = row_cells[row_cells[:, 0].argsort()]
+
+        tentacle_one = row_cells[1]
+        col_one = tentacle_one[0]
+
+        return col_one
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria):
         movable = []
