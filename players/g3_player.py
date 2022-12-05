@@ -350,7 +350,7 @@ class Player:
                 x_cord = 51
         
         # 2: not in initialization phase, and in formation
-        elif self.in_formation(desired_shape_offsets, [x_cord, 50], err=0.05):
+        elif self.in_formation(desired_shape_offsets, [x_cord, 50], err=0.2):
             x_cord += 1
             x_cord %= 100
 
