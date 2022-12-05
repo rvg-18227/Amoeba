@@ -22,6 +22,7 @@ import constants
 
 debug_png_dir = "render/debug"
 debug = 0
+debug_since = 50
 turns = 0
 
 if debug:
@@ -53,7 +54,7 @@ def visualize_reshape(
     global turns
     turns += 1
 
-    if not debug:
+    if not debug or turns < debug_since:
         return
 
 
@@ -69,13 +70,10 @@ def visualize_reshape(
     
     # marker sizes
     size_xs = mpl.rcParams['lines.markersize'] / 4
-    size_s = (mpl.rcParams['lines.markersize'] + 0.5) ** 2
-    size_m = (mpl.rcParams['lines.markersize'] + 0.75) ** 2
-    size_l = (mpl.rcParams['lines.markersize'] + 1) ** 2
+    size_s = (mpl.rcParams['lines.markersize'] / 4) ** 2
 
-    # common: ameoba & target
+    # common: ameoba
     for ax in [ax1, ax2]:
-        ax.plot(*list(zip(*target)), 'r.', label='target', markersize=size_xs)
         ax.plot(*list(zip(*ameoba)), 'g.', label='ameoba', markersize=size_xs)
 
     def scatter(ax: plt.Axes, pts: list[cell], **kwargs) -> None:
@@ -85,20 +83,13 @@ def visualize_reshape(
         ax.scatter(*list(zip(*pts)), **kwargs)
 
 
-    # subplot 1: occupiable, retractable
-    scatter(
-        ax1, occupiable, label='occupiable',
-        facecolors='none', edgecolors='tab:purple', s=size_s
-    )
-    scatter(
-        ax1, retractable, label='retractable',
-        facecolors='none', edgecolors='forestgreen', marker='s', s=size_l
-    )
+    # subplot 1: ameoba & target
+    ax1.plot(*list(zip(*target)), 'rs', label='target', markersize=size_s, markerfacecolor='none')
 
     # subplot 2: retract, extend, bacteria
     scatter(
         ax2, retract, label='retract',
-        facecolors='none', edgecolors='forestgreen', marker='s', s=size_l
+        facecolors='none', edgecolors='forestgreen', marker='s', s=size_s
     )
     scatter(
         ax2, extend, label='extend',
@@ -106,7 +97,7 @@ def visualize_reshape(
     )
     scatter(
         ax2, bacteria, label='bacteria',
-        facecolors='none', edgecolors='orange', marker='s', s=size_m
+        facecolors='none', edgecolors='orange', marker='s', s=size_s
     )
 
     # legend
@@ -736,7 +727,7 @@ class BucketAttack(Strategy):
                 bridge_targets = upper_bridge_cells + lower_bridge_cells
                 bridge_size=len(bridge_targets)
                 v_size=min(self.v_size, size-comb_size-bridge_size)
-                v_targets=self._get_Vshpae_target(v_size,(50,50))
+                v_targets=self._get_vshape_target(v_size,(50,50))
                 print("Grow V", size, comb_size, bridge_size, v_size)
                 horizontal_comb_size = size- comb_size - bridge_size - v_size
                 if horizontal_comb_size > 0:
@@ -745,7 +736,7 @@ class BucketAttack(Strategy):
 
         return comb_targets
 
-    def _get_Vshpae_target(self, size: int, cog: cell) -> list[cell]:
+    def _get_vshape_target(self, size: int, cog: cell) -> list[cell]:
         arm_length =size//2
         print("upper")
         upper_arm= self._spread_diagonally(arm_length, cog, 1)
@@ -810,7 +801,7 @@ class BucketAttack(Strategy):
 
         return abs(upper_bound - lower_bound) >= 98
 
-    def _in_shape(self, curr_state: AmoebaState) -> bool:
+    def _in_shape(self, xmax: int, curr_state: AmoebaState) -> bool:
         """Returns a bool indicating if our bucket arms are in shape.
         
         In our implementation, *no memory bit* is needed to store information
@@ -826,7 +817,6 @@ class BucketAttack(Strategy):
         that we don't risk moving and not able to eat any bacteria along the
         way.
         """
-        xmax = self._get_xmax(curr_state)
         arms_got = len(np.where(curr_state.amoeba_map[xmax,:] == State.ameoba.value)[0])
 
         if not self._reach_border:
@@ -844,7 +834,6 @@ class BucketAttack(Strategy):
         #  Decode Memory
         # ----------------
         mem = f'{memory:b}'.rjust(8, '0')
-        print("Start mem",mem)
         old_xmax = int(mem[:7], 2)
         shifted = int(mem[-1])
 
@@ -859,14 +848,11 @@ class BucketAttack(Strategy):
         # arm_xval
         if not self._reach_border(state):
             xmax = self._get_xmax(state)
-            print("xmax (normal)", xmax, '{0:07b}'.format(xmax), mem)
         else:
             xmax = old_xmax + 1
-            print("xmax (reached border)", xmax, '{0:07b}'.format(xmax), mem)
 
-        if not self._in_shape(state):
+        if not self._in_shape(xmax % 100, state):
             arm_xval = (xmax - 1) % 100
-            print("not in shape", xmax,'{0:07b}'.format(xmax))
         else:
             arm_xval = xmax % 100
 
@@ -876,7 +862,6 @@ class BucketAttack(Strategy):
         arm_xval_bin = '{0:07b}'.format(arm_xval)
         shifted_bin  = '{0:01b}'.format(shifted)
         memory = int(arm_xval_bin + shifted_bin, 2)
-        print("update memory", arm_xval_bin + shifted_bin)
 
 
         size = state.current_size
@@ -892,7 +877,6 @@ class BucketAttack(Strategy):
         # TODO: if reach boder, return comb+1cell each step as the bridge + Vshape
         # need about 290 cells to reach border
         if self._reach_border(state):
-            print(f"reach border, current size: {state.current_size}")
             target_cells = self._get_bridge_V_target_cells(size, cog, arm_xval)
         else:
             target_cells = self._get_target_cells(size, cog, arm_xval)
