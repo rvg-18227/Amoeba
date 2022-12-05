@@ -9,3 +9,5 @@ render/
 .idea/
 .vscode/
 .venv/
+results.log
+players/test.py

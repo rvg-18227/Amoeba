@@ -53,6 +53,91 @@ class Player:
         self.static_center = [50, 50]
 
         self.turn = 0
+    
+    # Adapted from G2 aka from amoeba_game.py
+    def check_move(
+        self, retracts: List[Tuple[int, int]], extends: List[Tuple[int, int]]
+    ) -> bool:
+        if not set(retracts).issubset(self.periphery):
+            return False
+
+        movable = retracts[:]
+        new_periphery = list(self.periphery.difference(set(retracts)))
+        for i, j in new_periphery:
+            nbr = self.find_movable_neighbor(i, j, self.amoeba_map, self.bacteria)
+            for x, y in nbr:
+                if (x, y) not in movable:
+                    movable.append((x, y))
+
+        if not set(extends).issubset(set(movable)):
+            return False
+
+        amoeba = np.copy(self.amoeba_map)
+        amoeba[amoeba < 0] = 0
+        amoeba[amoeba > 0] = 1
+
+        for i, j in retracts:
+            amoeba[i][j] = 0
+
+        for i, j in extends:
+            amoeba[i][j] = 1
+
+        tmp = np.where(amoeba == 1)
+        result = list(zip(tmp[0], tmp[1]))
+        check = np.zeros((constants.map_dim, constants.map_dim), dtype=int)
+
+        stack = result[0:1]
+        while len(stack):
+            a, b = stack.pop()
+            check[a][b] = 1
+
+            if (a, (b - 1) % constants.map_dim) in result and check[a][
+                (b - 1) % constants.map_dim
+            ] == 0:
+                stack.append((a, (b - 1) % constants.map_dim))
+            if (a, (b + 1) % constants.map_dim) in result and check[a][
+                (b + 1) % constants.map_dim
+            ] == 0:
+                stack.append((a, (b + 1) % constants.map_dim))
+            if ((a - 1) % constants.map_dim, b) in result and check[
+                (a - 1) % constants.map_dim
+            ][b] == 0:
+                stack.append(((a - 1) % constants.map_dim, b))
+            if ((a + 1) % constants.map_dim, b) in result and check[
+                (a + 1) % constants.map_dim
+            ][b] == 0:
+                stack.append(((a + 1) % constants.map_dim, b))
+
+        return (amoeba == check).all()
+
+    def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
+        movable = []
+        new_periphery = list(set(periphery).difference(set(retract)))
+        for i, j in new_periphery:
+            nbr = self.find_movable_neighbor(i, j, amoeba_map, bacteria)
+            for x, y in nbr:
+                if (x, y) not in movable:
+                    movable.append((x, y))
+
+        movable += retract
+
+        return movable[:mini]
+
+    def find_movable_neighbor(self, x, y, amoeba_map, bacteria):
+        # a cell is on the periphery if it borders (orthogonally) a 
+        # cell that is not occupied by the amoeba
+        out = []
+        if (x, y) not in bacteria:
+            if amoeba_map[x][(y - 1) % 100] == 0:
+                out.append((x, (y - 1) % 100))
+            if amoeba_map[x][(y + 1) % 100] == 0:
+                out.append((x, (y + 1) % 100))
+            if amoeba_map[(x - 1) % 100][y] == 0:
+                out.append(((x - 1) % 100, y))
+            if amoeba_map[(x + 1) % 100][y] == 0:
+                out.append(((x + 1) % 100, y))
+
+        return out
 
     # Find shape given size of anoemba, in the form of a list of offsets from center
     def get_desired_shape(self):
@@ -105,13 +190,13 @@ class Player:
         return absolute_cords
 
     def morph(self, offsets:set, center_point:Tuple[int]):
+        # adapted from group 2
         cur_ameoba_points = self.map_to_coords(self.amoeba_map)
         desired_ameoba_points = self.offset_to_absolute(offsets, center_point)
 
         potential_retracts = list(self.periphery.intersection((cur_ameoba_points.difference(desired_ameoba_points))))
         potential_extends = list(self.movable_cells.intersection(desired_ameoba_points.difference(cur_ameoba_points)))
 
-        # TODO: FIX BELOW 
         # Loop through potential extends, searching for a matching retract
         retracts = []
         extends = []
@@ -134,7 +219,6 @@ class Player:
                     break
         
         # TODO: extra bacteria handling??
-
 
         return retracts, extends
 
