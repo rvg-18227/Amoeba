@@ -127,9 +127,9 @@ class Player:
            # bottom_side = np.max(amoeba_loc[:, 1])
 
             expand_list = self.box_to_sweeper_expand(
-                    current_percept.amoeba_map, int(self.current_size*self.metabolism))
+                    amoeba_map, int(self.current_size*self.metabolism))
             retract_list = self.box_to_sweeper_retract(
-                    current_percept.amoeba_map, current_percept.periphery, int(self.current_size*self.metabolism))
+                    amoeba_map, current_percept.periphery, int(self.current_size*self.metabolism))
             if stage == 2 and len(retract_list) == 0:  
                 # Close in
                 retract_list, expand_list = self.close_in(current_percept.amoeba_map)
