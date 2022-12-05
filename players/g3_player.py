@@ -50,6 +50,7 @@ class Player:
         self.bacteria = None
         self.movable_cells = None
         self.num_available_moves = 0
+        self.static_center = [50, 50]
 
         self.turn = 0
 
@@ -160,11 +161,23 @@ class Player:
         self.num_available_moves = int(np.ceil(self.metabolism * self.current_size))
 
         desired_shape_offsets = self.get_desired_shape()
-        if self.turn < 50:
-            center_point = self.get_center_point(current_percept, 0)
+
+        cur_ameoba_points = self.map_to_coords(self.amoeba_map)
+        desired_ameoba_points = self.offset_to_absolute(desired_shape_offsets, self.static_center)
+
+        potential_retracts = list(self.periphery.intersection((cur_ameoba_points.difference(desired_ameoba_points))))
+
+        # if self.turn < 50:
+        #     center_point = self.get_center_point(current_percept, 0)
+        if len(potential_retracts) > 5:
+            center_point = self.static_center
         else:
-            center_point = self.get_center_point(current_percept, 1)
-            center_point = (center_point[0] + 1, center_point[1])
+            #center_point = self.get_center_point(current_percept, 1)
+            #center_point = (center_point[0] + 1, center_point[1])
+            if self.turn % 4 == 0:
+                self.static_center[0] += 1
+                self.static_center[0] %= 100
+            center_point = self.static_center
             print(center_point)
         retracts, moves = self.morph(desired_shape_offsets, center_point)
 
