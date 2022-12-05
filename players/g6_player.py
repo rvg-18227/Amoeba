@@ -102,18 +102,22 @@ class Player:
         amoeba_map = self.concat_map(current_percept.amoeba_map, split, split_row)
         self.logger.info(f'split_row (exclusive): {split_row}')
 
-        if info < 20:
+        if info < 30:
             # expand
             stage = 0
-        elif info >= 20 and info < 25:
+        elif info >= 30 and info < 40:
             # forward
             stage = 1
-        elif info >= 25:
+        elif info >= 40:
             stage = 2
-        #stage = 0 if info < 10 else 1 # hard-coded
+        
         if stage == 0:
-            retract_list, expand_list = self.reorganize(
-                amoeba_map, current_percept.periphery, current_percept.bacteria)
+            if info < 10:
+                retract_list, expand_list = self.reorganize(
+                    amoeba_map, current_percept.periphery, current_percept.bacteria, split_row)
+            else:
+                retract_list, expand_list = self.init_organize(
+                    amoeba_map, current_percept.periphery, current_percept.bacteria)
         elif stage == 1:
             retract_list, expand_list = self.forward(
                 amoeba_map, current_percept.amoeba_map, current_percept.periphery, current_percept.bacteria, split_row)
@@ -123,12 +127,12 @@ class Player:
             #amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
            # bottom_side = np.max(amoeba_loc[:, 1])
             expand_list = self.box_to_sweeper_expand(
-                    current_percept.amoeba_map, int(self.current_size*self.metabolism))
+                    amoeba_map, int(self.current_size*self.metabolism))
             retract_list = self.box_to_sweeper_retract(
-                    current_percept.amoeba_map, current_percept.periphery, int(self.current_size*self.metabolism))
+                    amoeba_map, current_percept.periphery, int(self.current_size*self.metabolism))
             if stage == 2 and len(retract_list) == 0:  
                 # Close in
-                retract_list, expand_list = self.close_in(current_percept.amoeba_map)
+                retract_list, expand_list = self.close_in(amoeba_map)
             
             if len(retract_list) == 0:
                 info = 0
@@ -154,15 +158,21 @@ class Player:
         return amoeba_map
     
     def forward(self, amoeba_map, amoeba_map_old, periphery, bacteria, split_row):
-        retract_list = self.reorganize_retract(amoeba_map, periphery, min_num_per_col=1)
+        retract_list = self.organize_retract(amoeba_map, periphery, min_num_per_col=1)
         movable = self.find_movable_cells(retract_list, periphery, amoeba_map_old, bacteria)
         expand_list = self.forward_expand(amoeba_map, movable, split_row)
         return retract_list, expand_list
 
-    def reorganize(self, amoeba_map, periphery, bacteria):
+    def init_organize(self, amoeba_map, periphery, bacteria):
+        retract_list = self.organize_retract(amoeba_map, periphery)
+        movable = self.find_movable_cells(retract_list, periphery, amoeba_map, bacteria)
+        expand_list = self.organize_expand(amoeba_map, movable)
+        return retract_list, expand_list
+
+    def reorganize(self, amoeba_map, periphery, bacteria, split_row):
         retract_list = self.reorganize_retract(amoeba_map, periphery)
         movable = self.find_movable_cells(retract_list, periphery, amoeba_map, bacteria)
-        expand_list = self.reorganize_expand(amoeba_map, movable)
+        expand_list = self.reorganize_expand(amoeba_map, movable, split_row)
         return retract_list, expand_list
 
     def forward_expand(self, amoeba_map, movable, split_row):
@@ -206,8 +216,7 @@ class Player:
 
         return expand_cells
 
-
-    def reorganize_retract(self, amoeba_map, periphery, min_num_per_col=2):
+    def organize_retract(self, amoeba_map, periphery, min_num_per_col=2):
         amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
         amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
         top_side = np.min(amoeba_loc[:, 1])
@@ -239,7 +248,62 @@ class Player:
 
         return retract_list
 
-    def reorganize_expand(self, amoeba_map, movable):
+    def reorganize_retract(self, amoeba_map, periphery, min_num_per_col=2):
+        amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
+        amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
+        top_side = np.min(amoeba_loc[:, 1])
+        bottom_side = np.max(amoeba_loc[:, 1])
+        retract_list = []
+
+        for row in range(top_side, bottom_side):
+
+            row_array = np.where(amoeba_loc[:, 1] == row)[0]
+            row_cells = amoeba_loc[row_array]
+            columns = np.sort(row_cells[:, 0])
+
+            priorize_columns = []
+            # priorize columns that's about to disconnect
+            for i in range(columns.shape[0]):
+                cell = (columns[i], row)
+                if amoeba_map[cell[0], cell[1]+1] == 0 or amoeba_map[cell[0]-1, cell[1]]+amoeba_map[cell[0]+1, cell[1]] == 0:
+                    priorize_columns.append(columns[i])
+            priorize_columns = sorted(priorize_columns, reverse=True) 
+
+            for col in priorize_columns:
+                cell = (col%100, row%100)
+                if cell in periphery:
+                    retract_list.append(cell)
+                    cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
+                    amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx==True)[0], axis=0)
+
+        return retract_list
+
+    def reorganize_expand(self, amoeba_map, movable, split_row):
+        amoeba_loc = np.stack(np.where(amoeba_map==1)).T.astype(int)
+        cols, count = np.unique(amoeba_loc[:, 0], return_counts=True)
+
+        expand_cells = []
+        movable = np.array(movable).astype(int)
+
+        # wrap around
+        if split_row == 0:
+            movable[movable[:, 1]==0, 1] += 100
+        else:
+            movable[movable[:, 1]<split_row, 1] += 100
+
+        max_row = movable[:, 1].max()
+        movable = movable[movable[:, 1]!=max_row]
+        movable = movable[movable[:, 1].argsort()[::-1]][:10]
+
+        for i in range(movable.shape[0]):
+            cell = movable[i]
+            if cell[0] < 4 or cell[0] > 95:
+                continue
+            expand_cells.append(tuple(cell%100))
+
+        return expand_cells
+
+    def organize_expand(self, amoeba_map, movable):
         amoeba_loc = np.stack(np.where(amoeba_map==1)).T.astype(int)
         cols, count = np.unique(amoeba_loc[:, 0], return_counts=True)
 
@@ -254,15 +318,17 @@ class Player:
                 # expand to the bottom of the first/last col
                 cell = col_cells[col_cells[:, 1].argmax()] # lowest cell
                 move = ((cell[0])%100, (cell[1]+1)%100)
-                # if move in movable:
-                expand_cells.append(move)
+                if move in movable:
+                    expand_cells.append(move)
 
             # expand to an additional col
             for c_i in range(min(2, col_cells.shape[0])):
                 cell = col_cells[-2:][c_i]
+                if cell[0]+direction[i] < 4 or cell[0]+direction[i] > 95:
+                    continue
                 move = ((cell[0]+direction[i])%100, (cell[1])%100)
-                # if move in movable:
-                expand_cells.append(move)
+                if move in movable:
+                    expand_cells.append(move)
 
         return expand_cells
 
@@ -278,7 +344,8 @@ class Player:
 
         max_row_length = np.NINF
         max_row = np.NINF
-        for row in range(top_side, bottom_side):
+        for row in range(top_side, bottom_side+1):
+            #print("here", row)
             row_array = np.where(amoeba_loc[:, 1] == row)[0]
             row_cells = amoeba_loc[row_array]
             row_len = len(row_cells)
@@ -296,6 +363,7 @@ class Player:
         tentacle_two = tentacle_two[0]
 
         for row in range(top_side, bottom_side):
+           # print(row)
             if len(retract_list) == 3:
                 break
 
@@ -307,22 +375,25 @@ class Player:
                 if len(retract_list) == 3:
                     break
 
+               # print(max_row)
                 if row >= max_row:
                     continue
 
                 num_column = np.size(np.where(amoeba_loc[:, 0] == col)[0])
 
                 if num_column > 1 and col != tentacle_one and col != tentacle_two:
-                    cell = (col, row)
+                    #cell = (col, row)
+                    cell = (col % 100, row % 100)
                     if cell in periphery:
                         retract_list.append(cell)
-                        self.logger.info(f'cell retract: {cell}')
+                        #self.logger.info(f'cell retract: {cell}')
                         cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
-                        self.logger.info(f'cell idx : {np.where(cell_idx == True)[0]}')
+                        #self.logger.info(f'cell idx : {np.where(cell_idx == True)[0]}')
                         amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx == True)[0], axis=0)
 
-       # print("retract", retract_list)
+        print("retract", retract_list)
         #print(amoeba_loc)
+        #quit()
         return retract_list
 
     def box_to_sweeper_expand(self, amoeba_map, mini):
@@ -335,7 +406,7 @@ class Player:
 
         max_row_length = np.NINF
         max_row = np.NINF
-        for row in range(top_side, bottom_side):
+        for row in range(top_side, bottom_side+1):
             row_array = np.where(amoeba_loc[:, 1] == row)[0]
             row_cells = amoeba_loc[row_array]
             row_len = len(row_cells)
@@ -386,11 +457,11 @@ class Player:
         # mini = 100
         if tentacle_three_len < mini:
             expand_cell = np.max(tentacle_three_column[:, 1])
-            expand_cell = (col_three, expand_cell + 1)
+            expand_cell = (col_three % 100, (expand_cell + 1) % 100)
             expand_cells.append(expand_cell)
             #quit()
 
-        #print("expand", expand_cells)
+        print("expand", expand_cells)
         return expand_cells
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria):
