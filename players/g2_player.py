@@ -22,10 +22,10 @@ turn = 0
 CENTER_X = constants.map_dim // 2
 CENTER_Y = constants.map_dim // 2
 
-COMB_SEPARATION_DIST = 24
-TEETH_GAP = 1
+COMB_SEPARATION_DIST = 4
+TEETH_GAP = 3
 
-VERTICAL_SHIFT_PERIOD = 4
+VERTICAL_SHIFT_PERIOD = 2
 VERTICAL_SHIFT_LIST = (
     (
         [0 for i in range(VERTICAL_SHIFT_PERIOD)]
@@ -139,8 +139,11 @@ class Formation:
             else np.zeros((constants.map_dim, constants.map_dim), dtype=np.int8)
         )
 
-    def add_cell(self, x, y):
+    def add_cell(self, x, y) -> None:
         self.map[x % constants.map_dim, y % constants.map_dim] = 1
+        
+    def get_cell(self, x, y) -> int:
+        return self.map[x % constants.map_dim, y % constants.map_dim]
 
     def merge_formation(self, formation_map: npt.NDArray):
         self.map = np.logical_or(self.map, formation_map)
@@ -194,15 +197,16 @@ class Player:
         # Class accessible percept variables, written at the start of each turn
         self.current_size: int = None
         self.amoeba_map: npt.NDArray = None
-        self.bacteria_cells: List[Tuple[int, int]] = None
+        self.bacteria_cells: set[Tuple[int, int]] = None
         self.retractable_cells: List[Tuple[int, int]] = None
         self.extendable_cells: List[Tuple[int, int]] = None
         self.num_available_moves: int = None
 
     def generate_comb_formation(
-        self, size: int, tooth_offset=0, center_x=CENTER_X, center_y=CENTER_Y
+        self, size: int, tooth_offset=0, center_x=CENTER_X, center_y=CENTER_Y, comb_idx=0
     ) -> npt.NDArray:
         formation = Formation()
+        comb_0_center_x = center_x
 
         if size < 2:
             return formation.map
@@ -212,37 +216,59 @@ class Player:
         cells_used = backbone_size * 2 + teeth_size
 
         # If we have hit our max size, form an additional comb and connect it via a bridge
-        if backbone_size == 99:
-            formation.merge_formation(
-                self.generate_comb_formation(
-                    size - cells_used - COMB_SEPARATION_DIST + 2,
-                    tooth_offset,
-                    center_x + COMB_SEPARATION_DIST,
-                    center_y,
-                )
+        if backbone_size == 99 and comb_idx == 0:
+            center_x_offset = np.absolute(center_x - CENTER_X)
+
+            # Offset each comb to the left and right of the map center
+            comb_0_center_x = min(max(CENTER_X - center_x_offset, COMB_SEPARATION_DIST), 50)
+            comb_1_center_x = min(max(CENTER_X + center_x_offset + COMB_SEPARATION_DIST, CENTER_X + COMB_SEPARATION_DIST + 1), 100)
+
+            # Generate the second comb
+            second_comb = self.generate_comb_formation(
+                cells_used,
+                tooth_offset,
+                comb_1_center_x % constants.map_dim,
+                center_y,
+                1
             )
-            for i in range(center_x, center_x + COMB_SEPARATION_DIST):
+            formation.merge_formation(second_comb)
+
+            # Bridge between the two combs
+            for i in range(comb_0_center_x, comb_1_center_x):
                 formation.add_cell(i, center_y)
 
-        # print("size: {}, backbone_size: {}, teeth_size: {}".format(size, backbone_size, teeth_size))
-
-        formation.add_cell(center_x, center_y)
-        formation.add_cell(center_x - 1, center_y)
+        # Build first comb formation
+        formation.add_cell(comb_0_center_x, center_y)
+        formation.add_cell(comb_0_center_x - 1, center_y)
         for i in range(1, round((backbone_size - 1) / 2 + 0.1) + 1):
             # first layer of backbone
-            formation.add_cell(center_x, center_y + i)
-            formation.add_cell(center_x, center_y - i)
+            formation.add_cell(comb_0_center_x, center_y + i)
+            formation.add_cell(comb_0_center_x, center_y - i)
             # second layer of backbone
-            formation.add_cell(center_x - 1, center_y + i)
-            formation.add_cell(center_x - 1, center_y - i)
+            formation.add_cell(comb_0_center_x - 1, center_y + i)
+            formation.add_cell(comb_0_center_x - 1, center_y - i)
         for i in range(
             1,
             round(min((teeth_size * (TEETH_GAP + 1)) / 2, backbone_size / 2) + 0.1),
             TEETH_GAP + 1,
         ):
-            formation.add_cell(center_x + 1, center_y + tooth_offset + i)
-            formation.add_cell(center_x + 1, center_y + tooth_offset - i)
+            formation.add_cell(comb_0_center_x + 1, center_y + tooth_offset + i)
+            formation.add_cell(comb_0_center_x + 1, center_y + tooth_offset - i)   
 
+        # If we build a second comb, build up additional cells in the center
+        if backbone_size == 99 and comb_idx == 0:
+            cells_remaining = size - np.count_nonzero(formation.map)
+            bridge_offset = 1
+            while cells_remaining > 0 and bridge_offset < 99:
+                for i in range(comb_0_center_x, comb_1_center_x):
+                    offset = bridge_offset if bridge_offset <= 49 else 50 - bridge_offset
+                    if formation.get_cell(i, center_y + offset) == 0:
+                        formation.add_cell(i, center_y + offset)
+                        cells_remaining -= 1
+                        if cells_remaining <= 0:
+                            break
+                bridge_offset += 1
+                
         # show_amoeba_map(formation.map)
         return formation.map
 
@@ -274,6 +300,7 @@ class Player:
         # Loop through potential extends, searching for a matching retract
         retracts = []
         extends = []
+        check_calls = 0
         for potential_extend in [p for p in potential_extends]:
             # Ensure we only move as much as possible given our current metabolism
             if len(extends) >= self.num_available_moves:
@@ -286,11 +313,14 @@ class Player:
                 retract = matching_retracts[i]
                 # Matching retract found, add the extend and retract to our lists
                 if self.check_move(retracts + [retract], extends + [potential_extend]):
+                    check_calls += 1
                     retracts.append(retract)
                     potential_retracts.remove(retract)
                     extends.append(potential_extend)
                     potential_extends.remove(potential_extend)
                     break
+                check_calls += 1
+        # print(f"Check calls: {check_calls} / {self.current_size}")
 
         # If we have moves remaining, try and get closer to the desired formation
         # if len(extends) < self.num_available_moves and len(potential_retracts):
@@ -329,7 +359,7 @@ class Player:
         return movable[:mini]
 
     def find_movable_neighbor(
-        self, x: int, y: int, amoeba_map: npt.NDArray, bacteria: List[Tuple[int, int]]
+        self, x: int, y: int, amoeba_map: npt.NDArray, bacteria: set[Tuple[int, int]]
     ) -> List[Tuple[int, int]]:
         out = []
         if (x, y) not in bacteria:
@@ -350,15 +380,15 @@ class Player:
         if not set(retracts).issubset(set(self.retractable_cells)):
             return False
 
-        movable = retracts[:]
+        movable = set(retracts[:])
         new_periphery = list(set(self.retractable_cells).difference(set(retracts)))
         for i, j in new_periphery:
             nbr = self.find_movable_neighbor(i, j, self.amoeba_map, self.bacteria_cells)
             for x, y in nbr:
                 if (x, y) not in movable:
-                    movable.append((x, y))
+                    movable.add((x, y))
 
-        if not set(extends).issubset(set(movable)):
+        if not set(extends).issubset(movable):
             return False
 
         amoeba = np.copy(self.amoeba_map)
@@ -376,6 +406,7 @@ class Player:
         check = np.zeros((constants.map_dim, constants.map_dim), dtype=int)
 
         stack = result[0:1]
+        result = set(result)
         while len(stack):
             a, b = stack.pop()
             check[a][b] = 1
@@ -403,7 +434,7 @@ class Player:
         self.current_size = current_percept.current_size
         self.amoeba_map = current_percept.amoeba_map
         self.retractable_cells = current_percept.periphery
-        self.bacteria_cells = current_percept.bacteria
+        self.bacteria_cells = set(current_percept.bacteria)
         self.extendable_cells = current_percept.movable_cells
         self.num_available_moves = int(
             np.ceil(self.metabolism * current_percept.current_size)
@@ -428,7 +459,7 @@ class Player:
         turn += 1
 
         self.store_current_percept(current_percept)
-
+        
         retracts = []
         moves = []
 
@@ -449,11 +480,17 @@ class Player:
             next_comb = self.generate_comb_formation(
                 self.current_size, vertical_shift, curr_backbone_col, CENTER_Y
             )
-            retracts, moves = self.get_morph_moves(next_comb)
+            # Check if current comb formation is filled
+            settled = self.amoeba_map[next_comb].all()
+            if not settled:
+                retracts, moves = self.get_morph_moves(next_comb)
+               
+                # Actually, we have no more moves to make 
+                if len(moves) == 0:
+                   settled = True
 
-            # When we "settle" into the target backbone column, no moves are generated
-            if len(moves) == 0:
-                # So we advance the backbone column by 1
+            if settled:
+                # When we "settle" into the target backbone column, advance the backbone column by 1
                 prev_backbone_col = curr_backbone_col
                 new_backbone_col = (prev_backbone_col + 1) % 100
                 vertical_shift = VERTICAL_SHIFT_LIST[new_backbone_col]
