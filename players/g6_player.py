@@ -344,7 +344,8 @@ class Player:
 
         max_row_length = np.NINF
         max_row = np.NINF
-        for row in range(top_side, bottom_side):
+        for row in range(top_side, bottom_side+1):
+            #print("here", row)
             row_array = np.where(amoeba_loc[:, 1] == row)[0]
             row_cells = amoeba_loc[row_array]
             row_len = len(row_cells)
@@ -362,6 +363,7 @@ class Player:
         tentacle_two = tentacle_two[0]
 
         for row in range(top_side, bottom_side):
+           # print(row)
             if len(retract_list) == 3:
                 break
 
@@ -373,22 +375,25 @@ class Player:
                 if len(retract_list) == 3:
                     break
 
+               # print(max_row)
                 if row >= max_row:
                     continue
 
                 num_column = np.size(np.where(amoeba_loc[:, 0] == col)[0])
 
                 if num_column > 1 and col != tentacle_one and col != tentacle_two:
-                    cell = (col, row)
+                    #cell = (col, row)
+                    cell = (col % 100, row % 100)
                     if cell in periphery:
                         retract_list.append(cell)
-                        self.logger.info(f'cell retract: {cell}')
+                        #self.logger.info(f'cell retract: {cell}')
                         cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
-                        self.logger.info(f'cell idx : {np.where(cell_idx == True)[0]}')
+                        #self.logger.info(f'cell idx : {np.where(cell_idx == True)[0]}')
                         amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx == True)[0], axis=0)
 
-       # print("retract", retract_list)
+        print("retract", retract_list)
         #print(amoeba_loc)
+        #quit()
         return retract_list
 
     def box_to_sweeper_expand(self, amoeba_map, mini):
@@ -401,7 +406,7 @@ class Player:
 
         max_row_length = np.NINF
         max_row = np.NINF
-        for row in range(top_side, bottom_side):
+        for row in range(top_side, bottom_side+1):
             row_array = np.where(amoeba_loc[:, 1] == row)[0]
             row_cells = amoeba_loc[row_array]
             row_len = len(row_cells)
@@ -452,11 +457,11 @@ class Player:
         # mini = 100
         if tentacle_three_len < mini:
             expand_cell = np.max(tentacle_three_column[:, 1])
-            expand_cell = (col_three, expand_cell + 1)
+            expand_cell = (col_three % 100, (expand_cell + 1) % 100)
             expand_cells.append(expand_cell)
             #quit()
 
-        #print("expand", expand_cells)
+        print("expand", expand_cells)
         return expand_cells
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria):
