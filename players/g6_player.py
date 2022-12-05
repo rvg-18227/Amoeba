@@ -99,17 +99,17 @@ class Player:
         amoeba_map = self.concat_map(current_percept.amoeba_map, split, split_row)
         self.logger.info(f'split_row (exclusive): {split_row}')
 
-        if info < 30:
+        if info < 40:
             # expand
             stage = 0
-        elif info >= 30 and info < 40:
+        elif info < 70:
             # forward
             stage = 1
-        elif info >= 40:
+        elif info >= 70:
             stage = 2
         
         if stage == 0:
-            if info < 10:
+            if info < 20:
                 retract_list, expand_list = self.reorganize(
                     amoeba_map, current_percept.periphery, current_percept.bacteria, split_row)
             else:
