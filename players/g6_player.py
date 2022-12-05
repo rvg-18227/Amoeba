@@ -274,7 +274,7 @@ class Player:
         tentacle_two = tentacle_two[0]
 
         for row in range(top_side, bottom_side):
-            if len(retract_list) == 2:
+            if len(retract_list) == 3:
                 break
 
             row_array = np.where(amoeba_loc[:, 1] == row)[0]
@@ -282,7 +282,7 @@ class Player:
             columns = np.sort(row_cells[:, 0])
 
             for col in columns:
-                if len(retract_list) == 2:
+                if len(retract_list) == 3:
                     break
 
                 if row >= max_row:
@@ -318,7 +318,7 @@ class Player:
             row_cells = amoeba_loc[row_array]
             row_len = len(row_cells)
 
-            if row_len > max_row_length:
+            if row_len >= max_row_length:
                 max_row_length = row_len
                 max_row = row
 
@@ -335,7 +335,7 @@ class Player:
         tentacle_one_len = len(tentacle_one_column_new)
         #mini = 100
         if tentacle_one_len < mini:
-            expand_cell = np.max(tentacle_one_column_new[:, 1])
+            expand_cell = np.max(tentacle_one_column[:, 1])
             expand_cell = (col_one, expand_cell+1)
             expand_cells.append(expand_cell)
 
@@ -348,9 +348,25 @@ class Player:
         tentacle_two_len = len(tentacle_two_column_new)
         # mini = 100
         if tentacle_two_len < mini:
-            expand_cell = np.max(tentacle_two_column_new[:, 1])
+            expand_cell = np.max(tentacle_two_column[:, 1])
             expand_cell = (col_two, expand_cell + 1)
             expand_cells.append(expand_cell)
+
+        tentacle_three = row_cells[-3]
+        col_three = tentacle_three[0]
+        tentacle_three_column = np.where(amoeba_loc[:, 0] == col_three)[0]
+        tentacle_three_column = amoeba_loc[tentacle_three_column]
+
+        tentacle_three_column_new = np.where(tentacle_three_column[:, 1] > max_row)[0]
+        tentacle_three_column_new = tentacle_three_column[tentacle_three_column_new]
+
+        tentacle_three_len = len(tentacle_three_column_new)
+        # mini = 100
+        if tentacle_three_len < mini:
+            expand_cell = np.max(tentacle_three_column[:, 1])
+            expand_cell = (col_three, expand_cell + 1)
+            expand_cells.append(expand_cell)
+            #quit()
 
         #print("expand", expand_cells)
         return expand_cells
