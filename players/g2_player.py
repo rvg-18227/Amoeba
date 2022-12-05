@@ -25,7 +25,7 @@ CENTER_Y = constants.map_dim // 2
 COMB_SEPARATION_DIST = 4
 TEETH_GAP = 3
 
-VERTICAL_SHIFT_PERIOD = 5
+VERTICAL_SHIFT_PERIOD = 2
 VERTICAL_SHIFT_LIST = (
     (
         [0 for i in range(VERTICAL_SHIFT_PERIOD)]
@@ -268,7 +268,7 @@ class Player:
                         if cells_remaining <= 0:
                             break
                 bridge_offset += 1
-
+                
         # show_amoeba_map(formation.map)
         return formation.map
 
@@ -493,7 +493,7 @@ class Player:
                 # When we "settle" into the target backbone column, advance the backbone column by 1
                 prev_backbone_col = curr_backbone_col
                 new_backbone_col = (prev_backbone_col + 1) % 100
-                vertical_shift = VERTICAL_SHIFT_LIST[prev_backbone_col]
+                vertical_shift = VERTICAL_SHIFT_LIST[new_backbone_col]
                 next_comb = self.generate_comb_formation(
                     self.current_size, vertical_shift, prev_backbone_col, CENTER_Y
                 )
