@@ -154,11 +154,10 @@ class Player:
         return out
 
     # Find shape given size of anoemba, in the form of a list of offsets from center
-    def get_desired_shape(self, shape=2):
-        # Assume base shape given size is always > 5
-        offsets = {(0,0), (0,1), (0,-1), (1,1), (1,-1)}
-        total_cells = self.current_size-5
+    def get_desired_shape(self, shape=3):        
         if shape == 0:
+            offsets = {(0,0), (0,1), (0,-1), (1,1), (1,-1)}
+            total_cells = self.current_size-5
             i = 1
             j = 2
             while total_cells > 0:
@@ -179,6 +178,8 @@ class Player:
                     i+=2
                     j+=1
         elif shape == 1:
+            offsets = {(0,0), (0,1), (0,-1), (1,1), (1,-1)}
+            total_cells = self.current_size-5
             j = 2
             step = 0
             while total_cells > 0:
@@ -306,6 +307,82 @@ class Player:
                     j+=1
                 total_cells -= 1
                 step += 1
+
+        # Not sure if correct, 5 wide tooth gap with 3 units of offset
+        elif shape == 3:
+            offsets = {(0,0), (0,1), (0,-1), (1,1), (1,-1)}
+            total_cells = self.current_size-5
+            j = 2
+            i = 1
+            step = 0
+            while total_cells > 0:
+                ###################### Add 3 long arm
+                if step % 11 == 0:
+                    offsets.add((i, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((i, -j))
+                elif step % 11 == 1:
+                    offsets.add((i+1, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((i+1, -j))
+                elif step % 11 == 2:
+                    offsets.add((i+2, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((i+2, -j))
+                ######################
+                ###################### Add 3 long offset arm
+                elif step % 11 == 3:
+                    offsets.add((i-1, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((i-1, -j))
+                elif step % 11 == 4:
+                    offsets.add((i-2, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((i-2, -j))
+                elif step % 11 == 5:
+                    offsets.add((i-3, j))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((i-3, -(j)))
+                ######################
+                ###################### Recreate inital offsets at new positions
+                elif step % 11 == 6:
+                    offsets.add((i-3, j+1))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((i-3, -(j+1)))
+                elif step % 11 == 7:
+                    offsets.add((i-4, j+1))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((i-4, -(j+1)))
+                elif step % 11 == 7 or step % 12 == 8:
+                    offsets.add((i-4, j+2))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((i-4, -(j+2)))
+                elif step % 11 == 9:
+                    offsets.add((i-4, j+3))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((i-4, -(j+3)))
+                elif step % 11 == 10:
+                    offsets.add((i-3, j+3))
+                    total_cells-=1
+                    if total_cells > 0:
+                        offsets.add((i-3, -(j+3)))
+                ######################
+                    # Last step increment x and y with new position to grow from
+                    j = j+4
+                    i = i-3
+
+                step += 1
+                total_cells-=1
         
         return offsets
 
@@ -418,6 +495,8 @@ class Player:
 
         ### GET DESIRED OFFSETS FOR CURRENT MORPH ###
         desired_shape_offsets = self.get_desired_shape()
+        print(desired_shape_offsets)
+        #exit(1)
 
 
         ### INCREMENT CENTER POINT PHASE ###
