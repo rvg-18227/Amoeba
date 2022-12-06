@@ -26,13 +26,9 @@ class AmoebaGame:
         self.use_gui = not args.no_gui
         self.use_vid = not args.no_vid
         self.do_logging = not args.disable_logging
-        if not self.use_gui:
-            self.use_timeout = not args.disable_timeout
-        else:
-            self.use_timeout = False
-
+        self.use_timeout = not args.disable_timeout
+        if self.use_gui:
             os.makedirs("render", exist_ok=True)
-
             old_files = glob("render/*.png")
             for f in old_files:
                 os.remove(f)
@@ -99,6 +95,10 @@ class AmoebaGame:
         self.history = []
 
         self.initialize(args.size)
+        self.init_complete_time = time.time() - self.start_time
+        self.end_time = None
+        self.total_time = None
+        self.vid_name = args.vid_name
 
         if not args.batch_mode:
             self.add_player(args.player)
@@ -106,6 +106,18 @@ class AmoebaGame:
             self.end_time = time.time()
 
             print("\nTime taken: {}\n".format(self.end_time - self.start_time))
+
+        self.args = args
+
+    def start_game(self):
+        """Function to run the game from a script"""
+        game_start_time = time.time()
+        self.add_player(self.args.player)
+        self.play_game()
+        self.end_time = time.time()
+        self.total_time = (self.end_time - game_start_time) + self.init_complete_time
+
+        print("\nTime taken: {}\n".format(self.total_time))
 
         if self.use_vid:
             if not self.use_gui:
@@ -115,11 +127,13 @@ class AmoebaGame:
                 print("\nTime taken to render frames: {}\n".format(final_time - self.end_time))
             print("Creating Video...\n")
             os.system(
-                "convert -delay 5 -loop 0 $(ls -1 render/*.png | sort -V) -quality 95 {}.mp4".format(args.vid_name))
+                "convert -delay 5 -loop 0 $(ls -1 render/*.png | sort -V) -quality 95 {}.mp4".format(self.args.vid_name))
 
         if self.use_gui:
             plt.show()
-    
+
+        return self  # Returning the object to match previous format. Allows extracting attributes.
+
     def add_player_object(self, player_name, player):
         self.player_name = player_name
         self.player = player
@@ -209,17 +223,31 @@ class AmoebaGame:
         return list(zip(result[0], result[1]))
 
     def play_game(self):
-        while self.turns != self.max_turns:
-            self.turns += 1
-            self.play_turn()
-            print("Turn {} complete".format(self.turns))
-            if self.amoeba_size >= self.goal_size:
-                self.goal_reached = True
-                self.game_end = self.turns
-                print("Goal size achieved!\n\nTurns taken: {}\nFinal size: {}\nGoal size: {}".format(self.turns,
-                                                                                                     self.amoeba_size,
-                                                                                                     self.goal_size))
-                break
+        if self.use_timeout:
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(constants.timeout)
+
+        try:
+            while self.turns != self.max_turns:
+                self.turns += 1
+                try:
+                    self.play_turn()
+                    print("Turn {} complete".format(self.turns))
+                except Exception as e:
+                    print("Turn {} error".format(self.turns))
+
+                if self.amoeba_size >= self.goal_size:
+                    self.goal_reached = True
+                    self.game_end = self.turns
+                    print("Goal size achieved!\n\nTurns taken: {}\nFinal size: {}\nGoal size: {}".format(self.turns,
+                                                                                                         self.amoeba_size,
+                                                                                                         self.goal_size))
+                    break
+            if self.use_timeout:
+                signal.alarm(0)  # Clear alarm
+        except TimeoutException:
+            self.logger.error(
+                "Game Timeout {} since {:.3f}s reached.".format(self.player_name, constants.timeout))
 
         if not self.goal_reached:
             print("Goal size not achieved...\n\nFinal size: {}\nGoal size: {}".format(self.amoeba_size, self.goal_size))

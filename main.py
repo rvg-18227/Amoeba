@@ -32,3 +32,5 @@ if __name__ == '__main__':
             args.log_path = "results.log"
 
     amoeba_game = AmoebaGame(args)
+    if args.batch_mode:
+        amoeba_game.start_game()

@@ -1,3 +1,5 @@
 numpy
 remi
 matplotlib
+pandas
+ray
