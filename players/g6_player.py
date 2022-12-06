@@ -624,13 +624,18 @@ class Player:
         start_row = np.argmax(np.sum(amoeba_map, axis=0)) + 1
         # assume no spliting
         # move right most cell to the adjacent left location
+        # TODO
+        # Pass in location of the opposing column
+        target_column = self.find_first_tentacle(amoeba_map)
+        # TODO
+        # check height of the tenticle, if exceed max meta, shrink it
         extract = []
         extend = []
         for i in range(start_row, start_row+100):
             if amoeba_map[:, i].sum() == 0:
                 # reach the end
                 break
-            if self.is_singular_chunk(amoeba_map[:, i]):
+            if self.is_singular_chunk(amoeba_map[:, i]) and amoeba_map[:, i].argmax() == target_column:
                 # singular chunk, no need to move
                 continue
             row_reverse = amoeba_map[:, i][::-1]
