@@ -211,6 +211,7 @@ class Player:
         self.goal_size = goal_size
         self.current_size = goal_size / 4
 
+        self.mem = None
         self.current_size: int = None
         self.amoeba_map: npt.NDArray = None
         self.bacteria_cells: List[Tuple[int, int]] = None
@@ -374,16 +375,16 @@ class Player:
         return formation
 
     # sort potential retracts based on the number of neighbors (less members -> higher priority)
-    def sort_retracts(self, potential_retracts):
-        ranked_cells = []
-        for x, y in potential_retracts:
-            neighbors = [((x-1) % 100, y), ((x+1) % 100, y), (x, (y-1) % 100), (x, (y+1) % 100)]
-            score = 0
-            for neighbor in neighbors:
-                if self.amoeba_map[neighbor] == 1:
-                    score += 1
-            ranked_cells.append(((x, y), score))
-        return [cell for cell, score in sorted(ranked_cells, key=lambda t: t[1])]
+    # def sort_retracts(self, potential_retracts):
+    #     ranked_cells = []
+    #     for x, y in potential_retracts:
+    #         neighbors = [((x-1) % 100, y), ((x+1) % 100, y), (x, (y-1) % 100), (x, (y+1) % 100)]
+    #         score = 0
+    #         for neighbor in neighbors:
+    #             if self.amoeba_map[neighbor] == 1:
+    #                 score += 1
+    #         ranked_cells.append(((x, y), score))
+    #     return [cell for cell, score in sorted(ranked_cells, key=lambda t: t[1])]
 
     def get_retracts_neighbors(self, potential_retracts):
         ranked_cells_dict = {}
@@ -397,7 +398,10 @@ class Player:
         return ranked_cells_dict
 
     def sort_retracts(self, retracts, ranked_cells_dict):
-        retracts = sorted(retracts, key=lambda r: (ranked_cells_dict[r], -abs(r[0]-50)), reverse=True)
+        if self.mem.x_val >= 50:
+            retracts = sorted(retracts, key=lambda r: (ranked_cells_dict[r], -abs(r[0]-50)), reverse=True)
+        else:
+            retracts = sorted(retracts, key=lambda r: (ranked_cells_dict[r], abs(r[0] - 50)), reverse=True)
         return retracts
 
     def get_valid_neighbors(self, cell):
@@ -580,6 +584,7 @@ class Player:
         retracts = []
         moves = []
         mem = Memory(byte=info)
+        self.mem = mem
         
         if self.is_square(current_percept):
             mem.x_val = 50
