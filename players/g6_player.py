@@ -149,6 +149,7 @@ class Player:
             
             if len(retract_list) == 0:
                 info = -1
+                # i need some info here on whther the resulting shape has backbone thickness more than 1
                 
             
         mini = min(int(self.current_size*self.metabolism), len(retract_list), len(expand_list))
@@ -285,8 +286,8 @@ class Player:
             priorize_columns = sorted(priorize_columns, reverse=True) 
 
             for col in priorize_columns:
-                # if row > bottom_side - 7: # do not retract bottom 7 rows, hardcoded
-                #     continue
+                if row > bottom_side - 4: # do not retract bottom 3 rows
+                    continue
                 cell = (col%100, row%100)
                 if cell in periphery:
                     retract_list.append(cell)
@@ -331,9 +332,9 @@ class Player:
             col_count = count[idx]
             col_cells = amoeba_loc[amoeba_loc[:, 0]==col]
 
-            if col_count < 2:
+            cell = col_cells[col_cells[:, 1].argmax()]  # lowest cell
+            if col_count < 2 or amoeba_map[cell[0], cell[1]-1] == 0:
                 # expand to the bottom of the first/last col
-                cell = col_cells[col_cells[:, 1].argmax()] # lowest cell
                 move = ((cell[0])%100, (cell[1]+1)%100)
                 if move in movable:
                     expand_cells.append(move)
@@ -342,6 +343,8 @@ class Player:
             for c_i in range(min(2, col_cells.shape[0])):
                 cell = col_cells[-2:][c_i]
                 if cell[0]+direction[i] < 4 or cell[0]+direction[i] > 95:
+                    continue
+                if amoeba_map[cell[0], cell[1]-1] == 0 and amoeba_map[cell[0], cell[1]+1] == 0:
                     continue
                 move = ((cell[0]+direction[i])%100, (cell[1])%100)
                 if move in movable:
