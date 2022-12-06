@@ -5,6 +5,7 @@ import logging
 from amoeba_state import AmoebaState
 import constants
 
+import random
 from typing import Tuple, List
 import numpy.typing as npt
 import math
@@ -336,7 +337,7 @@ class Player:
                     offsets.add((i-3, j))
                     total_cells-=1
                     if total_cells > 0:
-                        offsets.add((i-3, -(j)))
+                        offsets.add((i-3, -j))
                 ######################
                 ###################### Recreate inital offsets at new positions
                 elif step % 11 == 6:
@@ -349,7 +350,7 @@ class Player:
                     total_cells-=1
                     if total_cells > 0:
                         offsets.add((i-4, -(j+1)))
-                elif step % 11 == 7 or step % 12 == 8:
+                elif step % 11 == 8:
                     offsets.add((i-4, j+2))
                     total_cells-=1
                     if total_cells > 0:
