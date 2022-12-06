@@ -12,13 +12,6 @@ from amoeba_state import AmoebaState
 def map_to_coords(amoeba_map: npt.NDArray) -> list[Tuple[int, int]]:
     return list(map(tuple, np.transpose(amoeba_map.nonzero()).tolist()))
 
-# Copied from Group 2
-def coords_to_map(coords: list[tuple[int, int]], size=100) -> npt.NDArray:
-    amoeba_map = np.zeros((size, size), dtype=np.int8)
-    for x, y in coords:
-        amoeba_map[x, y] = 1
-    return amoeba_map
-
 def binary_search(list, goal):
     mid = len(list) // 2
 
