@@ -19,17 +19,60 @@ def coords_to_map(coords: list[tuple[int, int]], size=100) -> npt.NDArray:
         amoeba_map[x, y] = 1
     return amoeba_map
 
-def binary_search_item(li, check):
-    mid = len(li) // 2
+def binary_search(list, goal):
+    mid = len(list) // 2
 
-    if not check(li[:mid]):
-        return binary_search_item(li[:mid], check)
-    elif not check(li[mid + 1:]):
-        return binary_search_item(li[mid + 1:], check)
-    elif not check(li):
-        return li[mid]
+    if not goal(list[:mid]):
+        return binary_search(list[:mid], goal)
+    elif not goal(list[mid + 1:]):
+        return binary_search(list[mid + 1:], goal)
+    elif not goal(list):
+        return list[mid]
     else:
         return None
+
+def wrap_point(x, y):
+    return (x % 100, y % 100)
+
+def get_neighbors(cell):
+    x, y = cell
+    neighbors = [wrap_point(x - 1, y), wrap_point(x + 1, y), wrap_point(x, y + 1), wrap_point(x, y - 1)]
+    return neighbors
+
+def generate_rake(formation, move_teeth, available, spacing, x_position, center_y, reverse=False):
+    complete_chunks = available // (2 * spacing + 1)
+    additional_chunks = available % (2 * spacing + 1) // 2
+    base_length = min(complete_chunks * 3 + additional_chunks, 100)
+
+    start_y = center_y - base_length // 2
+
+    if not reverse:
+        start_x = x_position
+
+        for i in range(start_y, start_y + base_length):
+            formation[start_x, i % 100] = 1
+            formation[(start_x - 1) % 100, i % 100] = 1
+            if i % 100 % spacing == move_teeth:
+                formation[(start_x + 1) % 100, i % 100] = 1
+    else:
+        start_x = (99 - x_position) % 100
+
+        for i in range(start_y, start_y + base_length):
+            formation[start_x, i % 100] = 1
+            formation[(start_x + 1) % 100, i % 100] = 1
+            if i % 100 % spacing == move_teeth ^ 1:
+                formation[(start_x - 1) % 100, i % 100] = 1
+
+    return formation
+
+def generate_bar(formation, available, x_position, center_y):
+    bar_length = min((x_position - 50) * 2, available)
+    if x_position < 50: bar_length = min(100, available)
+        
+    for offset in range(1, bar_length + 1):
+        formation[wrap_point((x_position - offset), center_y)] = 1
+    
+    return formation
 
 # ---------------------------------------------------------------------------- #
 #                                Info Byte Class                               #
@@ -86,7 +129,7 @@ def decode_info(info: int) -> Tuple[int, int]:
 #                               Main Player Class                              #
 # ---------------------------------------------------------------------------- #
 
-TOOTH_SPACING = 1
+TOOTH_SPACING = 2
 SHIFTING_FREQUENCY = 6
 
 class Player:
@@ -129,72 +172,19 @@ class Player:
         # first rake
         if amoeba_size > 350 and stop_collision(x_position) < 3:
             x_position = ((50 * round(x_position / 50)) + 3) % 100
-
-        complete_chunks = amoeba_size // 7
-        additional_chunks = amoeba_size % 7 // 2
-        base_length = min(complete_chunks * 3 + additional_chunks, 100)
-
-        start_y = center_y - base_length // 2
-        start_x = x_position
-
-        cells_used = 0
-        for i in range(start_y, start_y + base_length):
-            formation[start_x, i % 100] = 1
-            formation[(start_x - 1) % 100, i % 100] = 1
-            if i % 100 % spacing == move_teeth:
-                formation[(start_x + 1) % 100, i % 100] = 1
+        formation = generate_rake(formation, move_teeth, amoeba_size, spacing, x_position, center_y)
         
         # middle bar
         cells_used = (formation == 1).sum()
         available = amoeba_size - cells_used
-
-        if x_position < 50:
-            bar_length = min(100, available)
-        else:
-            bar_length = min((x_position - 50) * 2, available)
-        
-        for offset in range(1, bar_length + 1):
-            formation[(x_position - offset) % 100, center_y] = 1
+        formation = generate_bar(formation, available, x_position, center_y)
 
         # second rake
         cells_used = (formation == 1).sum()
         available = amoeba_size - cells_used
-
-        complete_chunks = available // 7
-        additional_chunks = available % 7 // 2
-
-        base_length = min(complete_chunks * 3 + additional_chunks, 100)
-
-        start_y = center_y - base_length // 2
-        start_x = (99 - x_position) % 100
-
-        for i in range(start_y, start_y + base_length):
-            formation[start_x, i % 100] = 1
-            formation[(start_x + 1) % 100, i % 100] = 1
-            if i % 100 % spacing == move_teeth ^ 1:
-                formation[(start_x - 1) % 100, i % 100] = 1
+        formation = generate_rake(formation, move_teeth, available, spacing, x_position, center_y, reverse=True)
         
         return formation
-
-    def get_neighbors(self, cell):
-        x, y = cell
-        neighbors = [((x - 1) % 100, y), ((x + 1) % 100, y), (x, (y - 1) % 100), (x, (y + 1) % 100)]
-        return neighbors
-    
-    def get_retracts_neighbors(self, potential_retracts):
-        ranked_cells_dict = {}
-        for x, y in potential_retracts:
-            neighbors = [((x-1) % 100, y), ((x+1) % 100, y), (x, (y-1) % 100), (x, (y+1) % 100)]
-            score = 0
-            for neighbor in neighbors:
-                if self.amoeba_map[neighbor] == 1:
-                    score += 1
-            ranked_cells_dict[(x, y)] = score
-        return ranked_cells_dict
-
-    def sort_retracts(self, retracts, ranked_cells_dict):
-        retracts = sorted(retracts, key=lambda r: (ranked_cells_dict[r], -abs(r[0]-50)), reverse=True)
-        return retracts
 
     # Copied from Group 2, slightly modified
     def get_morph_moves(self, desired_amoeba: npt.NDArray) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
@@ -206,15 +196,24 @@ class Player:
         desired_points = map_to_coords(desired_amoeba)
 
         potential_retracts = [p for p in list(set(current_points).difference(set(desired_points))) if
-                              (p in self.retractable_cells) and not any([neighbor in self.bacteria_cells for neighbor in self.get_neighbors(p)])]
+                              (p in self.retractable_cells) and not any([neighbor in self.bacteria_cells for neighbor in get_neighbors(p)])]
         potential_extends = [p for p in list(set(desired_points).difference(set(current_points))) if
                              p in self.extendable_cells]
         potential_extends.sort(key=lambda pos: abs(50 - pos[1]))
 
         retracts = []
         extends = []
-        ranked_cells_dict = self.get_retracts_neighbors(potential_retracts)
-        potential_retracts = self.sort_retracts(potential_retracts, ranked_cells_dict)
+
+        ranked_cells_dict = {}
+        for x, y in potential_retracts:
+            neighbors = [((x-1) % 100, y), ((x+1) % 100, y), (x, (y-1) % 100), (x, (y+1) % 100)]
+            score = 0
+            for neighbor in neighbors:
+                if self.amoeba_map[neighbor] == 1:
+                    score += 1
+            ranked_cells_dict[(x, y)] = score
+
+        potential_retracts = sorted(potential_retracts, key=lambda x: (ranked_cells_dict[x], -abs(x[0]-50)), reverse=True)
 
         possible_moves = min(len(potential_retracts), len(potential_extends), self.num_available_moves)
         potential_extends.reverse()
@@ -224,23 +223,23 @@ class Player:
             retracts.append(next_ret)
             extends.append(potential_extends.pop())
 
-            for neighbor in self.get_neighbors(next_ret):
+            for neighbor in get_neighbors(next_ret):
                 if neighbor in ranked_cells_dict:
                     ranked_cells_dict[neighbor] -= 1
 
-            potential_retracts = self.sort_retracts(potential_retracts, ranked_cells_dict)
+            potential_retracts = sorted(potential_retracts, key=lambda x: (ranked_cells_dict[x], -abs(x[0]-50)), reverse=True)
 
         while not self.check_move(retracts, extends):
-            bad_retract = binary_search_item(retracts, lambda r: self.check_move(r, extends[:len(r)]))
+            bad_retract = binary_search(retracts, lambda r: self.check_move(r, extends[:len(r)]))
 
-            for neighbor in self.get_neighbors(bad_retract):
+            for neighbor in get_neighbors(bad_retract):
                 if neighbor in ranked_cells_dict:
                     ranked_cells_dict[neighbor] += 1
 
             retracts.remove(bad_retract)
             extends.pop()
 
-            potential_retracts = self.sort_retracts(potential_retracts, ranked_cells_dict)
+            potential_retracts = sorted(potential_retracts, key=lambda x: (ranked_cells_dict[x], -abs(x[0]-50)), reverse=True)
 
             if potential_retracts and potential_extends:
                 retracts.append(potential_retracts.pop())
@@ -317,7 +316,6 @@ class Player:
             self.move_teeth = 1
 
         while len(retract) == 0 and len(move) == 0:
-
             if self.move_teeth == 0:
                 x_position = self.x_position - 1
             else:
