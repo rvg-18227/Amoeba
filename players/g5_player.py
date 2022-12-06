@@ -22,7 +22,7 @@ MAX_BASE_LEN = min(MAP_DIM, 100)
 TOOTH_SPACING = 1       # 1 best
 SHIFTING_FREQ = 6       # 6 best for high metabolisms, 4 better for low
 SIZE_MULTIPLIER = 4     # 4 best for density = 0.1 metabolism = 0.1
-MOVING_TYPE = 'center_teeth_first'  # 'center' best for low metabolisms - 'center_teeth_first' better for high
+MOVING_TYPE = 'center'  # 'center' best for low metabolisms - 'center_teeth_first' better for high
 TWO_RAKE = True
 
 # Best configs so far #
@@ -481,7 +481,6 @@ class Player:
         # retracts = potential_retracts[:possible_moves]
         # extends = potential_extends[:possible_moves]
 
-        print('Search started')
         while not self.check_move(retracts, extends):
             # retracts = binary_search(retracts, lambda r: self.check_move(r, extends[:len(r)]))
             bad_retract = binary_search_item(retracts, lambda r: self.check_move(r, extends[:len(r)]))
@@ -500,11 +499,10 @@ class Player:
             if potential_retracts and potential_extends:
                 retracts.append(potential_retracts.pop())
                 extends.append(potential_extends.pop())
-        print('Search ended')
 
         # show_amoeba_map(self.amoeba_map, retracts, extends)
         # truncate to account for smaller metabolism
-        print(self.check_move(retracts, extends))
+        # print(self.check_move(retracts, extends))
         return retracts, extends
 
     # adapted from amoeba game code
@@ -577,7 +575,6 @@ class Player:
                     2. A list of positions the retracted cells have moved to
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
-        print('Move started')
         self.store_current_percept(current_percept)
 
         retracts = []
@@ -630,6 +627,8 @@ class Player:
                 retracts, moves = [], []
             else:
                 retracts, moves = self.get_morph_moves(target_formation)
+                # if len(retracts)/self.num_available_moves < 0.2:
+                #     retracts, moves = [], []
 
             if len(retracts) == 0 and len(moves) == 0:
             # if random.random() < 0.5 or (len(retracts) == 0 and len(moves) == 0):
@@ -642,7 +641,6 @@ class Player:
                     # mem.x_val = (mem.x_val + 1) % 100
 
         info = mem.get_byte()
-        print('Move ended')
         return retracts, moves, info
 
     def shift_col(self, arr, col, shift):
