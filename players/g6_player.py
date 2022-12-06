@@ -625,6 +625,13 @@ class Player:
                 return False
         return True
     
+    def find_last_row(self, array, start):
+        for i in range(100):
+            if (array[start - i] == 1) and (array[start - i - 1] == 0):
+                return start - i
+        # wrap around somehow
+        return None
+    
     def close_in(self, amoeba_map):
         """Close in function for clashing formation
         Args:
@@ -639,13 +646,18 @@ class Player:
         start_row = np.argmax(np.sum(amoeba_map, axis=0)) + 1
         # assume no spliting
         # move right most cell to the adjacent left location
+        # TODO
+        # Pass in location of the opposing column
+        target_column = self.find_first_tentacle(amoeba_map)
+        # TODO
+        # check height of the tenticle, if exceed max meta, shrink it
         extract = []
         extend = []
         for i in range(start_row, start_row+100):
             if amoeba_map[:, i].sum() == 0:
                 # reach the end
                 break
-            if self.is_singular_chunk(amoeba_map[:, i]):
+            if self.is_singular_chunk(amoeba_map[:, i]) and amoeba_map[:, i].argmax() == target_column:
                 # singular chunk, no need to move
                 continue
             row_reverse = amoeba_map[:, i][::-1]
@@ -657,4 +669,18 @@ class Player:
                     extract.append((right_most_cell, i % 100))
                     extend.append((j-1, i % 100))
                     break
+        # check for excess column
+        if i - start_row >= self.current_size * self.metabolism:
+            # not enough cells to move all column
+            # move the one on the top to the bottom first
+            excess_column = np.where(amoeba_map[:, i - 1] == 1)[0]
+            if not (len(excess_column) == 1 and target_column == excess_column[0]):
+                new_extract = []
+                new_extend = []
+                for col in excess_column:
+                    last_row = self.find_last_row(amoeba_map[col, :], i-1)
+                    # move current cell to the bottom
+                    new_extract.append((col, i-1))
+                    new_extend.append((col, last_row + 1))
+                return new_extract, new_extend
         return extract, extend
