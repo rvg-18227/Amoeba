@@ -139,20 +139,6 @@ class Player:
 
         return out
     
-    def find_adjacent_amoeba_cells(self, x, y, amoeba_map, bacteria):
-        out = []
-        if (x, y) not in bacteria:
-            if amoeba_map[x][(y - 1) % 100] == 1:
-                out.append((x, (y - 1) % 100))
-            if amoeba_map[x][(y + 1) % 100] == 1:
-                out.append((x, (y + 1) % 100))
-            if amoeba_map[(x - 1) % 100][y] == 1:
-                out.append(((x - 1) % 100, y))
-            if amoeba_map[(x + 1) % 100][y] == 1:
-                out.append(((x + 1) % 100, y))
-
-        return out
-
     # Find shape given size of anoemba, in the form of a list of offsets from center
     def get_desired_shape(self, shape=3):        
         if shape == 0:
@@ -426,19 +412,7 @@ class Player:
                 break
 
             matching_retracts = list(potential_retracts)
-
-            # 1
             matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))
-
-            # 2
-            # slows down dramatically...sometimes better/worse score
-            '''neighbors = {}
-            for retract in matching_retracts:
-                get_neighbors = self.find_adjacent_amoeba_cells(retract[0], retract[1], 
-                    self.amoeba_map, self.bacteria)
-                neighbors[retract] = len(get_neighbors)
-
-            matching_retracts = list(dict(sorted(neighbors.items(), key=lambda x: x[1])).keys())'''
 
             for i in range(len(matching_retracts)):
                 retract = matching_retracts[i]
@@ -450,8 +424,6 @@ class Player:
                     potential_extends.remove(potential_extend)
                     break
         
-        # TODO: extra bacteria handling??
-
         return retracts, extends
 
     def move(self, last_percept, current_percept, info) -> (list, list, int):
@@ -495,7 +467,7 @@ class Player:
 
         ### GET DESIRED OFFSETS FOR CURRENT MORPH ###
         desired_shape_offsets = self.get_desired_shape()
-        print(desired_shape_offsets)
+        #print(desired_shape_offsets)
         #exit(1)
 
 
