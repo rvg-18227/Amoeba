@@ -413,7 +413,7 @@ class Player:
                         #self.logger.info(f'cell idx : {np.where(cell_idx == True)[0]}')
                         amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx == True)[0], axis=0)
 
-        #print("retract sweep", retract_list)
+        print("retract sweep", retract_list)
         #print(amoeba_loc)
         #quit()
         return retract_list
@@ -448,10 +448,11 @@ class Player:
         tentacle_one_column_new = np.where(tentacle_one_column[:, 1] > max_row)[0]
         tentacle_one_column_new = tentacle_one_column[tentacle_one_column_new]
         tentacle_one_len = len(tentacle_one_column_new)
-        #mini = 100
+
         if tentacle_one_len < mini:
             expand_cell = np.max(tentacle_one_column[:, 1])
-            if abs(top_side - expand_cell % 100) > 5:
+
+            if abs(top_side - expand_cell % 100) > 5 or top_side < expand_cell % 100:
                 expand_cell = (col_one % 100, (expand_cell + 1) % 100)
                 expand_cells.append(expand_cell)
 
@@ -465,7 +466,7 @@ class Player:
         # mini = 100
         if tentacle_two_len < mini:
             expand_cell = np.max(tentacle_two_column[:, 1])
-            if abs(top_side - expand_cell % 100) > 5:
+            if abs(top_side - expand_cell % 100) > 5 or top_side < expand_cell % 100:
                 expand_cell = (col_two % 100, (expand_cell + 1) % 100)
                 expand_cells.append(expand_cell)
 
@@ -481,12 +482,12 @@ class Player:
         # mini = 100
         if tentacle_three_len < mini:
             expand_cell = np.max(tentacle_three_column[:, 1])
-            if abs(top_side - expand_cell % 100) > 5:
+            if abs(top_side - expand_cell % 100) > 5 or top_side < expand_cell % 100:
                 expand_cell = (col_three % 100, (expand_cell + 1) % 100)
                 expand_cells.append(expand_cell)
             #quit()
 
-        #print("expand", expand_cells)
+        print("expand", expand_cells)
         return expand_cells
 
     def find_first_tentacle(self, amoeba_map):
