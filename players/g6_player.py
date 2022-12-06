@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 import logging
 from amoeba_state import AmoebaState
+import math
 from matplotlib import pyplot as plt
 
 EXTEND_COLOR = (np.random.rand(1,1,3) * 255).astype(int)
@@ -102,6 +103,8 @@ class Player:
         if info < 40:
         # reorganize, organize, forward
             stage = min(info, 2)
+        elif info == 100:
+            stage = 4
         else:
             stage = 3
         
@@ -140,16 +143,22 @@ class Player:
                     amoeba_map, int(self.current_size*self.metabolism))
             retract_list = self.box_to_sweeper_retract(
                     amoeba_map, current_percept.periphery, int(self.current_size*self.metabolism))
-            if stage == 3 and len(retract_list) == 0:  
-                # Close in
-                col_one = self.find_first_tentacle(amoeba_map)
-                print(col_one)
-                print('close_in')
-                retract_list, expand_list = self.close_in(amoeba_map)
-            
+            if (len(retract_list) == 0 or len(expand_list) == 0):
+                stage = 4
+
+
+        if stage == 4:
+            # Close in
+            col_one = self.find_first_tentacle(amoeba_map)
+            print(col_one)
+            print('close_in')
+            retract_list, expand_list = self.close_in(amoeba_map)
+        
             if len(retract_list) == 0:
                 info = -1
                 # i need some info here on whther the resulting shape has backbone thickness more than 1
+            else:
+                info = 99
                 
             
         mini = min(int(self.current_size*self.metabolism), len(retract_list), len(expand_list))
@@ -487,29 +496,32 @@ class Player:
         return expand_cells
 
     def find_first_tentacle(self, amoeba_map):
-        amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
-        amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
-        top_side = np.min(amoeba_loc[:, 1])
-        bottom_side = np.max(amoeba_loc[:, 1])
+        # amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
+        # amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
+        # top_side = np.min(amoeba_loc[:, 1])
+        # bottom_side = np.max(amoeba_loc[:, 1])
 
-        max_row_length = np.NINF
-        max_row = np.NINF
-        for row in range(top_side, bottom_side + 1):
-            row_array = np.where(amoeba_loc[:, 1] == row)[0]
-            row_cells = amoeba_loc[row_array]
-            row_len = len(row_cells)
+        # max_row_length = np.NINF
+        # max_row = np.NINF
+        # for row in range(top_side, bottom_side + 1):
+        #     row_array = np.where(amoeba_loc[:, 1] == row)[0]
+        #     row_cells = amoeba_loc[row_array]
+        #     row_len = len(row_cells)
 
-            if row_len >= max_row_length:
-                max_row_length = row_len
-                max_row = row
+        #     if row_len >= max_row_length:
+        #         max_row_length = row_len
+        #         max_row = row
 
-        row_use = np.where(amoeba_loc[:, 1] == max_row)[0]
-        row_cells = amoeba_loc[row_use]
-        row_cells = row_cells[row_cells[:, 0].argsort()]
+        # row_use = np.where(amoeba_loc[:, 1] == max_row)[0]
+        # row_cells = amoeba_loc[row_use]
+        # row_cells = row_cells[row_cells[:, 0].argsort()]
 
-        tentacle_one = row_cells[1]
-        col_one = tentacle_one[0]
+        # tentacle_one = row_cells[1]
+        # col_one = tentacle_one[0]
 
+        sum_amoeba = np.sum(amoeba_map, axis=1)
+        ind = np.argpartition(sum_amoeba, -3)[-3:]
+        col_one = np.min(ind)
         return col_one
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria):
@@ -632,6 +644,26 @@ class Player:
         # wrap around somehow
         return None
     
+    def find_start_row(self, amoeba_map):
+        amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
+        amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
+        top_side = np.min(amoeba_loc[:, 1])
+        bottom_side = np.max(amoeba_loc[:, 1])
+
+        max_row_length = np.NINF
+        max_row = np.NINF
+        for row in range(top_side, bottom_side+1):
+            row_array = np.where(amoeba_loc[:, 1] == row)[0]
+            row_cells = amoeba_loc[row_array]
+            row_len = len(row_cells)
+
+            if row_len >= max_row_length:
+                max_row_length = row_len
+                max_row = row
+                
+        return max_row
+
+    
     def close_in(self, amoeba_map):
         """Close in function for clashing formation
         Args:
@@ -644,6 +676,8 @@ class Player:
         # possible for new cell eaten such that tenticle_length increases between moves
         #while moving_tenticle is None:
         start_row = np.argmax(np.sum(amoeba_map, axis=0)) + 1
+        start_row = self.find_start_row(amoeba_map) + 1
+        
         # assume no spliting
         # move right most cell to the adjacent left location
         # TODO
@@ -657,7 +691,7 @@ class Player:
             if amoeba_map[:, i].sum() == 0:
                 # reach the end
                 break
-            if self.is_singular_chunk(amoeba_map[:, i]) and amoeba_map[:, i].argmax() == target_column:
+            if self.is_singular_chunk(amoeba_map[:, i]) and amoeba_map[:, i].argmax() <= target_column:
                 # singular chunk, no need to move
                 continue
             row_reverse = amoeba_map[:, i][::-1]
@@ -669,8 +703,8 @@ class Player:
                     extract.append((right_most_cell, i % 100))
                     extend.append((j-1, i % 100))
                     break
-        # check for excess column
-        if i - start_row >= self.current_size * self.metabolism:
+        #check for excess column
+        if int(i - start_row) > math.ceil(self.current_size * self.metabolism):
             # not enough cells to move all column
             # move the one on the top to the bottom first
             excess_column = np.where(amoeba_map[:, i - 1] == 1)[0]
