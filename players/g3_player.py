@@ -214,6 +214,8 @@ class Player:
         elif shape == 2:
             j = 2
             step = 0
+            offsets = {(0,0), (0,1), (0,-1), (1,1), (1,-1)}
+            total_cells = self.current_size-5
             while total_cells > 0:
                 if step % 14 == 0:
                     offsets.add((1, j))
