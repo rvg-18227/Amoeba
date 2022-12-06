@@ -532,9 +532,9 @@ class BoxFarm(Strategy):
 
 class BucketAttack(Strategy):
 
-    def __init__(self, metabolism, bucket_width=1, shift_n=-1, v_size=200):
+    def __init__(self, metabolism, bucket_width=1, shift_n=-1):
         """Initializes BucketAttack.
-        
+
         kwargs:
           bucket_width: # cells between bucket arms, default to 1
           shift_n: shift bucket arms up/down every n turns, acceptable n value
@@ -544,12 +544,11 @@ class BucketAttack(Strategy):
         self.bucket_width = bucket_width
         self.shift_enabled = shift_n >= 1 and shift_n <= 16
         self.shift_n = shift_n
-        self.v_size = v_size
 
         # derived statistics
         self.wall_cost = self.bucket_width + 1
         self.bucket_cost = 2 * self.wall_cost + 1 # 1 is cost of bucket arm
-    
+
     def _spread_vertically(
         self,
         y_center: int,
@@ -558,7 +557,7 @@ class BucketAttack(Strategy):
         step=1
     ) -> np.ndarray:
         """Returns a list of y-values by spreading around y_center.
-        
+
         kwarg @step is used to determine the distance between spread points.
         e.g. step = 1 => spreaded pts are immediately next to one another
              step = 3 => distance between each consecutive pair of spreaded pts
@@ -592,6 +591,7 @@ class BucketAttack(Strategy):
         cur_x = x_cog
         cur_y = y_cog
         targets = []
+
         while cur < size:
             cur_x -= 1
             targets.append(((cur_x) % 100, cur_y % 100))
@@ -601,9 +601,10 @@ class BucketAttack(Strategy):
                 cur_y += up_or_down
                 targets.append(((cur_x) % 100, cur_y % 100))
                 cur += 1
-            if cur_x%100 == 0:
-                print("reach edge",len(targets))
-        print(targets)
+
+            if cur_x % 100 == 0:
+                print("reach edge", len(targets))
+
         return targets
 
     def _get_target_cells(self, size: int, cog: cell, xmax: int) -> list[cell]:
@@ -642,6 +643,162 @@ class BucketAttack(Strategy):
         arm_cells = [ ( (xmax + 1) % 100, y % 100 ) for y in arm_cell_ys ]
 
         return wall_cells + arm_cells
+
+    def _get_rectangle_target(self, size: int, cog: cell, xmax: int) -> list[cell]:
+        _, y_cog = cog
+        wall_length, orphans=int(size/4),size%4
+        upper=y_cog+wall_length
+        lower=y_cog-wall_length
+
+        inner_wall_cell_ys = self._spread_vertically(
+            y_cog,
+            upper,
+            lower+orphans
+        )
+        outer_wall_cell_ys = self._spread_vertically(
+            y_cog,
+            upper,
+            lower
+        )
+        wall_cells = (
+                [(xmax % 100, y % 100) for y in inner_wall_cell_ys] +
+                [((xmax + 1) % 100, y % 100) for y in outer_wall_cell_ys]
+        )
+        return wall_cells
+
+    def _get_cog(self, curr_state: AmoebaState) -> tuple[int, int]:
+        """Compute center of gravity of current Ameoba."""
+        ameoba_cells = np.array(list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value))))
+        cog = (round(np.average(ameoba_cells[:,0])),round(np.average(ameoba_cells[:,1])))
+
+        return cog
+
+    def _get_xmax(self, curr_state: AmoebaState) -> int:
+        """Returns the x-value of the "rightmost" Ameoba cell.
+
+        Note: when the ameoba's bucket arm moves from x=99 to the right, the x-value
+        will wrap around to 0. In this case, xmax is 0 since that's where the bucket
+        arms are. Below is a graphical illustration:
+
+                       x=0     ...     x = 98  x = 99
+                        .                 .      .
+                                          .      .
+                                          .      .
+                        .                 .      .
+                      (xmax
+        """
+
+        # we concatenate the ameoba map along the x-axis forming a 200 * 100 map
+        #               x = 0 ... x = 99 x=100 ... x=199
+
+        ameoba_map = np.vstack((curr_state.amoeba_map, curr_state.amoeba_map))
+        ameoba_xs, _ = np.where(ameoba_map == State.ameoba.value)
+
+        # we operate a subset (x=50 -> x=149) of this new map to find @xmax by
+        # searching from xmax=xmin, and increment xmax whenever we see a x-value
+        # immediately larger by 1
+        x_filter = (ameoba_xs >= constants.map_dim / 2) & (ameoba_xs < constants.map_dim * 1.5)
+        xs = sorted(set(ameoba_xs[x_filter]))
+        xmax = min(xs)
+        for x in xs:
+            xmax += int(x == xmax + 1)
+
+        return xmax % constants.map_dim
+
+    def _reach_border(self, curr_state: AmoebaState) -> bool:
+        _, ameoba_ys = np.where(curr_state.amoeba_map == State.ameoba.value)
+        lower_bound, upper_bound = min(ameoba_ys), max(ameoba_ys)
+
+        return abs(upper_bound - lower_bound) >= 98
+
+    def _in_shape(self, xmax: int, curr_state: AmoebaState) -> bool:
+        """Returns a bool indicating if our bucket arms are in shape.
+
+        In our implementation, *no memory bit* is needed to store information
+        of whether we have gotten into "comb" shape or not, all thanks to
+        this function/heuristic.
+
+        If we have an expected number of bucket arms, it's safe for us to
+        keep marching forward, since having bucket arms in formation would
+        allow us to keep capturing bacteria on our way while adjusting
+        formation.
+
+        Otherwise, we need to wait for the bucket arms to get into shape, so
+        that we don't risk moving and not able to eat any bacteria along the
+        way.
+        """
+        arms_got = len(np.where(curr_state.amoeba_map[xmax,:] == State.ameoba.value)[0])
+
+        if not self._reach_border:
+            arms_expected = 1 + math.floor((curr_state.current_size - 3) / self.bucket_cost)
+        else:
+            arms_expected = 2 * ((constants.map_dim / 2 - 1) // (self.bucket_width + 1) + 1)
+
+        return arms_got >= arms_expected
+
+    def move(
+        self, prev_state: AmoebaState, state: AmoebaState, memory: int
+    ) -> tuple[list[cell], list[cell], int]:
+
+        # ----------------
+        #  Decode Memory
+        # ----------------
+        mem = f'{memory:b}'.rjust(8, '0')
+        old_xmax = int(mem[:7], 2)
+        shifted = int(mem[-1])
+
+        # ---------------
+        #  State Update
+        # ---------------
+        # rotation counter & shifted
+        rotation = (old_xmax + 1) % self.shift_n
+        if self.shift_enabled and rotation == 0:
+            shifted = shifted ^ 1
+
+        # arm_xval
+        if not self._reach_border(state):
+            xmax = self._get_xmax(state)
+        else:
+            xmax = old_xmax + 1
+
+        if not self._in_shape(xmax % 100, state):
+            arm_xval = (xmax - 1) % 100
+        else:
+            arm_xval = xmax % 100
+
+        # ----------------
+        #  Update Memory
+        # ----------------
+        arm_xval_bin = '{0:07b}'.format(arm_xval)
+        shifted_bin  = '{0:01b}'.format(shifted)
+        memory = int(arm_xval_bin + shifted_bin, 2)
+
+
+        size = state.current_size
+        # TODO: maybe not always moving horizontally?
+        if shifted:
+            cog = (50, 49)
+        else:
+            cog  = (50, 50)
+
+        # ----------------------------------
+        #  compute moves: retract & extend
+        # ----------------------------------
+        target_cells = self._get_target_cells(size, cog, arm_xval)
+        retract, extend, memory = self._reshape(state, memory, set(target_cells))
+
+        if len(retract) > 0:
+            return retract, extend, memory
+        else:
+            target_cells = self._get_rectangle_target(size, cog, arm_xval)
+            return self._reshape(state, memory, set(target_cells))
+
+
+class BucketXAttack(BucketAttack):
+
+    def __init__(self, metabolism, bucket_width=1, shift_n=-1, v_size=200):
+        super().__init__(metabolism, bucket_width=bucket_width, shift_n=shift_n)
+        self.v_size = v_size
 
     def _get_horizontal_comb_target_cells(self, size: int, cog: cell, ymax: int) -> list[cell]:
         """Returns the cells of the target shape by centering vertically on
@@ -684,27 +841,23 @@ class BucketAttack(Strategy):
 
         return wall_cells + arm_cells
 
-    def _get_rectangle_target(self, size: int, cog: cell, xmax: int) -> list[cell]:
-        _, y_cog = cog
-        wall_length, orphans=int(size/4),size%4
-        upper=y_cog+wall_length
-        lower=y_cog-wall_length
+    def _get_vshape_target(self, size: int, cog: cell) -> list[cell]:
+        arm_length = size // 2
+        upper_arm = self._spread_diagonally(arm_length, cog, 1)
+        lower_arm = self._spread_diagonally(arm_length, cog, -1)
+        arm_cells = upper_arm + lower_arm
 
-        inner_wall_cell_ys = self._spread_vertically(
-            y_cog,
-            upper,
-            lower+orphans
-        )
-        outer_wall_cell_ys = self._spread_vertically(
-            y_cog,
-            upper,
-            lower
-        )
-        wall_cells = (
-                [(xmax % 100, y % 100) for y in inner_wall_cell_ys] +
-                [((xmax + 1) % 100, y % 100) for y in outer_wall_cell_ys]
-        )
-        return wall_cells
+        return arm_cells
+
+    def _get_bridge_target(self, size: int, cog: cell) -> list[cell]:
+        bridge_cells = []
+        x_cog,y_cog = cog
+        cur_x = x_cog
+
+        for i in range(size):
+            bridge_cells.append((cur_x, y_cog))
+            cur_x -= 1
+        return bridge_cells
 
     def _get_bridge_V_target_cells(self, size: int, cog: cell, xmax: int) -> list[cell]:
         _, y_cog = cog
@@ -717,135 +870,79 @@ class BucketAttack(Strategy):
         if bridge_size>0:
             print("have bridge",size, comb_size,bridge_size)
             bridge_length,orphan=divmod(bridge_size,2)
-            if xmax>50:
+
+            if xmax > 50:
                 if xmax-bridge_length > 50:
-                    upper_bridge_cells=[(cur_x,y_cog) for cur_x in range(xmax-bridge_length,xmax)]
-                    lower_bridge_cells=[(cur_x,y_cog-1) for cur_x in range(xmax-bridge_length-orphan,xmax)]
-                    bridge_targets= upper_bridge_cells+lower_bridge_cells
+                    upper_bridge_cells= [
+                        (cur_x, y_cog)
+                        for cur_x in range(xmax-bridge_length,xmax)
+                    ]
+                    lower_bridge_cells = [
+                        (cur_x, y_cog - 1)
+                        for cur_x in range(xmax-bridge_length-orphan,xmax)
+                    ]
+                    bridge_targets = upper_bridge_cells + lower_bridge_cells
+
                     return comb_targets + bridge_targets
                 else:
                     bridge_length = xmax - 50
-                    upper_bridge_cells = [(cur_x, y_cog) for cur_x in range(xmax - bridge_length, xmax)]
-                    lower_bridge_cells = [(cur_x, y_cog - 1) for cur_x in range(xmax - bridge_length, xmax)]
+                    upper_bridge_cells = [
+                        (cur_x, y_cog)
+                        for cur_x in range(xmax - bridge_length, xmax)
+                    ]
+                    lower_bridge_cells = [
+                        (cur_x, y_cog - 1)
+                        for cur_x in range(xmax - bridge_length, xmax)
+                    ]
                     bridge_targets = upper_bridge_cells + lower_bridge_cells
                     bridge_size = len(bridge_targets)
+
                     v_size = min(self.v_size, size - comb_size - bridge_size)
                     v_targets = self._get_vshape_target(v_size, (50, 50))
-                    #print("Grow V", size, comb_size, bridge_size, v_size)
+
                     horizontal_comb_size = size - comb_size - bridge_size - v_size
                     if horizontal_comb_size > 0:
-                         comb_targets = self._get_target_cells(comb_size + horizontal_comb_size, cog, xmax)
+                         comb_targets = self._get_target_cells(
+                                 comb_size + horizontal_comb_size, cog, xmax)
+
                     return comb_targets + bridge_targets + v_targets
 
             else:
-                    left_upper_bridge_cells = [(cur_x, y_cog) for cur_x in range(0, xmax)]
-                    left_lower_bridge_cells = [(cur_x, y_cog - 1) for cur_x in range(0, xmax+orphan)]
-
-                    right_upper_bridge_cells = [(cur_x, y_cog) for cur_x in range(50, 100)]
-                    right_lower_bridge_cells = [(cur_x, y_cog - 1) for cur_x in range(50,100)]
-                    bridge_targets = left_upper_bridge_cells + left_lower_bridge_cells+right_upper_bridge_cells+right_lower_bridge_cells
-                    #print("wrapped around bridge target:",bridge_targets)
-                    #print("wrapped around comb target:",comb_targets)
+                    left_upper_bridge_cells = [
+                        (cur_x, y_cog)
+                        for cur_x in range(0, xmax)
+                    ]
+                    left_lower_bridge_cells = [
+                        (cur_x, y_cog - 1)
+                        for cur_x in range(0, xmax+orphan)
+                    ]
+                    right_upper_bridge_cells = [
+                        (cur_x, y_cog)
+                        for cur_x in range(50, 100)
+                    ]
+                    right_lower_bridge_cells = [
+                        (cur_x, y_cog - 1)
+                        for cur_x in range(50,100)
+                    ]
+                    bridge_targets = (
+                            left_upper_bridge_cells  +
+                            left_lower_bridge_cells  +
+                            right_upper_bridge_cells +
+                            right_lower_bridge_cells
+                    )
                     bridge_size = len(bridge_targets)
+
                     v_size = min(self.v_size, size - comb_size - bridge_size)
                     v_targets = self._get_vshape_target(v_size, (50, 50))
+
                     horizontal_comb_size = size - comb_size - bridge_size - v_size
                     if horizontal_comb_size > 0:
-                        comb_targets = self._get_target_cells(comb_size + horizontal_comb_size, cog, xmax)
+                        comb_targets = self._get_target_cells(
+                                comb_size + horizontal_comb_size, cog, xmax)
+
                     return comb_targets + bridge_targets + v_targets
 
-
         return comb_targets
-
-    def _get_vshape_target(self, size: int, cog: cell) -> list[cell]:
-        arm_length =size//2
-        #print("upper")
-        upper_arm= self._spread_diagonally(arm_length, cog, 1)
-        #print(f"len(upper bridge cells): {len(set(upper_arm))}")
-        #print("lower")
-        lower_arm= self._spread_diagonally(arm_length, cog, -1)
-        #print(f"len(upper bridge cells): {len(set(lower_arm))}")
-        arm_cells = upper_arm+lower_arm
-        return arm_cells
-
-    def _get_bridge_target(self, size: int, cog: cell) -> list[cell]:
-        bridge_cells=[]
-        x_cog,y_cog= cog
-        cur_x=x_cog
-        for i in range(size):
-            bridge_cells.append((cur_x, y_cog))
-            cur_x-=1
-        return bridge_cells
-
-    def _get_cog(self, curr_state: AmoebaState) -> tuple[int, int]:
-        """Compute center of gravity of current Ameoba."""
-        ameoba_cells = np.array(list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value))))
-        cog = (round(np.average(ameoba_cells[:,0])),round(np.average(ameoba_cells[:,1])))
-
-        return cog
-    
-    def _get_xmax(self, curr_state: AmoebaState) -> int:
-        """Returns the x-value of the "rightmost" Ameoba cell.
-        
-        Note: when the ameoba's bucket arm moves from x=99 to the right, the x-value
-        will wrap around to 0. In this case, xmax is 0 since that's where the bucket
-        arms are. Below is a graphical illustration:
-
-                       x=0     ...     x = 98  x = 99
-                        .                 .      .
-                                          .      .
-                                          .      .
-                        .                 .      .
-                      (xmax
-        """
-
-        # we concatenate the ameoba map along the x-axis forming a 200 * 100 map
-        #               x = 0 ... x = 99 x=100 ... x=199
-
-        ameoba_map = np.vstack((curr_state.amoeba_map, curr_state.amoeba_map))
-        ameoba_xs, _ = np.where(ameoba_map == State.ameoba.value)
-
-        # we operate a subset (x=50 -> x=149) of this new map to find @xmax by
-        # searching from xmax=xmin, and increment xmax whenever we see a x-value
-        # immediately larger by 1
-        x_filter = (ameoba_xs >= constants.map_dim / 2) & (ameoba_xs < constants.map_dim * 1.5)
-        xs = sorted(set(ameoba_xs[x_filter]))
-        xmax = min(xs)
-        for x in xs:
-            xmax += int(x == xmax + 1)
-
-        return xmax % constants.map_dim
-
-    def _reach_border(self, curr_state: AmoebaState) -> bool:
-        _, ameoba_ys = np.where(curr_state.amoeba_map == State.ameoba.value)
-        lower_bound, upper_bound = min(ameoba_ys), max(ameoba_ys)
-
-        return abs(upper_bound - lower_bound) >= 98
-
-    def _in_shape(self, xmax: int, curr_state: AmoebaState) -> bool:
-        """Returns a bool indicating if our bucket arms are in shape.
-        
-        In our implementation, *no memory bit* is needed to store information
-        of whether we have gotten into "comb" shape or not, all thanks to
-        this function/heuristic.
-
-        If we have an expected number of bucket arms, it's safe for us to
-        keep marching forward, since having bucket arms in formation would
-        allow us to keep capturing bacteria on our way while adjusting
-        formation.
-
-        Otherwise, we need to wait for the bucket arms to get into shape, so
-        that we don't risk moving and not able to eat any bacteria along the
-        way.
-        """
-        arms_got = len(np.where(curr_state.amoeba_map[xmax,:] == State.ameoba.value)[0])
-
-        if not self._reach_border:
-            arms_expected = 1 + math.floor((curr_state.current_size - 3) / self.bucket_cost)
-        else:
-            arms_expected = 2 * ((constants.map_dim / 2 - 1) // (self.bucket_width + 1) + 1)
-
-        return arms_got >= arms_expected
 
     def move(
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
@@ -919,8 +1016,11 @@ class BucketAttack(Strategy):
 #  Group 4 Ameoba
 #------------------------------------------------------------------------------
 
-BUCKET_WIDTH = 1
-SHIFT_CYCLE  = -1
+BUCKET_WIDTH = 2
+SHIFT_CYCLE  = 16
+
+X_BUCKET_WIDTH = 1
+X_SHIFT_CYCLE  = -1
 V_SIZE = 400
 
 
@@ -957,6 +1057,11 @@ class Player:
                 metabolism,
                 bucket_width=BUCKET_WIDTH,
                 shift_n=SHIFT_CYCLE,
+            ),
+            bucketX_attack=BucketXAttack(
+                metabolism,
+                bucket_width=X_BUCKET_WIDTH,
+                shift_n=X_SHIFT_CYCLE,
                 v_size=V_SIZE
             )
         )
@@ -991,10 +1096,7 @@ class Player:
 
         # TODO: dynamically select a strategy, possible factors:
         # current_size, metabolism, etc
-        if self.goal_size <= 64:
-            strategy="box_farm"
-        else:
-            strategy = "bucket_attack"
+        strategy = "bucket_attack"
 
         return self.strategies[strategy].move(last_percept, current_percept, info)
 
