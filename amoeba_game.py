@@ -99,11 +99,13 @@ class AmoebaGame:
         self.history = []
 
         self.initialize(args.size)
-        self.add_player(args.player)
-        self.play_game()
-        self.end_time = time.time()
 
-        print("\nTime taken: {}\n".format(self.end_time - self.start_time))
+        if not args.batch_mode:
+            self.add_player(args.player)
+            self.play_game()
+            self.end_time = time.time()
+
+            print("\nTime taken: {}\n".format(self.end_time - self.start_time))
 
         if self.use_vid:
             if not self.use_gui:
@@ -117,6 +119,10 @@ class AmoebaGame:
 
         if self.use_gui:
             plt.show()
+    
+    def add_player_object(self, player_name, player):
+        self.player_name = player_name
+        self.player = player
 
     def add_player(self, player_in):
         if player_in in constants.possible_players:

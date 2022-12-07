@@ -141,7 +141,7 @@ class Formation:
 
     def add_cell(self, x, y) -> None:
         self.map[x % constants.map_dim, y % constants.map_dim] = 1
-        
+
     def get_cell(self, x, y) -> int:
         return self.map[x % constants.map_dim, y % constants.map_dim]
 
@@ -203,7 +203,12 @@ class Player:
         self.num_available_moves: int = None
 
     def generate_comb_formation(
-        self, size: int, tooth_offset=0, center_x=CENTER_X, center_y=CENTER_Y, comb_idx=0
+        self,
+        size: int,
+        tooth_offset=0,
+        center_x=CENTER_X,
+        center_y=CENTER_Y,
+        comb_idx=0,
     ) -> npt.NDArray:
         formation = Formation()
         comb_0_center_x = center_x
@@ -217,28 +222,25 @@ class Player:
 
         # If we have hit our max size, form an additional comb and connect it via a bridge
         if backbone_size == 99 and comb_idx == 0:
-            center_x_offset = np.absolute(center_x - CENTER_X)
-
-            if size > cells_used * 2:
-                # Offset each comb to the left and right of the map center
-                comb_0_center_x = min(max(CENTER_X - center_x_offset, COMB_SEPARATION_DIST), 50)
-                comb_1_center_x = min(max(CENTER_X + center_x_offset + COMB_SEPARATION_DIST, CENTER_X + COMB_SEPARATION_DIST + 1), 100)
-            else:
-                comb_1_center_x = center_x + COMB_SEPARATION_DIST
-
-            # Generate the second comb
-            second_comb = self.generate_comb_formation(
-                size - cells_used,
-                tooth_offset,
-                comb_1_center_x % constants.map_dim,
-                center_y,
-                1
-            )
-            formation.merge_formation(second_comb)
+            comb_0_x_offset = center_x - CENTER_X
+            comb_1_center_x = CENTER_X - comb_0_x_offset
 
             # Bridge between the two combs
-            for i in range(comb_0_center_x, comb_1_center_x):
-                formation.add_cell(i, center_y)
+            for i in range(100):
+                if size - cells_used > 0:
+                    formation.add_cell((comb_0_center_x - i) % constants.map_dim, center_y)
+                    cells_used += 1
+            
+            # Generate the second comb
+            if size - cells_used > 0:
+                second_comb = self.generate_comb_formation(
+                    size - cells_used,
+                    tooth_offset,
+                    comb_1_center_x,
+                    center_y,
+                    1
+                )
+                formation.merge_formation(second_comb)
 
         # Build first comb formation
         formation.add_cell(comb_0_center_x, center_y)
@@ -248,30 +250,30 @@ class Player:
             formation.add_cell(comb_0_center_x, center_y + i)
             formation.add_cell(comb_0_center_x, center_y - i)
             # second layer of backbone
-            formation.add_cell(comb_0_center_x - 1, center_y + i)
-            formation.add_cell(comb_0_center_x - 1, center_y - i)
+            formation.add_cell(comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y + i)
+            formation.add_cell(comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y - i)
         for i in range(
             1,
             round(min((teeth_size * (TEETH_GAP + 1)) / 2, backbone_size / 2) + 0.1),
             TEETH_GAP + 1,
         ):
-            formation.add_cell(comb_0_center_x + 1, center_y + tooth_offset + i)
-            formation.add_cell(comb_0_center_x + 1, center_y + tooth_offset - i)   
+            formation.add_cell(comb_0_center_x + (1 if comb_idx == 0 else -1), center_y + tooth_offset + i)
+            formation.add_cell(comb_0_center_x + (1 if comb_idx == 0 else -1), center_y + tooth_offset - i)   
 
         # If we build a second comb, build up additional cells in the center
         if backbone_size == 99 and comb_idx == 0:
             cells_remaining = size - np.count_nonzero(formation.map)
             bridge_offset = 1
             while cells_remaining > 0 and bridge_offset < 99:
-                for i in range(comb_0_center_x, comb_1_center_x):
+                for i in range(100):
                     offset = bridge_offset if bridge_offset <= 49 else 50 - bridge_offset
-                    if formation.get_cell(i, center_y + offset) == 0:
-                        formation.add_cell(i, center_y + offset)
+                    if formation.get_cell((comb_0_center_x - i) % constants.map_dim, center_y + offset) == 0:
+                        formation.add_cell((comb_0_center_x - i) % constants.map_dim, center_y + offset)
                         cells_remaining -= 1
                         if cells_remaining <= 0:
                             break
                 bridge_offset += 1
-                
+
         # show_amoeba_map(formation.map)
         return formation.map
 
@@ -462,7 +464,7 @@ class Player:
         turn += 1
 
         self.store_current_percept(current_percept)
-        
+
         retracts = []
         moves = []
 
@@ -484,13 +486,14 @@ class Player:
                 self.current_size, vertical_shift, curr_backbone_col, CENTER_Y
             )
             # Check if current comb formation is filled
-            settled = self.amoeba_map[next_comb].all()
+            comb_mask = self.amoeba_map[next_comb.nonzero()]
+            settled = (sum(comb_mask) / len(comb_mask)) > 0.7
             if not settled:
                 retracts, moves = self.get_morph_moves(next_comb)
-               
-                # Actually, we have no more moves to make 
+
+                # Actually, we have no more moves to make
                 if len(moves) == 0:
-                   settled = True
+                    settled = True
 
             if settled:
                 # When we "settle" into the target backbone column, advance the backbone column by 1
