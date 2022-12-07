@@ -12,8 +12,6 @@ import numpy.typing as npt
 import constants
 from amoeba_state import AmoebaState
 
-turn = 0
-
 
 # ---------------------------------------------------------------------------- #
 #                               Constants                                      #
@@ -66,11 +64,10 @@ def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[], title="") 
                 map[y, x] = 1
 
     plt.rcParams["figure.figsize"] = (10, 10)
-    plt.pcolormesh(map, edgecolors="k", linewidth=1)
+    plt.pcolormesh(map, edgecolors="k", linewidth=0.1)
     ax = plt.gca()
     ax.set_aspect("equal")
     plt.title(title)
-    # plt.savefig(f"debug/{turn}.png")
     plt.show()
 
 
@@ -80,8 +77,7 @@ def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[], title="") 
 
 
 class MemoryFields(Enum):
-    Initialized = 0
-    Translating = 1
+    VerticalInvert = 0
 
 
 def read_memory(memory: int) -> dict[MemoryFields, bool]:
@@ -97,33 +93,6 @@ def change_memory_field(memory: int, field: MemoryFields, value: bool) -> int:
     mask = 1 << field.value
     # Unset the bit, then or in the new bit
     return (memory & ~mask) | ((bit << field.value) & mask)
-
-
-if __name__ == "__main__":
-    memory = 0
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == False
-    assert fields[MemoryFields.Translating] == False
-
-    memory = change_memory_field(memory, MemoryFields.Initialized, True)
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == True
-    assert fields[MemoryFields.Translating] == False
-
-    memory = change_memory_field(memory, MemoryFields.Translating, True)
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == True
-    assert fields[MemoryFields.Translating] == True
-
-    memory = change_memory_field(memory, MemoryFields.Translating, False)
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == True
-    assert fields[MemoryFields.Translating] == False
-
-    memory = change_memory_field(memory, MemoryFields.Initialized, False)
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == False
-    assert fields[MemoryFields.Translating] == False
 
 
 # ---------------------------------------------------------------------------- #
@@ -317,7 +286,7 @@ class Player:
             for p in list(set(desired_points).difference(set(current_points)))
             if p in self.extendable_cells
         ]
-        potential_extends.sort(key=lambda p: p[1])
+        # potential_extends.sort(key=lambda p: p[1])
 
         # show_amoeba_map(desired_amoeba, title="Desired Amoeba")
         # show_amoeba_map(self.amoeba_map, potential_retracts, potential_extends, title="Current Amoeba, Potential Retracts and Extends")
@@ -345,7 +314,7 @@ class Player:
                     potential_extends.remove(potential_extend)
                     break
                 check_calls += 1
-        # print(f"Check calls: {check_calls} / {self.current_size}")
+        print(f"Check calls: {check_calls} / {self.current_size}")
 
         # If we have moves remaining, try and get closer to the desired formation
         # if len(extends) < self.num_available_moves and len(potential_retracts):
@@ -465,6 +434,15 @@ class Player:
             np.ceil(self.metabolism * current_percept.current_size)
         )
 
+    def check_and_initialize_memory(self, memory: int) -> int:
+        if (
+            memory == 0
+            and self.current_size == self.goal_size / 4
+            and self.amoeba_map[50][50]
+        ):
+            return 50 << 1
+        return memory
+
     def move(
         self, last_percept: AmoebaState, current_percept: AmoebaState, info: int
     ) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]], int]:
@@ -480,52 +458,63 @@ class Player:
                 2. A list of positions the retracted cells have moved to
                 3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
-        global turn
-        turn += 1
-
         self.store_current_percept(current_percept)
 
         retracts = []
         moves = []
 
+        info = self.check_and_initialize_memory(info)
+
+        # Extract backbone column from memory
+        curr_backbone_col = info >> 1
+
+        # Alternate vertical translation direction if necessary
         memory_fields = read_memory(info)
-        if not memory_fields[MemoryFields.Initialized]:
-            initial_x = 0 if self.current_size < 36 else CENTER_X + 3
-            initial_comb, initial_bridge = self.generate_comb_formation(
-                self.current_size, center_x=initial_x
+        if curr_backbone_col == 50:
+            info = change_memory_field(
+                info,
+                MemoryFields.VerticalInvert,
+                not memory_fields[MemoryFields.VerticalInvert],
             )
-            retracts, moves = self.get_morph_moves(initial_comb + initial_bridge)
+            memory_fields = read_memory(info)
+
+        vertical_shift = VERTICAL_SHIFT_LIST[curr_backbone_col]
+        next_comb, next_bridge = self.generate_comb_formation(
+            self.current_size,
+            vertical_shift,
+            curr_backbone_col,
+            CENTER_Y
+            # curr_backbone_col
+            # if not memory_fields[MemoryFields.VerticalInvert]
+            # else 100 - curr_backbone_col,
+        )
+        # Check if current comb formation is filled
+        comb_mask = self.amoeba_map[next_comb.nonzero()]
+        settled = (sum(comb_mask) / len(comb_mask)) > 0.9
+        if not settled:
+            retracts, moves = self.get_morph_moves(next_comb + next_bridge)
+
+            # Actually, we have no more moves to make
             if len(moves) == 0:
-                info = change_memory_field(info, MemoryFields.Initialized, True)
-                info = (initial_x << 1) | info
-                memory_fields = read_memory(info)
+                settled = True
 
-        if memory_fields[MemoryFields.Initialized]:
-            # Extract backbone column from memory
-            curr_backbone_col = info >> 1
-            vertical_shift = VERTICAL_SHIFT_LIST[curr_backbone_col]
-            next_comb, next_bridge = self.generate_comb_formation(
-                self.current_size, vertical_shift, curr_backbone_col, CENTER_Y
+        if settled:
+            # When we "settle" into the target backbone column, advance the backbone column by 1
+            prev_backbone_col = curr_backbone_col
+            new_backbone_col = (prev_backbone_col + 1) % 100
+            vertical_shift = VERTICAL_SHIFT_LIST[new_backbone_col]
+            next_comb, next_comb = self.generate_comb_formation(
+                self.current_size,
+                vertical_shift,
+                new_backbone_col,
+                CENTER_Y
+                # curr_backbone_col
+                # if not memory_fields[MemoryFields.VerticalInvert]
+                # else 100 - curr_backbone_col,
             )
-            # Check if current comb formation is filled
-            comb_mask = self.amoeba_map[next_comb.nonzero()]
-            settled = (sum(comb_mask) / len(comb_mask)) > 0.7
-            if not settled:
-                retracts, moves = self.get_morph_moves(next_comb + next_bridge)
-
-                # Actually, we have no more moves to make
-                if len(moves) == 0:
-                    settled = True
-
-            if settled:
-                # When we "settle" into the target backbone column, advance the backbone column by 1
-                prev_backbone_col = curr_backbone_col
-                new_backbone_col = (prev_backbone_col + 1) % 100
-                vertical_shift = VERTICAL_SHIFT_LIST[new_backbone_col]
-                next_comb, next_comb = self.generate_comb_formation(
-                    self.current_size, vertical_shift, new_backbone_col, CENTER_Y
-                )
-                retracts, moves = self.get_morph_moves(next_comb + next_bridge)
-                info = new_backbone_col << 1 | 1
+            retracts, moves = self.get_morph_moves(next_comb + next_bridge)
+            info = new_backbone_col << 1 | int(
+                memory_fields[MemoryFields.VerticalInvert]
+            )
 
         return retracts, moves, info
