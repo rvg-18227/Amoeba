@@ -318,48 +318,61 @@ class Player:
         # Loop through potential extends, searching for a matching retract
         retracts = []
         extends = []
+        error_ext = []
+        error_ret = []
+
         check_calls = 0
-        for potential_extend in [p for p in potential_extends]:
+        SKIP_PER = 0.25
+        skip_n = int(SKIP_PER * min(len(potential_extends), len(potential_retracts)))  # Scales with size of amoeba
+        skip_n = min(skip_n, 200)  # Cap it at 200
+        if skip_n < 1:
+            skip_n = 1
+        count = 0
+        for potential_extend, potential_retract in zip(potential_extends, potential_retracts):
             # Ensure we only move as much as possible given our current metabolism
             if len(extends) >= self.num_available_moves:
                 break
 
-            matching_retracts = list(potential_retracts)
-            # matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))  # Replaced with Global sorting
+            extends.append(potential_extend)
+            retracts.append(potential_retract)
 
-            for i in range(len(matching_retracts)):
-                retract = matching_retracts[i]
-                # Matching retract found, add the extend and retract to our lists
-                if self.check_move(retracts + [retract], extends + [potential_extend]):
+            # Check if the last N calls are okay
+            count += 1
+            if count % skip_n == 0:
+                while not self.check_move(retracts, extends):
+                    # remove elements one-by-one till it works
                     check_calls += 1
-                    retracts.append(retract)
-                    potential_retracts.remove(retract)
-                    extends.append(potential_extend)
-                    potential_extends.remove(potential_extend)
+                    error_ext.append(extends.pop())
+                    error_ret.append(retracts.pop())
+
+        # Shorten the original lists for later use
+        potential_extends = list(set(potential_extends) - set(extends))
+        potential_retracts = list(set(potential_retracts) - set(retracts))
+
+        # For the left-over error causing retract/extends, try again with a thorough search
+        # TODO - Could ignore these if small enough
+        leftover_extends = potential_extends + error_ext
+        leftover_retracts = potential_retracts + error_ret
+
+        if leftover_extends and leftover_retracts:
+            for pot_ext in leftover_extends:
+                # Ensure we only move as much as possible given our current metabolism
+                if len(extends) >= self.num_available_moves:
                     break
-                check_calls += 1
 
-        print(f"Check calls: {check_calls} / {self.current_size}")
-
-        # If we have moves remaining, try and get closer to the desired formation
-        # if len(extends) < self.num_available_moves and len(potential_retracts):
-        #     desired_extends = [p for p in list(set(desired_points).difference(set(current_points))) if p not in self.extendable_cells]
-        #     unused_extends = [p for p in self.extendable_cells if p not in extends]
-
-        #     for potential_retract in [p for p in potential_retracts]:
-        #         for desired_extend in desired_extends:
-        #             curr_dist = math.dist(potential_retract, desired_extend)
-
-        #             matching_extends = [p for p in unused_extends if self.check_move(retracts + [potential_retract], extends + [p])]
-        #             matching_extends.sort(key=lambda p: math.dist(p, desired_extend))
-
-        #             if len(matching_extends) and  math.dist(potential_retract, matching_extends[0]) < curr_dist:
-        #                 # show_amoeba_map(self.amoeba_map, [potential_retract], [matching_extends[0]])
-        #                 retracts.append(potential_retract)
-        #                 potential_retracts.remove(potential_retract)
-        #                 extends.append(matching_extends[0])
-        #                 unused_extends.remove(matching_extends[0])
-        #                 break
+                for pot_ret in leftover_retracts:
+                    if self.check_move(retracts + [pot_ret], extends + [pot_ext]):
+                        check_calls += 1
+                        break
+                retracts.append(pot_ret)
+                extends.append(pot_ext)
+                leftover_retracts.remove(pot_ret)
+                try:
+                    potential_extends.remove(pot_ext)
+                    potential_retracts.remove(pot_ret)
+                except ValueError:
+                    pass
+                break
 
         # If we have moves remaining, 'store' the remaining extends and retracts in the center of the amoeba
         if (
@@ -382,23 +395,26 @@ class Player:
             # show_amoeba_map(self.amoeba_map, potential_retracts, potential_extends, "Possible Remaining")
 
             for potential_extend in potential_extends:
+                if len(extends) >= self.num_available_moves:
+                    break
+
                 for potential_retract in potential_retracts:
                     if np.absolute(center_y - potential_extend[1]) < np.absolute(
                         center_y - potential_retract[1]
                     ) and self.check_move(
                         retracts + [potential_retract], extends + [potential_extend]
                     ):
+                        check_calls += 1
                         retracts.append(potential_retract)
                         extends.append(potential_extend)
                         potential_retracts.remove(potential_retract)
                         break
-                if (
-                    len(retracts) >= self.num_available_moves
-                    or len(potential_retracts) <= 0
-                ):
-                    break
 
         # show_amoeba_map(self.amoeba_map, retracts, extends, title="Current Amoeba, Selected Retracts and Extends")
+        print(f"Check calls: {check_calls} / {self.current_size}")
+
+        retracts = list(set(retracts))
+        extends = list(set(extends))
         return retracts, extends
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
