@@ -410,6 +410,12 @@ class Player:
                         potential_retracts.remove(potential_retract)
                         break
 
+                if (
+                    len(retracts) >= self.num_available_moves
+                    or len(potential_retracts) <= 0
+                ):
+                    break
+
         # show_amoeba_map(self.amoeba_map, retracts, extends, title="Current Amoeba, Selected Retracts and Extends")
         print(f"Check calls: {check_calls} / {self.current_size}")
 
