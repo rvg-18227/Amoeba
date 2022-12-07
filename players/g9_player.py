@@ -337,7 +337,7 @@ class Player:
 
             cells_to_eat = ((radius-3)**2)*density
             if  size+cells_to_eat > self.goal_size:
-                return radius-1
+                return radius-3
 
             if cell_count > size:
                 return radius-3
