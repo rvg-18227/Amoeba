@@ -15,6 +15,23 @@ import constants
 from amoeba_state import AmoebaState
 
 
+class PlayerParameters:
+    formation_threshold: float
+    teeth_gap: int
+    teeth_shift_period: int
+    one_wide_backbone: bool
+    vertical_flip_size: int
+
+    def __init__(self):
+        self.formation_threshold = 0.9
+        self.teeth_gap = 2
+        self.teeth_shift_period = 6
+        self.one_wide_backbone = False
+        self.vertical_flip_size = 100
+
+
+default_params = PlayerParameters()
+
 # ---------------------------------------------------------------------------- #
 #                               Constants                                      #
 # ---------------------------------------------------------------------------- #
@@ -74,6 +91,7 @@ def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[], title="") 
     plt.title(title)
     # plt.show()
     plt.savefig(f"formation_map/{time.time() * 1000}.png")
+
 
 # ---------------------------------------------------------------------------- #
 #                                Memory Bit Mask                               #
@@ -138,6 +156,7 @@ class Player:
         metabolism: float,
         goal_size: int,
         precomp_dir: str,
+        params: PlayerParameters = default_params,
     ) -> None:
         """Initialise the player with the basic amoeba information
 
@@ -169,6 +188,15 @@ class Player:
         self.metabolism = metabolism
         self.goal_size = goal_size
         self.current_size = goal_size / 4
+        self.params = params
+
+        self.teeth_shift_list = (
+            (
+                [0 for i in range(self.params.teeth_shift_period)]
+                + [1 for i in range(self.params.teeth_shift_period)]
+            )
+            * (round(np.ceil(100 / (self.params.teeth_shift_period * 2))))
+        )[:100]
 
         # Class accessible percept variables, written at the start of each turn
         self.current_size: int = None
@@ -195,12 +223,12 @@ class Player:
         if size < 2:
             return comb_formation.map, bridge_formation.map
 
-        one_wide_backbone = True if size < 36 else ONE_WIDE_BACKBONE
+        one_wide_backbone = True if size < 36 else self.params.one_wide_backbone
         if not one_wide_backbone:
-            teeth_size = min(round(size / ((TEETH_GAP + 1) * 2 + 1)), 49)
+            teeth_size = min(round(size / ((self.params.teeth_gap + 1) * 2 + 1)), 49)
             backbone_size = min((size - teeth_size) // 2, 99)
         else:
-            teeth_size = min(round(size / ((TEETH_GAP + 1) + 1)), 49)
+            teeth_size = min(round(size / ((self.params.teeth_gap + 1) + 1)), 49)
             backbone_size = min((size - teeth_size), 99)
         cells_used = backbone_size * 2 + teeth_size
 
@@ -226,16 +254,19 @@ class Player:
                 bridge_formation.merge_formation(second_bridge)
 
         # Build first comb formation
-        
+
         # Add center cells
         comb_formation.add_cell(comb_0_center_x, center_y)
         comb_formation.add_cell(comb_0_center_x - 1, center_y)
-        
+
         # Then prioritize adding teeth
         for i in range(
             1,
-            round(min((teeth_size * (TEETH_GAP + 1)) / 2, backbone_size / 2) + 0.1),
-            TEETH_GAP + 1,
+            round(
+                min((teeth_size * (self.params.teeth_gap + 1)) / 2, backbone_size / 2)
+                + 0.1
+            ),
+            self.params.teeth_gap + 1,
         ):
             comb_formation.add_cell(
                 comb_0_center_x + (1 if comb_idx == 0 else -1),
@@ -245,7 +276,7 @@ class Player:
                 comb_0_center_x + (1 if comb_idx == 0 else -1),
                 center_y + tooth_offset - i,
             )
-            
+
         # Then build the backbone (we may not have quite enough cells for this)
         for i in range(1, round((backbone_size - 1) / 2 + 0.1) + 1):
             # first layer of backbone
@@ -325,12 +356,16 @@ class Player:
 
         check_calls = 0
         SKIP_PER = 0.25
-        skip_n = int(SKIP_PER * min(len(potential_extends), len(potential_retracts)))  # Scales with size of amoeba
+        skip_n = int(
+            SKIP_PER * min(len(potential_extends), len(potential_retracts))
+        )  # Scales with size of amoeba
         skip_n = min(skip_n, 200)  # Cap it at 200
         if skip_n < 1:
             skip_n = 1
         count = 0
-        for potential_extend, potential_retract in zip(potential_extends, potential_retracts):
+        for potential_extend, potential_retract in zip(
+            potential_extends, potential_retracts
+        ):
             # Ensure we only move as much as possible given our current metabolism
             if len(extends) >= self.num_available_moves:
                 break
@@ -518,7 +553,9 @@ class Player:
             np.ceil(self.metabolism * current_percept.current_size)
         )
 
-        self.amoeba_map = np.bitwise_or(self.amoeba_map, coords_to_map(self.bacteria_cells))
+        self.amoeba_map = np.bitwise_or(
+            self.amoeba_map, coords_to_map(self.bacteria_cells)
+        )
 
     def check_and_initialize_memory(self, memory: int) -> int:
         if (
@@ -570,16 +607,19 @@ class Player:
             CENTER_Y
             # curr_backbone_row,
         )
-        if memory_fields[MemoryFields.VerticalInvert] and self.current_size < VERTICAL_FLIP_SIZE_THRESHOLD:
+        if (
+            memory_fields[MemoryFields.VerticalInvert]
+            and self.current_size < self.params.vertical_flip_size
+        ):
             next_comb = np.rot90(next_comb)
             next_bridge = np.rot90(next_bridge)
-            
+
         # Check if current comb formation is filled
         comb_mask = self.amoeba_map[next_comb.nonzero()]
-        settled = (sum(comb_mask) / len(comb_mask)) > PERCENT_MATCH_BEFORE_MOVE
+        settled = (sum(comb_mask) / len(comb_mask)) > self.params.formation_threshold
         if not settled:
             retracts, moves = self.get_morph_moves(
-                next_comb + next_bridge, 
+                next_comb + next_bridge,
                 CENTER_Y
                 # curr_backbone_row
             )
@@ -606,13 +646,16 @@ class Player:
                 CENTER_Y
                 # new_backbone_row,
             )
-            
-            if memory_fields[MemoryFields.VerticalInvert] and VERTICAL_FLIP_SIZE_THRESHOLD:
+
+            if (
+                memory_fields[MemoryFields.VerticalInvert]
+                and self.params.vertical_flip_size
+            ):
                 next_comb = np.rot90(next_comb)
                 next_bridge = np.rot90(next_bridge)
-            
+
             retracts, moves = self.get_morph_moves(
-                next_comb + next_bridge, 
+                next_comb + next_bridge,
                 CENTER_Y
                 # curr_backbone_row
             )
@@ -621,9 +664,11 @@ class Player:
                 info = change_memory_field(
                     info,
                     MemoryFields.VerticalInvert,
-                    not memory_fields[MemoryFields.VerticalInvert] if self.current_size < VERTICAL_FLIP_SIZE_THRESHOLD else 0,
+                    not memory_fields[MemoryFields.VerticalInvert]
+                    if self.current_size < self.params.vertical_flip_size
+                    else 0,
                 )
-                memory_fields = read_memory(info)   
+                memory_fields = read_memory(info)
 
             info = new_backbone_col << 1 | int(
                 memory_fields[MemoryFields.VerticalInvert]
