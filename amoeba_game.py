@@ -233,6 +233,9 @@ class AmoebaGame:
                 try:
                     self.play_turn()
                     print("Turn {} complete".format(self.turns))
+                except TimeoutException as e:
+                    print("Timeout Error. Turn {}".format(self.turns))
+                    break
                 except Exception as e:
                     print("Turn {} error.\n{}".format(self.turns, e))
 
