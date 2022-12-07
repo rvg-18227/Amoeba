@@ -10,7 +10,7 @@ from tqdm import tqdm
 from amoeba_game import AmoebaGame
 from players.g2_player import Player, PlayerParameters
 
-NUM_CPUS = 30  # None to use all cores
+NUM_CPUS = None  # None to use all cores
 
 PLAYERS = [2]
 # METABOLISMS = [0.05, 0.1, 0.25, 0.4, 1.0]
