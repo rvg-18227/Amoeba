@@ -154,7 +154,7 @@ class Player:
                     x = -1
                     if n % 2 == 0:
                         n+=1
-                    print(n, (n-1)/2)
+                    # print(n, (n-1)/2)
                     while total_cells > 0:
                         if (x, 0) not in offsets:
                             offsets.add((x, 0))
@@ -538,7 +538,12 @@ class Player:
 
         ### GET DESIRED OFFSETS FOR CURRENT MORPH ###
         desired_shape_offsets = self.get_desired_shape(0)
-        
+
+        ### INCREMENT CENTER POINT PHASE ###
+        # move amoeba: x_cord is info_L7_int because initial info_L7_int val is 0, indicating initialization/building phase
+        init_phase = info_L7_int == 0
+        x_cord = info_L7_int - 1
+
         # determine if density suggests flip is adventagous
         if x_cord <= 50:
             total_distance = 50+x_cord
@@ -555,11 +560,6 @@ class Player:
             desired_shape_offsets = [tuple(reversed(offset)) for offset in desired_shape_offsets]
 
         ### NEED TO REFACTOR CODE TO FLIP X AND Y
-
-        ### INCREMENT CENTER POINT PHASE ###
-        # move amoeba: x_cord is info_L7_int because initial info_L7_int val is 0, indicating initialization/building phase
-        init_phase = info_L7_int == 0
-        x_cord = info_L7_int - 1
 
         # move under these 2 conditions
         # 1: end of initialization phase
