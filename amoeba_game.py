@@ -112,7 +112,6 @@ class AmoebaGame:
     def start_game(self):
         """Function to run the game from a script"""
         game_start_time = time.time()
-        self.add_player(self.args.player)
         self.play_game()
         self.end_time = time.time()
         self.total_time = (self.end_time - game_start_time) + self.init_complete_time

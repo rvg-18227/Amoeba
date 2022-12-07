@@ -36,12 +36,8 @@ VERTICAL_FLIP_SIZE_THRESHOLD = 100
 
 # ONE_WIDE_BACKBONE = False
 
-class PlayerParameters:
-    # formation_threshold: float = 0.7
-    # teeth_gap: int = 1
-    # teeth_shift: int = 6
-    # one_wide_backbone: bool = False
 
+class PlayerParameters:
     def __init__(self, formation_threshold, teeth_gap, teeth_shift, one_wide_backbone):
         self.formation_threshold = formation_threshold
         self.teeth_gap = teeth_gap

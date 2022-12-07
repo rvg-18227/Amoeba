@@ -8,6 +8,7 @@ import time
 from tqdm import tqdm
 
 from amoeba_game import AmoebaGame
+from players.g2_player import Player, PlayerParameters
 
 NUM_CPUS = 30  # None to use all cores
 
@@ -16,13 +17,29 @@ METABOLISMS = [0.05, 0.1, 0.25, 0.4, 1.0]
 DENSITIES = [0.01, 0.05, 0.1, 0.2]
 SIZES = [3, 5, 8, 15, 25]
 
+FORMATION_THRESHOLD = [0.5, 0.7, 0.8, 0.9]
+TEETH_GAP = [1, 2, 3]
+TEETH_SHIFT_PERIOD = [2, 4, 6, 8]
+ONE_WIDE_BACKBONE = [True, False]
+
+
 MAX_TURNS = 10000
 SEED = 0  # Randomize behavior
 
-
 @ray.remote(num_cpus=1)
-def run_amoeba_game(args):
+def run_amoeba_game(args, player_params):
     amoeba_game = AmoebaGame(args)
+
+    player = Player(
+            amoeba_game.rng,
+            amoeba_game.get_player_logger("G2"),
+            amoeba_game.metabolism,
+            amoeba_game.start_size * 4,
+            "",
+            params=player_params,
+        )
+    amoeba_game.add_player_object("G2", player)
+
     amoeba_game.start_game()
     return amoeba_game
 
@@ -61,9 +78,12 @@ if __name__ == "__main__":
 
     # Start parallel runs. Try combinations of parameters.
     runs_list = []
-    for (px, mx, dx, sx) in itertools.product(PLAYERS, METABOLISMS, DENSITIES, SIZES):
+    for (px, mx, dx, sx, py, gy, sy, by) in itertools.product(PLAYERS, METABOLISMS, DENSITIES, SIZES,
+                                                              FORMATION_THRESHOLD, TEETH_GAP, TEETH_SHIFT_PERIOD,
+                                                              ONE_WIDE_BACKBONE):
         args = create_args(px, mx, dx, sx)
-        runs_list.append(run_amoeba_game.remote(args))
+        player_params = PlayerParameters(py, gy, sy, by)
+        runs_list.append(run_amoeba_game.remote(args, player_params))
 
     # data for Pandas array
     data = defaultdict(list)
@@ -86,6 +106,11 @@ if __name__ == "__main__":
         data["Total Time"].append(round(r.total_time, 2))
         data["Final Size"].append(r.amoeba_size)
         data["Goal Size"].append(r.goal_size)
+
+        data["Formation Threshold"].append(r.player.params.formation_threshold)
+        data["Teeth Gap"].append(r.player.params.teeth_gap)
+        data["Teeth Shift"].append(r.player.params.teeth_shift)
+        data["One Wide Backbone"].append(r.player.params.one_wide_backbone)
 
         if time.time() - last_save_time > save_interval:
             df = pd.DataFrame(data=data)
