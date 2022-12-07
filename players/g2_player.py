@@ -14,7 +14,6 @@ from scipy.spatial import KDTree
 import constants
 from amoeba_state import AmoebaState
 
-
 # ---------------------------------------------------------------------------- #
 #                               Constants                                      #
 # ---------------------------------------------------------------------------- #
@@ -88,7 +87,7 @@ TEETH_SHIFT_PERIOD_MAP = {
     (25, 1.0): 6,
 }
 FORMATION_THRESHOLD_MAP = {
-    (3, 0.05): 0.5,
+    (3, 0.05): 0.7,
     (3, 0.1): 0.7,
     (3, 0.25): 0.7,
     (3, 0.4): 0.7,
@@ -115,21 +114,21 @@ FORMATION_THRESHOLD_MAP = {
     (25, 1.0): 0.7,
 }
 VERTICAL_FLIP_SIZE_MAP = {
-    (3, 0.05): 100,
-    (3, 0.1): 100,
-    (3, 0.25): 100,
-    (3, 0.4): 100,
-    (3, 1.0): 100,
-    (5, 0.05): 100,
-    (5, 0.1): 100,
-    (5, 0.25): 100,
-    (5, 0.4): 100,
-    (5, 1.0): 100,
-    (8, 0.05): 100,
-    (8, 0.1): 100,
-    (8, 0.25): 100,
-    (8, 0.4): 100,
-    (8, 1.0): 100,
+    (3, 0.05): 200,
+    (3, 0.1): 200,
+    (3, 0.25): 200,
+    (3, 0.4): 200,
+    (3, 1.0): 200,
+    (5, 0.05): 200,
+    (5, 0.1): 200,
+    (5, 0.25): 200,
+    (5, 0.4): 200,
+    (5, 1.0): 200,
+    (8, 0.05): 50,
+    (8, 0.1): 50,
+    (8, 0.25): 50,
+    (8, 0.4): 50,
+    (8, 1.0): 50,
     (15, 0.05): 100,
     (15, 0.1): 100,
     (15, 0.25): 100,
@@ -142,11 +141,11 @@ VERTICAL_FLIP_SIZE_MAP = {
     (25, 1.0): 100,
 }
 ONE_WIDE_BACKBONE_MAP = {
-    (3, 0.05): False,
-    (3, 0.1): False,
-    (3, 0.25): False,
-    (3, 0.4): False,
-    (3, 1.0): False,
+    (3, 0.05): True,
+    (3, 0.1): True,
+    (3, 0.25): True,
+    (3, 0.4): True,
+    (3, 1.0): True,
     (5, 0.05): False,
     (5, 0.1): False,
     (5, 0.25): False,
@@ -168,6 +167,7 @@ ONE_WIDE_BACKBONE_MAP = {
     (25, 0.4): False,
     (25, 1.0): False,
 }
+
 
 class PlayerParameters:
     formation_threshold: float
@@ -322,7 +322,7 @@ class Player:
         self.goal_size = goal_size
         self.current_size = goal_size / 4
         self.params = params
-        
+
         self.set_game_params()
 
         self.teeth_shift_list = (
@@ -340,14 +340,24 @@ class Player:
         self.retractable_cells: List[Tuple[int, int]] = None
         self.extendable_cells: List[Tuple[int, int]] = None
         self.num_available_moves: int = None
-        
+
     def set_game_params(self) -> None:
         start_size = math.sqrt(self.current_size)
-        self.params.teeth_gap = TEETH_GAP_MAP.get((start_size, self.metabolism), DEFAULT_TEETH_GAP)
-        self.params.teeth_shift_period = TEETH_SHIFT_PERIOD_MAP.get((start_size, self.metabolism), DEFAULT_TEETH_SHIFT_PERIOD)
-        self.params.formation_threshold = FORMATION_THRESHOLD_MAP.get((start_size, self.metabolism), DEFAULT_FORMATION_THRESHOLD)
-        self.params.vertical_flip_size = VERTICAL_FLIP_SIZE_MAP.get((start_size, self.metabolism), DEFAULT_VERTICAL_FLIP_SIZE)
-        self.params.one_wide_backbone = ONE_WIDE_BACKBONE_MAP.get((start_size, self.metabolism), DEFAULT_ONE_WIDE_BACKBONE)
+        self.params.teeth_gap = TEETH_GAP_MAP.get(
+            (start_size, self.metabolism), DEFAULT_TEETH_GAP
+        )
+        self.params.teeth_shift_period = TEETH_SHIFT_PERIOD_MAP.get(
+            (start_size, self.metabolism), DEFAULT_TEETH_SHIFT_PERIOD
+        )
+        self.params.formation_threshold = FORMATION_THRESHOLD_MAP.get(
+            (start_size, self.metabolism), DEFAULT_FORMATION_THRESHOLD
+        )
+        self.params.vertical_flip_size = VERTICAL_FLIP_SIZE_MAP.get(
+            (start_size, self.metabolism), DEFAULT_VERTICAL_FLIP_SIZE
+        )
+        self.params.one_wide_backbone = ONE_WIDE_BACKBONE_MAP.get(
+            (start_size, self.metabolism), DEFAULT_ONE_WIDE_BACKBONE
+        )
 
     def generate_comb_formation(
         self,
