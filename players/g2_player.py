@@ -22,19 +22,34 @@ from amoeba_state import AmoebaState
 CENTER_X = constants.map_dim // 2
 CENTER_Y = constants.map_dim // 2
 
-TEETH_GAP = 1
-TEETH_SHIFT_PERIOD = 6
+# TEETH_GAP = 1
+# TEETH_SHIFT_PERIOD = 6
 
-TEETH_SHIFT_LIST = (
-    ([0 for i in range(TEETH_SHIFT_PERIOD)] + [1 for i in range(TEETH_SHIFT_PERIOD)])
-    * (round(np.ceil(100 / (TEETH_SHIFT_PERIOD * 2))))
-)[:100]
+# TEETH_SHIFT_LIST = (
+#     ([0 for i in range(TEETH_SHIFT_PERIOD)] + [1 for i in range(TEETH_SHIFT_PERIOD)])
+#     * (round(np.ceil(100 / (TEETH_SHIFT_PERIOD * 2))))
+# )[:100]
 
-PERCENT_MATCH_BEFORE_MOVE = 0.7
+# PERCENT_MATCH_BEFORE_MOVE = 0.7
 
 VERTICAL_FLIP_SIZE_THRESHOLD = 100
 
-ONE_WIDE_BACKBONE = False
+# ONE_WIDE_BACKBONE = False
+
+class PlayerParameters:
+    # formation_threshold: float = 0.7
+    # teeth_gap: int = 1
+    # teeth_shift: int = 6
+    # one_wide_backbone: bool = False
+
+    def __init__(self, formation_threshold, teeth_gap, teeth_shift, one_wide_backbone):
+        self.formation_threshold = formation_threshold
+        self.teeth_gap = teeth_gap
+        self.teeth_shift = teeth_shift
+        self.one_wide_backbone = one_wide_backbone
+
+default_params = PlayerParameters(0.7, 1, 6, False)
+
 
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
@@ -138,6 +153,7 @@ class Player:
         metabolism: float,
         goal_size: int,
         precomp_dir: str,
+        params: PlayerParameters = default_params
     ) -> None:
         """Initialise the player with the basic amoeba information
 
@@ -169,6 +185,7 @@ class Player:
         self.metabolism = metabolism
         self.goal_size = goal_size
         self.current_size = goal_size / 4
+        self.params = params
 
         # Class accessible percept variables, written at the start of each turn
         self.current_size: int = None
@@ -195,12 +212,15 @@ class Player:
         if size < 2:
             return comb_formation.map, bridge_formation.map
 
-        one_wide_backbone = True if size < 36 else ONE_WIDE_BACKBONE
+        # one_wide_backbone = True if size < 36 else ONE_WIDE_BACKBONE
+        one_wide_backbone = True if size < 36 else self.params.one_wide_backbone
         if not one_wide_backbone:
-            teeth_size = min(round(size / ((TEETH_GAP + 1) * 2 + 1)), 49)
+            # teeth_size = min(round(size / ((TEETH_GAP + 1) * 2 + 1)), 49)
+            teeth_size = min(round(size / ((self.params.teeth_gap + 1) * 2 + 1)), 49)
             backbone_size = min((size - teeth_size) // 2, 99)
         else:
-            teeth_size = min(round(size / ((TEETH_GAP + 1) + 1)), 49)
+            # teeth_size = min(round(size / ((TEETH_GAP + 1) + 1)), 49)
+            teeth_size = min(round(size / ((self.params.teeth_gap + 1) + 1)), 49)
             backbone_size = min((size - teeth_size), 99)
         cells_used = backbone_size * 2 + teeth_size
 
@@ -234,8 +254,10 @@ class Player:
         # Then prioritize adding teeth
         for i in range(
             1,
-            round(min((teeth_size * (TEETH_GAP + 1)) / 2, backbone_size / 2) + 0.1),
-            TEETH_GAP + 1,
+            # round(min((teeth_size * (TEETH_GAP + 1)) / 2, backbone_size / 2) + 0.1),
+            round(min((teeth_size * (self.params.teeth_gap + 1)) / 2, backbone_size / 2) + 0.1),
+            # TEETH_GAP + 1,
+            self.params.teeth_gap + 1,
         ):
             comb_formation.add_cell(
                 comb_0_center_x + (1 if comb_idx == 0 else -1),
@@ -557,6 +579,10 @@ class Player:
         # Alternate vertical translation direction if necessary
         memory_fields = read_memory(info)
 
+        TEETH_SHIFT_LIST = (
+                               ([0 for i in range(self.params.teeth_shift)] + [1 for i in range(self.params.teeth_shift)])
+                               * (round(np.ceil(100 / (self.params.teeth_shift * 2))))
+                           )[:100]
         teeth_shift = TEETH_SHIFT_LIST[curr_backbone_col]
         curr_backbone_row = (
             curr_backbone_col
@@ -576,7 +602,8 @@ class Player:
             
         # Check if current comb formation is filled
         comb_mask = self.amoeba_map[next_comb.nonzero()]
-        settled = (sum(comb_mask) / len(comb_mask)) > PERCENT_MATCH_BEFORE_MOVE
+        # settled = (sum(comb_mask) / len(comb_mask)) > PERCENT_MATCH_BEFORE_MOVE
+        settled = (sum(comb_mask) / len(comb_mask)) > self.params.formation_threshold
         if not settled:
             retracts, moves = self.get_morph_moves(
                 next_comb + next_bridge, 
@@ -598,6 +625,11 @@ class Player:
                 if not memory_fields[MemoryFields.VerticalInvert]
                 else constants.map_dim - new_backbone_col
             )
+            TEETH_SHIFT_LIST = (
+                                   ([0 for i in range(self.params.teeth_shift)] + [1 for i in
+                                                                                   range(self.params.teeth_shift)])
+                                   * (round(np.ceil(100 / (self.params.teeth_shift * 2))))
+                               )[:100]
             teeth_shift = TEETH_SHIFT_LIST[new_backbone_col]
             next_comb, next_bridge = self.generate_comb_formation(
                 self.current_size,
