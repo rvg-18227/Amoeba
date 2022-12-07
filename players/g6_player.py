@@ -274,8 +274,7 @@ class Player:
                 if num_column > min_num_per_col:
                     cell = (col%100, row%100)
                     if cell in periphery:
-                        # if col in (left_side, right_side) \
-                        #     or (amoeba_map[cell[0]-1, cell[1]+1] != 0 and amoeba_map[cell[0]+1, cell[1]+1] != 0):
+                        if col in (left_side, right_side) or self.check_connect(amoeba_map, cell):
                             retract_list.append(cell)
                             #self.logger.info(f'cell retract: {cell}')
                             cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
@@ -373,12 +372,12 @@ class Player:
 
         return expand_cells[:10]
 
-    # def check_connect(self, amoeba_map, cell):
-    #     if amoeba_map[cell[0], cell[1]-1] == 0 and amoeba_map[cell[0], cell[1]-1] == 0:
-    #         return False
-
-    #     if amoeba_map[cell[0], cell[1]+1] == 0 and :
-    #         return False
+    def check_connect(self, amoeba_map, cell):
+        if amoeba_map[cell[0]-1, cell[1]+1] == 0 and amoeba_map[cell[0]-1, cell[1]] != 0:
+            return False
+        if amoeba_map[cell[0]+1, cell[1]+1] == 0 and amoeba_map[cell[0]+1, cell[1]] != 0:
+            return False
+        return True
             
 
     def organize_expand(self, amoeba_map, movable):
