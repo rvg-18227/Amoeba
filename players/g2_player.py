@@ -474,6 +474,8 @@ class Player:
             np.ceil(self.metabolism * current_percept.current_size)
         )
 
+        self.amoeba_map = np.bitwise_or(self.amoeba_map, coords_to_map(self.bacteria_cells))
+
     def check_and_initialize_memory(self, memory: int) -> int:
         if (
             memory == 0
