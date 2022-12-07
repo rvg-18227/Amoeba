@@ -510,13 +510,6 @@ class Player:
 
         # Alternate vertical translation direction if necessary
         memory_fields = read_memory(info)
-        if curr_backbone_col == 50:
-            info = change_memory_field(
-                info,
-                MemoryFields.VerticalInvert,
-                not memory_fields[MemoryFields.VerticalInvert],
-            )
-            memory_fields = read_memory(info)
 
         teeth_shift = TEETH_SHIFT_LIST[curr_backbone_col]
         curr_backbone_row = (
@@ -550,19 +543,33 @@ class Player:
             prev_backbone_col = curr_backbone_col
             prev_backbone_row = curr_backbone_row
             new_backbone_col = (prev_backbone_col + 1) % 100
+            new_backbone_row = (
+                new_backbone_col
+                if not memory_fields[MemoryFields.VerticalInvert]
+                else constants.map_dim - new_backbone_col
+            )
             teeth_shift = TEETH_SHIFT_LIST[new_backbone_col]
             next_comb, next_bridge = self.generate_comb_formation(
                 self.current_size,
                 teeth_shift,
                 prev_backbone_col,
                 CENTER_Y
-                # prev_backbone_row,
+                # new_backbone_row,
             )
             retracts, moves = self.get_morph_moves(
                 next_comb + next_bridge, 
                 CENTER_Y
                 # curr_backbone_row
             )
+
+            if curr_backbone_col == 50:
+                info = change_memory_field(
+                    info,
+                    MemoryFields.VerticalInvert,
+                    not memory_fields[MemoryFields.VerticalInvert],
+                )
+                memory_fields = read_memory(info)   
+
             info = new_backbone_col << 1 | int(
                 memory_fields[MemoryFields.VerticalInvert]
             )
