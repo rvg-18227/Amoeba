@@ -21,12 +21,10 @@ SEED = 0  # Randomize behavior
 
 
 @ray.remote(num_cpus=1)
-class AmoebaCopy(AmoebaGame):
-    """Convert to ray actor to allow remote calls.
-        Limit each class instance to a single CPU.
-    """
-    def __init__(self, args):
-        super().__init__(args)
+def run_amoeba_game(args):
+    amoeba_game = AmoebaGame(args)
+    amoeba_game.start_game()
+    return amoeba_game
 
 
 def rayobj_to_iterator(obj_ids):
@@ -41,6 +39,7 @@ def create_args(p:str, m: float, d: float, A: int):
     # Constants
     args.no_gui = True
     args.no_vid = True
+    args.vid_name = None
     args.disable_logging = True
     args.log_path = None
     args.disable_timeout = False
@@ -48,7 +47,7 @@ def create_args(p:str, m: float, d: float, A: int):
     args.final = MAX_TURNS
     args.seed = SEED
 
-    args.player = p
+    args.player = str(p)
     args.metabolism = m
     args.density = d
     args.size = A
@@ -60,14 +59,11 @@ if __name__ == "__main__":
 
     ray.init(num_cpus=NUM_CPUS, configure_logging=True, log_to_driver=False)  # don't print the console outputs
 
-    # Create the ray actors from class. Try combinations of parameters.
-    actor_list = []
+    # Start parallel runs. Try combinations of parameters.
+    runs_list = []
     for (px, mx, dx, sx) in itertools.product(PLAYERS, METABOLISMS, DENSITIES, SIZES):
         args = create_args(px, mx, dx, sx)
-        actor_list.append(AmoebaCopy.remote(args))
-
-    # Start parallel runs
-    runs_list = [x.start_game.remote() for x in actor_list]
+        runs_list.append(run_amoeba_game.remote(args))
 
     # data for Pandas array
     data = defaultdict(list)

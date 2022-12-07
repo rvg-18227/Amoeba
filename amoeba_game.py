@@ -234,7 +234,7 @@ class AmoebaGame:
                     self.play_turn()
                     print("Turn {} complete".format(self.turns))
                 except Exception as e:
-                    print("Turn {} error".format(self.turns))
+                    print("Turn {} error.\n{}".format(self.turns, e))
 
                 if self.amoeba_size >= self.goal_size:
                     self.goal_reached = True
