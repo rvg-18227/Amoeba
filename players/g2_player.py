@@ -31,6 +31,8 @@ TEETH_SHIFT_LIST = (
 
 PERCENT_MATCH_BEFORE_MOVE = 0.9
 
+VERTICAL_FLIP_SIZE_THRESHOLD = 100
+
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
 # ---------------------------------------------------------------------------- #
@@ -482,7 +484,7 @@ class Player:
             and self.current_size == self.goal_size / 4
             and self.amoeba_map[50][50]
         ):
-            return (CENTER_X if self.current_size < 36 else CENTER_X + 3) << 1
+            return (CENTER_X + 1 if self.current_size < 36 else CENTER_X + 3) << 1
         return memory
 
     def move(
@@ -526,6 +528,10 @@ class Player:
             CENTER_Y
             # curr_backbone_row,
         )
+        if memory_fields[MemoryFields.VerticalInvert] and self.current_size < VERTICAL_FLIP_SIZE_THRESHOLD:
+            next_comb = np.rot90(next_comb)
+            next_bridge = np.rot90(next_bridge)
+            
         # Check if current comb formation is filled
         comb_mask = self.amoeba_map[next_comb.nonzero()]
         settled = (sum(comb_mask) / len(comb_mask)) > PERCENT_MATCH_BEFORE_MOVE
@@ -558,6 +564,11 @@ class Player:
                 CENTER_Y
                 # new_backbone_row,
             )
+            
+            if memory_fields[MemoryFields.VerticalInvert] and VERTICAL_FLIP_SIZE_THRESHOLD:
+                next_comb = np.rot90(next_comb)
+                next_bridge = np.rot90(next_bridge)
+            
             retracts, moves = self.get_morph_moves(
                 next_comb + next_bridge, 
                 CENTER_Y
@@ -568,7 +579,7 @@ class Player:
                 info = change_memory_field(
                     info,
                     MemoryFields.VerticalInvert,
-                    not memory_fields[MemoryFields.VerticalInvert],
+                    not memory_fields[MemoryFields.VerticalInvert] if self.current_size < VERTICAL_FLIP_SIZE_THRESHOLD else 0,
                 )
                 memory_fields = read_memory(info)   
 
