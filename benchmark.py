@@ -13,9 +13,18 @@ from players.g2_player import Player, PlayerParameters
 NUM_CPUS = 30  # None to use all cores
 
 PLAYERS = [2]
+# METABOLISMS = [0.05, 0.1, 0.25, 0.4, 1.0]
+# DENSITIES = [0.01, 0.05, 0.1, 0.2]
+# SIZES = [3, 5, 8, 15, 25]
+#
+# FORMATION_THRESHOLD = [0.5, 0.7, 0.8, 0.9]
+# TEETH_GAP = [1, 2, 3]
+# TEETH_SHIFT_PERIOD = [2, 4, 6, 8]
+# ONE_WIDE_BACKBONE = [True, False]
+
 METABOLISMS = [0.05, 0.1, 0.25, 0.4, 1.0]
-DENSITIES = [0.01, 0.05, 0.1, 0.2]
-SIZES = [3, 5, 8, 15, 25]
+DENSITIES = [0.01, 0.05]
+SIZES = [15, 25]
 
 FORMATION_THRESHOLD = [0.5, 0.7, 0.8, 0.9]
 TEETH_GAP = [1, 2, 3]
