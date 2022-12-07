@@ -94,6 +94,8 @@ class Player:
         self.logger.info(f'----------------Turn {info}-----------------')
         self.current_size = current_percept.current_size
 
+        print()
+
         info_binary  = format(info, '04b')
         
         split, split_row = self.split_amoeba(current_percept.amoeba_map)
@@ -123,8 +125,10 @@ class Player:
             retract_list, expand_list = self.init_organize(
                 amoeba_map, current_percept.periphery, current_percept.bacteria)
             amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
-            if amoeba_loc[:, 1].max() - amoeba_loc[:, 1].min() <= 3 \
+            # if amoeba_loc[:, 1].max() - amoeba_loc[:, 1].min() <= 3 \
+            if amoeba_loc.shape[0] / (amoeba_loc[:, 0].max() - amoeba_loc[:, 0].min()) <= 3 \
                 or min(len(retract_list), len(expand_list)) == 0:
+            #if min(len(retract_list), len(expand_list)) == 0:
                 info = 1
                 stage = 2
             else:
@@ -169,6 +173,7 @@ class Player:
         self.logger.info(f'expand: {expand_list[:mini]}')
 
         self.drawer.draw(current_percept, retract_list[:mini], expand_list[:mini])
+        print(retract_list[:mini], expand_list[:mini], info+1)
         return retract_list[:mini], expand_list[:mini], info+1
 
     def concat_map(self, amoeba_map, split, split_row):
@@ -189,7 +194,7 @@ class Player:
         return retract_list, expand_list
 
     def init_organize(self, amoeba_map, periphery, bacteria):
-        retract_list = self.organize_retract(amoeba_map, periphery)
+        retract_list = self.organize_retract(amoeba_map, periphery, min_num_per_col=2)
         movable = self.find_movable_cells(retract_list, periphery, amoeba_map, bacteria)
         expand_list = self.organize_expand(amoeba_map, movable)
         return retract_list, expand_list
@@ -249,6 +254,8 @@ class Player:
         top_side = np.min(amoeba_loc[:, 1])
         bottom_side = np.max(amoeba_loc[:, 1])
         retract_list = []
+        left_side = np.min(amoeba_loc[:, 0])
+        right_side = np.max(amoeba_loc[:, 0])
 
         for row in range(top_side, bottom_side):
 
@@ -267,15 +274,22 @@ class Player:
                 if num_column > min_num_per_col:
                     cell = (col%100, row%100)
                     if cell in periphery:
-                        retract_list.append(cell)
-                        #self.logger.info(f'cell retract: {cell}')
-                        cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
-                        #self.logger.info(f'cell idx : {np.where(cell_idx==True)[0]}')
-                        amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx==True)[0], axis=0)
+                        # if col in (left_side, right_side) \
+                        #     or (amoeba_map[cell[0]-1, cell[1]+1] != 0 and amoeba_map[cell[0]+1, cell[1]+1] != 0):
+                            retract_list.append(cell)
+                            #self.logger.info(f'cell retract: {cell}')
+                            cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
+                            #self.logger.info(f'cell idx : {np.where(cell_idx==True)[0]}')
+                            amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx==True)[0], axis=0)
 
         return retract_list
 
+    def check_neighbors(self, amoeba_map, cell, count=0):
+        num_neighbors = amoeba_map[cell[0]-1, cell[1]]+amoeba_map[cell[0]+1, cell[1]]+amoeba_map[cell[0], cell[1]-1]+amoeba_map[cell[0], cell[1]+1]
+        return (num_neighbors <= 1)
+
     def reorganize_retract(self, amoeba_map, periphery):
+        amoeba_map =amoeba_map.copy()
         amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
         amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
         top_side = np.min(amoeba_loc[:, 1])
@@ -288,25 +302,51 @@ class Player:
             row_cells = amoeba_loc[row_array]
             columns = np.sort(row_cells[:, 0])
 
-            priorize_columns = []
-            # priorize columns that's about to disconnect
-            for i in range(columns.shape[0]):
-                cell = (columns[i], row)
-                if amoeba_map[cell[0], cell[1]+1] == 0 \
-                    or amoeba_map[cell[0]-1, cell[1]]+amoeba_map[cell[0]+1, cell[1]] == 0:
-                    priorize_columns.append(columns[i])
-            priorize_columns = sorted(priorize_columns, reverse=True) 
+            # priorize_columns = []
+            # # priorize columns that's about to disconnect
+            # for i in range(columns.shape[0]):
+            #     cell = (columns[i], row)
+            #     if (amoeba_map[cell[0], cell[1]+1]+amoeba_map[cell[0], cell[1]-1] == 0) \
+            #         or (amoeba_map[cell[0]-1, cell[1]]+amoeba_map[cell[0]+1, cell[1]]+amoeba_map[cell[0], cell[1]-1] == 0):
+            #         priorize_columns.append(columns[i])
+            # priorize_columns = sorted(priorize_columns, reverse=True) 
 
-            for col in priorize_columns:
-                if row > bottom_side - 4: # do not retract bottom 3 rows
-                    continue
+            # for col in priorize_columns:
+            #     if row > bottom_side - 4: # do not retract bottom 3 rows
+            #         continue
+            #     cell = (col%100, row%100)
+            #     if (col%100, row%100) in periphery:
+            #         retract_list.append(cell)
+            #         cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
+            #         amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx==True)[0], axis=0)
+            #         amoeba_map[col, row] = 0
+
+            if row > bottom_side - 4: # do not retract bottom 3 rows
+                continue
+
+            cols = sorted(columns.tolist(), reverse=True) 
+            for col in cols:
                 cell = (col%100, row%100)
-                if cell in periphery:
+                if self.check_neighbors(amoeba_map, (col, row)) and cell in periphery:
                     retract_list.append(cell)
                     cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
                     amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx==True)[0], axis=0)
+                    amoeba_map[col, row] = 0
 
-        return retract_list
+            cols = sorted(columns.tolist(), reverse=False) 
+            for col in cols:
+                cell = (col%100, row%100)
+                if self.check_neighbors(amoeba_map, (col, row)) and cell in periphery:
+                    retract_list.append(cell)
+                    cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
+                    amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx==True)[0], axis=0)
+                    amoeba_map[col, row] = 0
+
+        retract_list_nodup = []
+        for c in retract_list:
+            if not c in retract_list_nodup:
+                retract_list_nodup.append(c)
+        return retract_list_nodup
 
     def reorganize_expand(self, amoeba_map, movable, split_row):
         amoeba_loc = np.stack(np.where(amoeba_map==1)).T.astype(int)
@@ -332,6 +372,14 @@ class Player:
             expand_cells.append(tuple(cell%100))
 
         return expand_cells[:10]
+
+    # def check_connect(self, amoeba_map, cell):
+    #     if amoeba_map[cell[0], cell[1]-1] == 0 and amoeba_map[cell[0], cell[1]-1] == 0:
+    #         return False
+
+    #     if amoeba_map[cell[0], cell[1]+1] == 0 and :
+    #         return False
+            
 
     def organize_expand(self, amoeba_map, movable):
         amoeba_loc = np.stack(np.where(amoeba_map==1)).T.astype(int)
