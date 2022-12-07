@@ -524,7 +524,7 @@ class Player:
         # col_one = tentacle_one[0]
 
         sum_amoeba = np.sum(amoeba_map[:, start_row:], axis=1)
-        ind = np.argsort(sum_amoeba)[-3]
+        ind = np.argsort(sum_amoeba)[-3:]
         col_one = np.min(ind)
         return col_one
 
@@ -708,14 +708,15 @@ class Player:
         # put it in the back
         if np.sum(amoeba_map[:, i-1]) == 1:
             col = amoeba_map[:, i-1].argmax() 
-            if col != target_column:
-                new_extract = []
-                new_extend = []
-                last_row = self.find_last_row(amoeba_map[col, :])
-                new_extract.append((col, i-1))
-                new_extend.append((col, last_row))
-                return new_extract, new_extend
-            
+            #if col != target_column:
+            new_extract = []
+            new_extend = []
+            last_row = self.find_last_row(amoeba_map[col, :])
+            new_extract.append((col, (i-1) % 100))
+            new_extend.append((col, last_row % 100))
+            return new_extract, new_extend
+    
+        
 
         # #check for excess column
         # if int(i - start_row) > math.ceil(self.current_size * self.metabolism):
