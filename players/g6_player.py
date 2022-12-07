@@ -105,9 +105,9 @@ class Player:
 
         if self.current_size < 100:
             forward_length = 30
-        elif self.current_size < 200
-            forward_length = 50:
-        elif self.current_size < 300
+        elif self.current_size < 200:
+            forward_length = 50
+        elif self.current_size < 300:
             forward_length = 60
         else:
             forward_length = 100
@@ -273,6 +273,10 @@ class Player:
             return False
         if amoeba_map[cell[0]+1, cell[1]+1] == 0 and amoeba_map[cell[0]+1, cell[1]] != 0:
             return False
+        # if amoeba_map[cell[0]-1, cell[1]-1] == 0 and amoeba_map[cell[0]-1, cell[1]] != 0:
+        #     return False
+        # if amoeba_map[cell[0]+1, cell[1]-1] == 0 and amoeba_map[cell[0]+1, cell[1]] != 0:
+        #     return False
         if amoeba_map[cell[0]-1, cell[1]] == 0 and amoeba_map[cell[0]+1, cell[1]] == 0 and amoeba_map[cell[0], cell[1]-1] != 0:
             return False
         return True
@@ -332,7 +336,7 @@ class Player:
             row_cells = amoeba_loc[row_array]
             columns = np.sort(row_cells[:, 0])
 
-            if row > bottom_side - 4: # do not retract bottom 3 rows
+            if row > bottom_side - 2: # do not retract bottom 2 rows
                 continue
 
             cols = sorted(columns.tolist(), reverse=True) 
