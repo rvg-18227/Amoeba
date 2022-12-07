@@ -15,6 +15,160 @@ import constants
 from amoeba_state import AmoebaState
 
 
+# ---------------------------------------------------------------------------- #
+#                               Constants                                      #
+# ---------------------------------------------------------------------------- #
+
+CENTER_X = constants.map_dim // 2
+CENTER_Y = constants.map_dim // 2
+
+DEFAULT_TEETH_GAP = 2
+DEFAULT_TEETH_SHIFT_PERIOD = 6
+
+DEFAULT_FORMATION_THRESHOLD = 0.7
+
+DEFAULT_VERTICAL_FLIP_SIZE = 100
+
+DEFAULT_ONE_WIDE_BACKBONE = False
+
+
+# Maping from (size, density) to the number of parameter value
+TEETH_GAP_MAP = {
+    (3, 0.05): 1,
+    (3, 0.1): 1,
+    (3, 0.25): 1,
+    (3, 0.4): 1,
+    (3, 1.0): 1,
+    (5, 0.05): 1,
+    (5, 0.1): 1,
+    (5, 0.25): 1,
+    (5, 0.4): 1,
+    (5, 1.0): 1,
+    (8, 0.05): 1,
+    (8, 0.1): 1,
+    (8, 0.25): 1,
+    (8, 0.4): 1,
+    (8, 1.0): 1,
+    (15, 0.05): 1,
+    (15, 0.1): 1,
+    (15, 0.25): 1,
+    (15, 0.4): 1,
+    (15, 1.0): 1,
+    (25, 0.05): 1,
+    (25, 0.1): 1,
+    (25, 0.25): 1,
+    (25, 0.4): 1,
+    (25, 1.0): 1,
+}
+TEETH_SHIFT_PERIOD_MAP = {
+    (3, 0.05): 6,
+    (3, 0.1): 6,
+    (3, 0.25): 6,
+    (3, 0.4): 6,
+    (3, 1.0): 6,
+    (5, 0.05): 6,
+    (5, 0.1): 6,
+    (5, 0.25): 6,
+    (5, 0.4): 6,
+    (5, 1.0): 6,
+    (8, 0.05): 6,
+    (8, 0.1): 6,
+    (8, 0.25): 6,
+    (8, 0.4): 6,
+    (8, 1.0): 6,
+    (15, 0.05): 6,
+    (15, 0.1): 6,
+    (15, 0.25): 6,
+    (15, 0.4): 6,
+    (15, 1.0): 6,
+    (25, 0.05): 6,
+    (25, 0.1): 6,
+    (25, 0.25): 6,
+    (25, 0.4): 6,
+    (25, 1.0): 6,
+}
+FORMATION_THRESHOLD_MAP = {
+    (3, 0.05): 0.5,
+    (3, 0.1): 0.7,
+    (3, 0.25): 0.7,
+    (3, 0.4): 0.7,
+    (3, 1.0): 0.7,
+    (5, 0.05): 0.7,
+    (5, 0.1): 0.7,
+    (5, 0.25): 0.7,
+    (5, 0.4): 0.7,
+    (5, 1.0): 0.7,
+    (8, 0.05): 0.7,
+    (8, 0.1): 0.7,
+    (8, 0.25): 0.7,
+    (8, 0.4): 0.7,
+    (8, 1.0): 0.7,
+    (15, 0.05): 0.7,
+    (15, 0.1): 0.7,
+    (15, 0.25): 0.7,
+    (15, 0.4): 0.7,
+    (15, 1.0): 0.7,
+    (25, 0.05): 0.7,
+    (25, 0.1): 0.7,
+    (25, 0.25): 0.7,
+    (25, 0.4): 0.7,
+    (25, 1.0): 0.7,
+}
+VERTICAL_FLIP_SIZE_MAP = {
+    (3, 0.05): 100,
+    (3, 0.1): 100,
+    (3, 0.25): 100,
+    (3, 0.4): 100,
+    (3, 1.0): 100,
+    (5, 0.05): 100,
+    (5, 0.1): 100,
+    (5, 0.25): 100,
+    (5, 0.4): 100,
+    (5, 1.0): 100,
+    (8, 0.05): 100,
+    (8, 0.1): 100,
+    (8, 0.25): 100,
+    (8, 0.4): 100,
+    (8, 1.0): 100,
+    (15, 0.05): 100,
+    (15, 0.1): 100,
+    (15, 0.25): 100,
+    (15, 0.4): 100,
+    (15, 1.0): 100,
+    (25, 0.05): 100,
+    (25, 0.1): 100,
+    (25, 0.25): 100,
+    (25, 0.4): 100,
+    (25, 1.0): 100,
+}
+ONE_WIDE_BACKBONE_MAP = {
+    (3, 0.05): False,
+    (3, 0.1): False,
+    (3, 0.25): False,
+    (3, 0.4): False,
+    (3, 1.0): False,
+    (5, 0.05): False,
+    (5, 0.1): False,
+    (5, 0.25): False,
+    (5, 0.4): False,
+    (5, 1.0): False,
+    (8, 0.05): False,
+    (8, 0.1): False,
+    (8, 0.25): False,
+    (8, 0.4): False,
+    (8, 1.0): False,
+    (15, 0.05): False,
+    (15, 0.1): False,
+    (15, 0.25): False,
+    (15, 0.4): False,
+    (15, 1.0): False,
+    (25, 0.05): False,
+    (25, 0.1): False,
+    (25, 0.25): False,
+    (25, 0.4): False,
+    (25, 1.0): False,
+}
+
 class PlayerParameters:
     formation_threshold: float
     teeth_gap: int
@@ -23,35 +177,14 @@ class PlayerParameters:
     vertical_flip_size: int
 
     def __init__(self):
-        self.formation_threshold = 0.9
-        self.teeth_gap = 2
-        self.teeth_shift_period = 6
-        self.one_wide_backbone = False
-        self.vertical_flip_size = 100
+        self.formation_threshold = DEFAULT_FORMATION_THRESHOLD
+        self.teeth_gap = DEFAULT_TEETH_GAP
+        self.teeth_shift_period = DEFAULT_TEETH_SHIFT_PERIOD
+        self.one_wide_backbone = DEFAULT_ONE_WIDE_BACKBONE
+        self.vertical_flip_size = DEFAULT_VERTICAL_FLIP_SIZE
 
 
 default_params = PlayerParameters()
-
-# ---------------------------------------------------------------------------- #
-#                               Constants                                      #
-# ---------------------------------------------------------------------------- #
-
-CENTER_X = constants.map_dim // 2
-CENTER_Y = constants.map_dim // 2
-
-TEETH_GAP = 1
-TEETH_SHIFT_PERIOD = 6
-
-TEETH_SHIFT_LIST = (
-    ([0 for i in range(TEETH_SHIFT_PERIOD)] + [1 for i in range(TEETH_SHIFT_PERIOD)])
-    * (round(np.ceil(100 / (TEETH_SHIFT_PERIOD * 2))))
-)[:100]
-
-PERCENT_MATCH_BEFORE_MOVE = 0.7
-
-VERTICAL_FLIP_SIZE_THRESHOLD = 100
-
-ONE_WIDE_BACKBONE = False
 
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
@@ -189,6 +322,8 @@ class Player:
         self.goal_size = goal_size
         self.current_size = goal_size / 4
         self.params = params
+        
+        self.set_game_params()
 
         self.teeth_shift_list = (
             (
@@ -205,6 +340,14 @@ class Player:
         self.retractable_cells: List[Tuple[int, int]] = None
         self.extendable_cells: List[Tuple[int, int]] = None
         self.num_available_moves: int = None
+        
+    def set_game_params(self) -> None:
+        start_size = math.sqrt(self.current_size)
+        self.params.teeth_gap = TEETH_GAP_MAP.get((start_size, self.metabolism), DEFAULT_TEETH_GAP)
+        self.params.teeth_shift_period = TEETH_SHIFT_PERIOD_MAP.get((start_size, self.metabolism), DEFAULT_TEETH_SHIFT_PERIOD)
+        self.params.formation_threshold = FORMATION_THRESHOLD_MAP.get((start_size, self.metabolism), DEFAULT_FORMATION_THRESHOLD)
+        self.params.vertical_flip_size = VERTICAL_FLIP_SIZE_MAP.get((start_size, self.metabolism), DEFAULT_VERTICAL_FLIP_SIZE)
+        self.params.one_wide_backbone = ONE_WIDE_BACKBONE_MAP.get((start_size, self.metabolism), DEFAULT_ONE_WIDE_BACKBONE)
 
     def generate_comb_formation(
         self,
@@ -594,7 +737,7 @@ class Player:
         # Alternate vertical translation direction if necessary
         memory_fields = read_memory(info)
 
-        teeth_shift = TEETH_SHIFT_LIST[curr_backbone_col]
+        teeth_shift = self.teeth_shift_list[curr_backbone_col]
         curr_backbone_row = (
             curr_backbone_col
             if not memory_fields[MemoryFields.VerticalInvert]
@@ -638,7 +781,7 @@ class Player:
                 if not memory_fields[MemoryFields.VerticalInvert]
                 else constants.map_dim - new_backbone_col
             )
-            teeth_shift = TEETH_SHIFT_LIST[new_backbone_col]
+            teeth_shift = self.teeth_shift_list[new_backbone_col]
             next_comb, next_bridge = self.generate_comb_formation(
                 self.current_size,
                 teeth_shift,
