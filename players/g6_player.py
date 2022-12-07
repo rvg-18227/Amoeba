@@ -94,7 +94,7 @@ class Player:
         self.logger.info(f'----------------Turn {info}-----------------')
         self.current_size = current_percept.current_size
 
-        print(info, self.current_size*self.metabolism)
+        print(info, self.current_size, self.metabolism)
 
         info_binary  = format(info, '04b')
         
@@ -102,10 +102,20 @@ class Player:
         amoeba_map = self.concat_map(current_percept.amoeba_map, split, split_row)
         self.logger.info(f'split_row (exclusive): {split_row}')
 
+
+        if self.current_size < 100:
+            forward_length = 30
+        elif self.current_size < 200
+            forward_length = 50:
+        elif self.current_size < 300
+            forward_length = 60
+        else:
+            forward_length = 100
+
         if info < 40:
         # reorganize, organize, forward
             stage = min(info, 2)
-        elif info == 100:
+        elif info == 255:
             stage = 4
         else:
             stage = 3
@@ -175,7 +185,7 @@ class Player:
             if len(retract_list) == 0:
                 info = -1
             else:
-                info = 99
+                info = 254
                 
             
         mini = min(int(self.current_size*self.metabolism), len(retract_list), len(expand_list))
