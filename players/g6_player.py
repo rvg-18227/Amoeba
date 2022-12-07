@@ -705,12 +705,24 @@ class Player:
             row_cells = amoeba_loc[row_array]
             row_len = len(row_cells)
 
-            if row_len >= max_row_length:
+            if row_len >= max_row_length - 2:
                 max_row_length = row_len
                 max_row = row
                 
         return max_row
 
+    def find_left_most_none_singular_chunk(self, array, tmp):
+        
+        for i in range(98, 0, -1):
+            next_cell = array[(i - 1)]
+            curr_cell = array[i]
+            prev_cell = array[(i + 1)]
+            
+            if curr_cell == 1 and prev_cell == 1 and next_cell == 0:
+                return i - 1
+                    
+        return tmp
+        
     
     def close_in(self, amoeba_map):
         """Close in function for clashing formation
@@ -729,14 +741,16 @@ class Player:
         # assume no spliting
         # move right most cell to the adjacent left location
         # TODO
+        WALL = 10
         # Pass in location of the opposing column
         target_column = self.find_first_tentacle(amoeba_map, start_row)
-        target_column = np.where(np.sum(amoeba_map, axis=1) != 0)[0][0]
+        target_column = max(np.where(np.sum(amoeba_map, axis=1) != 0)[0][0], WALL)
         # TODO
         # check height of the tenticle, if exceed max meta, shrink it
         extract = []
         extend = []
         for i in range(start_row, start_row+100):
+            
             if amoeba_map[:, i].sum() == 0:
                 # reach the end
                 break
@@ -746,13 +760,19 @@ class Player:
             row_reverse = amoeba_map[:, i][::-1]
             right_most_cell = len(row_reverse) - np.argmax(row_reverse) - 1
             
-            for j in range(right_most_cell, -1, -1):
-                curr_cell = amoeba_map[(j)%100, i]
-                next_cell = amoeba_map[(j-1)%100, i]
-                if curr_cell == 1 and next_cell == 0:
-                    extract.append((right_most_cell, i % 100))
-                    extend.append((j-1, i % 100))
-                    break
+            if i == start_row:
+                # find the right most chunk that arent of length 1
+                row_special_col = self.find_left_most_none_singular_chunk(amoeba_map[:, i], right_most_cell)
+                extract.append((right_most_cell, i % 100))
+                extend.append((row_special_col, i % 100))
+            else:
+                for j in range(right_most_cell, -1, -1):
+                    curr_cell = amoeba_map[(j)%100, i]
+                    next_cell = amoeba_map[(j-1)%100, i]
+                    if curr_cell == 1 and next_cell == 0:
+                        extract.append((right_most_cell, i % 100))
+                        extend.append((j-1, i % 100))
+                        break
         # check for singular cell that arent on the target column
         # put it in the back
         if np.sum(amoeba_map[:, i-1]) == 1:
