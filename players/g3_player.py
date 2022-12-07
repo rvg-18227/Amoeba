@@ -11,7 +11,7 @@ import numpy.typing as npt
 import math
 
 MAP_LENGTH = 100
-
+LOW_DENSITY = .1
 class Player:
     def __init__(self, rng: np.random.Generator, logger: logging.Logger, metabolism: float, goal_size: int,
                  precomp_dir: str) -> None:
@@ -498,15 +498,8 @@ class Player:
 
         ### GET DESIRED OFFSETS FOR CURRENT MORPH ###
         desired_shape_offsets = self.get_desired_shape(0)
-        #print(desired_shape_offsets)
-        #exit(1)
-
-
-        ### INCREMENT CENTER POINT PHASE ###
-        # move amoeba: x_cord is info_L7_int because initial info_L7_int val is 0, indicating initialization/building phase
-        init_phase = info_L7_int == 0
-        x_cord = info_L7_int - 1
-
+        
+        # determine if density suggests flip is adventagous
         if x_cord <= 50:
             total_distance = 50+x_cord
         else:
@@ -514,8 +507,19 @@ class Player:
 
         current_density_est = bacteria_eaten/(average_mouth*total_distance)
 
-        if x_cord == 0:
-            print(goal_percentage)
+        if x_cord == 50 and current_density_est < LOW_DENSITY:
+            info_first_bit = "1"
+            
+        # if first but is flipped, flip the desired shape to (y, x)
+        if int(info_first_bit) == 1:
+            desired_shape_offsets = [tuple(reversed(offset)) for offset in desired_shape_offsets]
+
+        ### NEED TO REFACTOR CODE TO FLIP X AND Y
+
+        ### INCREMENT CENTER POINT PHASE ###
+        # move amoeba: x_cord is info_L7_int because initial info_L7_int val is 0, indicating initialization/building phase
+        init_phase = info_L7_int == 0
+        x_cord = info_L7_int - 1
 
         # move under these 2 conditions
         # 1: end of initialization phase
