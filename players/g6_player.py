@@ -79,6 +79,23 @@ class Player:
         self.current_size = goal_size / 4
         self.drawer = Drawer()
 
+    def check_density(self, last_percept, info, threshold=0.05):
+        amoeba_loc = np.stack(np.where(last_percept.amoeba_map == 1)).T.astype(int)
+        width = amoeba_loc[:, 0].max() - amoeba_loc[:, 0].min() + 1
+        height = amoeba_loc[:, 1].max() - amoeba_loc[:, 1].min() + 1
+        print(amoeba_loc.shape[0], width, height)
+        
+        if amoeba_loc.shape[0] != width * height:
+            return info
+
+        num_bac = len(last_percept.bacteria)
+        num_peri = width * 4 - 4
+        if num_bac / num_peri < 0.05:
+            info += 1
+
+        return info
+
+
     def move(self, last_percept, current_percept, info) -> (list, list, int):
         """Function which retrieves the current state of the amoeba map and returns an amoeba movement
             Args:
@@ -94,7 +111,10 @@ class Player:
         self.logger.info(f'----------------Turn {info}-----------------')
         self.current_size = current_percept.current_size
 
-        info_binary  = format(info, '04b')
+        info = self.check_density(last_percept, info, threshold=0.05)
+        sparse = info & 1
+        info = info >> 1
+        print(sparse, info)
         
         split, split_row = self.split_amoeba(current_percept.amoeba_map)
         amoeba_map = self.concat_map(current_percept.amoeba_map, split, split_row)
@@ -104,7 +124,7 @@ class Player:
         width = amoeba_loc[:, 0].max() - amoeba_loc[:, 0].min()
         height = amoeba_loc[:, 1].max() - amoeba_loc[:, 1].min()
 
-        print(info, self.current_size / self.metabolism)
+        #print(info, self.current_size / self.metabolism)
 
         if self.current_size / self.metabolism < 1000:
             forward_length = 50
@@ -118,7 +138,7 @@ class Player:
         if info < forward_length:
         # reorganize, organize, forward
             stage = min(info, 2)
-        elif info == 255:
+        elif info == 127:
             stage = 4
         else:
             stage = 3
@@ -183,7 +203,7 @@ class Player:
             if len(retract_list) == 0:
                 info = -1
             else:
-                info = 254
+                info = 126
                 
             
         mini = min(math.ceil(self.current_size*self.metabolism), len(retract_list), len(expand_list))
@@ -193,7 +213,7 @@ class Player:
 
         self.drawer.draw(current_percept, retract_list[:mini], expand_list[:mini])
         #print(retract_list[:mini], expand_list[:mini], info+1)
-        return retract_list[:mini], expand_list[:mini], info+1
+        return retract_list[:mini], expand_list[:mini], ((info+1) << 1) + sparse
 
     def box_shape(self, amoeba_loc, height, width):
         return (amoeba_loc.shape[0] > (height * width * 2/3))
