@@ -1,5 +1,6 @@
-import argparse
 import itertools
+from collections import defaultdict
+from types import SimpleNamespace
 
 import pandas as pd
 import ray
@@ -35,30 +36,9 @@ def rayobj_to_iterator(obj_ids):
         yield ray.get(done[0])
 
 
-if __name__ == "__main__":
-    # NOTE: The args are overridden by the benchmark script. None of these are used.
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--metabolism", "-m", type=float, default=1.0, help="Value between 0 and 1 (including 1) that "
-                                                                            "indicates what proportion of the amoeba "
-                                                                            "is allowed to retract in one turn")
-    parser.add_argument("--size", "-A", type=int, default=15, help="length of a side of the initial amoeba square "
-                                                                   "(min=3, max=50")
-    parser.add_argument("--final", "-l", type=int, default=1000, help="the maximum number of days")
-    parser.add_argument("--density", "-d", type=float, default=0.3, help="Density of bacteria on the map")
-    parser.add_argument("--seed", "-s", type=int, default=2, help="Seed used by random number generator, specify 0 to "
-                                                                  "use no seed and have different random behavior on "
-                                                                  "each launch")
-    parser.add_argument("--no_gui", "-ng", action="store_true", help="Disable GUI")
-    parser.add_argument("--log_path", default="log", help="Directory path to dump log files, filepath if "
-                                                          "disable_logging is false")
-    parser.add_argument("--disable_logging", action="store_true", help="Disable Logging, log_path becomes path to file")
-    parser.add_argument("--disable_timeout", action="store_true", help="Disable timeouts for player code")
-    parser.add_argument("--player", "-p", default="d", help="Specifying player")
-    parser.add_argument("--vid_name", "-v", default="game", help="Naming the video file")
-    parser.add_argument("--no_vid", "-nv", action="store_true", help="Stops generating video of the session")
-    parser.add_argument("--batch_mode", action="store_true", help="For running games via scripts")
-    args = parser.parse_args()
-
+def create_args(p:str, m: float, d: float, A: int):
+    args = SimpleNamespace()
+    # Constants
     args.no_gui = True
     args.no_vid = True
     args.disable_logging = True
@@ -68,46 +48,36 @@ if __name__ == "__main__":
     args.final = MAX_TURNS
     args.seed = SEED
 
+    args.player = p
+    args.metabolism = m
+    args.density = d
+    args.size = A
+
+    return args
+
+
+if __name__ == "__main__":
+
     ray.init(num_cpus=NUM_CPUS, configure_logging=True, log_to_driver=False)  # don't print the console outputs
-    # testing = Create as many copies as cpus with identical args
-    # ray_start_time = time.time()
-    # actor_list = [AmoebaCopy.remote(args) for _ in range(NUM_CPUS)]
-    # runs_list = [x.start_game.remote() for x in actor_list]
-    # result_list = ray.get(runs_list)
-    # ray_end_time = time.time()
-    # print(f"Ray total time: {ray_end_time - ray_start_time}")
 
     # Create the ray actors from class. Try combinations of parameters.
     actor_list = []
     for (px, mx, dx, sx) in itertools.product(PLAYERS, METABOLISMS, DENSITIES, SIZES):
-        args.player = str(px)
-        args.metabolism = mx
-        args.density = dx
-        args.size = sx
+        args = create_args(px, mx, dx, sx)
         actor_list.append(AmoebaCopy.remote(args))
 
     # Start parallel runs
     runs_list = [x.start_game.remote() for x in actor_list]
 
-    # Create datastructure for Pandas array
-    data = {
-        "Player": [],  # self.player
-        "Goal Reached": [],  # self.goal_reached
-        "Num Turns": [],  # self.turns
-        "Starting Size": [],  # self.start_size
-        "Metabolism": [],  # self.metabolism
-        "Density": [],  # self.density
-        "Total Time": [],  # self.total_time
-        "Final Size": [],  # self.amoeba_size
-        "Goal Size": [],  # self.goal_size
-    }
-
-    # Progress bar to track finished ray tasks. Periodically save to a CSV file so we may get partial results.
+    # data for Pandas array
+    data = defaultdict(list)
     filename = "benchmark_results.csv"
     save_interval = 2.0  # Save every N seconds
     print(f"Saving benchmark results to {filename}")
     last_save_time = time.time()
-    result_list = []
+
+    # Progress bar to track finished ray tasks. Periodically save to a CSV file so we may get partial results.
+    result_list = []  # All the returned amoeba objects. For plotting.
     for r in tqdm(rayobj_to_iterator(runs_list), total=len(runs_list), ncols=80):
         result_list.append(r)
 
