@@ -148,7 +148,7 @@ class Player:
         #     info = -1
 
         if stage == 3:
-            if math.ceil(self.current_size*self.metabolism) < 6 or self.current_size < 25 or width < 8:
+            if math.ceil(self.current_size*self.metabolism) < 6 or width < 7:
                 stage = 0
         
         # if stage == 2 and self.box_shape(amoeba_loc, width, height):
