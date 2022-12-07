@@ -21,14 +21,15 @@ from amoeba_state import AmoebaState
 CENTER_X = constants.map_dim // 2
 CENTER_Y = constants.map_dim // 2
 
-COMB_SEPARATION_DIST = 4
 TEETH_GAP = 1
-
 TEETH_SHIFT_PERIOD = 6
+
 TEETH_SHIFT_LIST = (
     ([0 for i in range(TEETH_SHIFT_PERIOD)] + [1 for i in range(TEETH_SHIFT_PERIOD)])
     * (round(np.ceil(100 / (TEETH_SHIFT_PERIOD * 2))))
 )[:100]
+
+PERCENT_MATCH_BEFORE_MOVE = 0.9
 
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
@@ -532,7 +533,7 @@ class Player:
         )
         # Check if current comb formation is filled
         comb_mask = self.amoeba_map[next_comb.nonzero()]
-        settled = (sum(comb_mask) / len(comb_mask)) > 0.9
+        settled = (sum(comb_mask) / len(comb_mask)) > PERCENT_MATCH_BEFORE_MOVE
         if not settled:
             retracts, moves = self.get_morph_moves(
                 next_comb + next_bridge, 
