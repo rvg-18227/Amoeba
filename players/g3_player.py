@@ -493,6 +493,12 @@ class Player:
                     break
         
         return retracts, extends
+    
+    def reset_center(self, info_first_bit, new_coord): # returns [_, y]
+        if info_first_bit == "0":
+            return [new_coord, 50]
+        elif info_first_bit == "1":
+            return [50, new_coord]
 
     def move(self, last_percept, current_percept, info) -> (list, list, int):
         """Function which retrieves the current state of the amoeba map and returns an amoeba movement
@@ -545,6 +551,7 @@ class Player:
         x_cord = info_L7_int - 1
 
         # determine if density suggests flip is adventagous
+        total_distance = 0
         if x_cord <= 50:
             total_distance = 50+x_cord
         else:
@@ -554,39 +561,42 @@ class Player:
 
         if x_cord == 50 and current_density_est < LOW_DENSITY:
             info_first_bit = "1"
+        #elif x_cord == 51 and info_first_bit == "1" and current_density_est < LOW_DENSITY:
+            #info_first_bit = "0"
             
         # if first but is flipped, flip the desired shape to (y, x)
         if int(info_first_bit) == 1:
             desired_shape_offsets = [tuple(reversed(offset)) for offset in desired_shape_offsets]
 
-        ### NEED TO REFACTOR CODE TO FLIP X AND Y
-
         # move under these 2 conditions
         # 1: end of initialization phase
-        print(init_phase)
-        print(len(desired_shape_offsets), self.current_size)
+        #print(init_phase)
+        #print(len(desired_shape_offsets), self.current_size)
+        new_center = self.reset_center(info_first_bit, x_cord)
         if init_phase:
             x_cord = 50
 
-            if self.in_formation(desired_shape_offsets, [x_cord, 50]):
+            new_center = self.reset_center(info_first_bit, x_cord)
+            if self.in_formation(desired_shape_offsets, new_center):
                 init_phase = False
                 x_cord = 51
-        
+                new_center = self.reset_center(info_first_bit, x_cord)
+
         # 2: not in initialization phase, and in formation
-        elif self.in_formation(desired_shape_offsets, [x_cord, 50], err=0.2):
+        elif self.in_formation(desired_shape_offsets, new_center, err=0.2):
             x_cord += 1
             x_cord %= 100
 
 
         ### MORPH PHASE ###
-        center_point = [x_cord, 50]
+        center_point = self.reset_center(info_first_bit, x_cord)
         retracts, moves = self.morph(desired_shape_offsets, center_point)
 
         # catch error (if moves == 0, no move was made, so we should step back until we can move)
         if len(moves) == 0:
             while len(moves) == 0:
                 x_cord = ((x_cord + 100) - 1) % 100
-                center_point = [x_cord, 50]
+                center_point = self.reset_center(info_first_bit, x_cord)
                 retracts, moves = self.morph(desired_shape_offsets, center_point)
             x_cord = ((x_cord + 100) - 1) % 100
 
