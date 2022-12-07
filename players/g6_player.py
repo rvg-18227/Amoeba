@@ -327,7 +327,7 @@ class Player:
 
         for i in range(movable.shape[0]):
             cell = movable[i]
-            if cell[0] < 4 or cell[0] > 95 or amoeba_map[cell[0], cell[1]] == 1:
+            if cell[0] < 10 or cell[0] > 89 or amoeba_map[cell[0], cell[1]] == 1:
                 continue
             expand_cells.append(tuple(cell%100))
 
@@ -354,7 +354,7 @@ class Player:
             # expand to an additional col
             for c_i in range(min(2, col_cells.shape[0])):
                 cell = col_cells[-2:][c_i]
-                if cell[0]+direction[i] < 4 or cell[0]+direction[i] > 95:
+                if cell[0]+direction[i] < 10 or cell[0]+direction[i] > 89:
                     continue
                 if amoeba_map[cell[0], cell[1]-1] == 0 and amoeba_map[cell[0], cell[1]+1] == 0:
                     continue
@@ -628,9 +628,7 @@ class Player:
         if amoeba_map[tentacle_column, chunks[-1] + 1] == 1:
             return False 
         return True
-    
-    def relocate_extra_cells(self, amoeba_map, tentacle_column, chunks):
-        pass    
+      
     
     def move_tenticle(self, tentacle_column, chunks):
         retract = [(tentacle_column, i) for i in chunks]
@@ -718,8 +716,21 @@ class Player:
             new_extract.append((col, (i-1) % 100))
             new_extend.append((col, last_row % 100))
             return new_extract, new_extend
-    
-        
+
+        if np.sum(amoeba_map[:, i-1]) == 2 and not self.is_singular_chunk(amoeba_map[:, i-1]):
+            new_extract = []
+            new_extend = []
+            
+            single_cells = np.where(amoeba_map[:, i-1] == 1)[0]
+            new_extract = []
+            new_extend = []
+            for col in single_cells:
+                last_row = self.find_last_row(amoeba_map[col, :])
+                new_extract.append((col, (i-1) % 100))
+                new_extend.append((col, last_row % 100))
+                
+            return new_extract, new_extend
+
 
         # #check for excess column
         # if int(i - start_row) > math.ceil(self.current_size * self.metabolism):
