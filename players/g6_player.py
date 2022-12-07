@@ -173,7 +173,7 @@ class Player:
         self.logger.info(f'expand: {expand_list[:mini]}')
 
         self.drawer.draw(current_percept, retract_list[:mini], expand_list[:mini])
-        print(retract_list[:mini], expand_list[:mini], info+1)
+        #print(retract_list[:mini], expand_list[:mini], info+1)
         return retract_list[:mini], expand_list[:mini], info+1
 
     def concat_map(self, amoeba_map, split, split_row):
@@ -203,8 +203,8 @@ class Player:
         retract_list = self.reorganize_retract(amoeba_map, periphery)
         movable = self.find_movable_cells(retract_list, periphery, amoeba_map, bacteria)
         expand_list = self.reorganize_expand(amoeba_map, movable, split_row)
-        print('retract:', retract_list)
-        print('expand:', expand_list)
+        #print('retract:', retract_list)
+        #print('expand:', expand_list)
         return retract_list, expand_list
 
     def forward_expand(self, amoeba_map, movable, split_row):
