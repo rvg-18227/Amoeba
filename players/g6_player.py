@@ -92,12 +92,12 @@ class Player:
 
         num_bac = len(last_percept.bacteria)
         num_peri = width * 4 - 4
-        if num_bac / num_peri < 0.06:
+        if num_bac / num_peri < 0.07:
             info += 1
 
-        # print('shape', amoeba_loc.shape[0], width, height)
-        # print('dense', num_bac, num_peri)
-        # print('sparse', info)
+        print('shape', amoeba_loc.shape[0], width, height)
+        print('dense', num_bac, num_peri)
+        print('sparse', info)
 
         return info
 
