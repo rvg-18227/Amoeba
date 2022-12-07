@@ -584,8 +584,7 @@ class Player:
         info_L7_int = int(info_L7_bits, 2)  # info_L7_int holds int value of last 7 bits (stores coordinate)
 
 
-        ### GET DESIRED OFFSETS FOR CURRENT MORPH ###
-        desired_shape_offsets = self.get_desired_shape(5)
+        
 
         ### INCREMENT CENTER POINT PHASE ###
         # move amoeba: x_cord is info_L7_int because initial info_L7_int val is 0, indicating initialization/building phase
@@ -603,8 +602,18 @@ class Player:
 
         if x_cord == 50 and current_density_est < LOW_DENSITY:
             info_first_bit = "1"
-        #elif x_cord == 51 and info_first_bit == "1" and current_density_est < LOW_DENSITY:
-            #info_first_bit = "0"
+            
+        # elif x_cord == 50 and info_first_bit == "1" and current_density_est < LOW_DENSITY:
+        #     info_first_bit = "0"
+        
+        ### GET DESIRED OFFSETS FOR CURRENT MORPH ###
+        desired_shape_offsets = self.get_desired_shape(5)
+        error = .2
+
+        if (current_density_est < LOW_DENSITY or int(info_first_bit) == 1) and self.current_size < 100:
+            desired_shape_offsets = self.get_desired_shape(0)
+            error = .01
+        
             
         # if first but is flipped, flip the desired shape to (y, x)
         if int(info_first_bit) == 1:
@@ -623,7 +632,7 @@ class Player:
                 new_center = self.reset_center(info_first_bit, x_cord)
 
         # 2: not in initialization phase, and in formation
-        elif self.in_formation(desired_shape_offsets, new_center, err=0.2):
+        elif self.in_formation(desired_shape_offsets, new_center, err=error):
             x_cord += 1
             x_cord %= 100
 
