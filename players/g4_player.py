@@ -409,15 +409,9 @@ class BoxFarm(Strategy):
         return box_cells
 
     def _sweep(self, size, ameoba_cells):
-        # print('sweep')
         left_x = min(ameoba_cells[:,0])
-        # print(left_x)
         left_ind = np.where(ameoba_cells[:,0]==left_x)
-        # print(left_ind)
         sweep_arm = ameoba_cells[left_ind]
-        # print(sweep_arm)
-        # print(ameoba_cells)
-        # print()
         return sweep_arm
 
     def _init(self, ameoba_cells, size, corner):
@@ -425,7 +419,6 @@ class BoxFarm(Strategy):
         minx, miny = min(ameoba_cells[:,0]), min(ameoba_cells[:,1])
         if corner == 0:
             top_right_corner = (minx+square_length-2,miny)
-           # print(top_right_corner)
         else:
             top_right_corner = (corner, miny)
         box_cells = self._make_box(size, top_right_corner)
@@ -434,7 +427,7 @@ class BoxFarm(Strategy):
     def move(
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
     ) -> tuple[list[cell], list[cell], int]:
-        
+
         size = (state.current_size)
         ameoba_cells = np.array(list(zip(*np.where(state.amoeba_map == State.ameoba.value))))
 
@@ -448,20 +441,28 @@ class BoxFarm(Strategy):
             initialize = int(mem[0])
             corner = int(mem[1:],2)
             if initialize == 0:
+                #print("FORM SQUARE")
                 target_cells, corner_new = self._init(ameoba_cells,size,corner)
                 #print(target_cells)
                 mem_corner = f'{corner_new[0]:b}'
                 while len(mem_corner) < 8:
                     mem_corner = '0' + mem_corner
                 mem = mem_corner
-                over = len(set(ameoba_cells_set))
                 if set(target_cells) == set(ameoba_cells_set):
                     initialize = 1
                     mem_initialize = f'{initialize:b}'
                     mem = mem_initialize + mem[1:]
+                else:
+                    reshape = self._reshape(state,memory, set(target_cells))
+                    if len(reshape[0]) == 0:
+                        print('cannot form box from this position')
+                        initialize = 1
+                        mem_initialize = f'{initialize:b}'
+                        mem = mem_initialize + mem[1:]
+                    
 
             if initialize == 1:
-                print("SWEEP")
+                #print("SWEEPING")
                 sweep_cells = self._sweep(size, ameoba_cells)
                 sweep_cells_set = list(set([tuple(ti) for ti in sweep_cells]))
                 #target_cells = list(set(ameoba_cells_set) - set(sweep_cells_set))
@@ -473,16 +474,11 @@ class BoxFarm(Strategy):
                 res = np.array(res)
              
                 ind = np.where(res[:,0]<=x)
-                #past_cells = np.array(list(zip(*np.where(ameoba_cells[:,0]<=x))))
-                #print(past_cells)
-                # print(res)
 
                 past_cells = res[ind]
-                # print(past_cells)
                 past_cells_set = list(set([tuple(ti) for ti in past_cells]))
                 target_cells_set = list(set([tuple(ti) for ti in target_cells]))
                 target_cells = list(set(target_cells_set) - set(past_cells_set))
-                # print(target_cells)
                 y = min(ameoba_cells[:,1])
                 square_length = (size // 4) + 1
                 leftover = (size % 4)
@@ -496,19 +492,12 @@ class BoxFarm(Strategy):
                 for i in range(leftover):
                     point = ((x+1,y+square_length+i))
                     target_cells.append(point)
-                # print(leftover)
-                # print(len(past_cells))
-                # print(square_length-2)
-                # print((len(past_cells) - (square_length - 2) - leftover)//2)
                 for i in range((len(past_cells) - (square_length-2)-leftover)//2):
                     print(i)
                     target_cells.append((corner+square_length+i,y))
                     target_cells.append((corner+square_length+i,y+square_length-1))
-                # print(target_cells)
-                print(target_cells)
-                print(ameoba_cells)
-                if (set(target_cells)) == (set(ameoba_cells_set)) or ready:#or set(target_cells) < set(ameoba_cells_set):
-                    print("TESTING TESTING")
+                
+                if (set(target_cells)) == (set(ameoba_cells_set)) or ready:
                     min_y = min(ameoba_cells[:,1])
                     min_ind = np.where(ameoba_cells[:,1]==min_y)
                     top = ameoba_cells[min_ind]
@@ -520,18 +509,26 @@ class BoxFarm(Strategy):
                     mem = mem_corner
                     memory = int(mem,2)
                     loop = True
-            
-            # for cell in sweep_cells:
-            #     if cell[1] == miny or cell[1] == maxy:
-            #         target_cells.append((cell[0],cell[1]))
-            #     else:
-            #         target_cells.append((cell[0]+1,cell[1]))
+                else:
+                    reshape = self._reshape(state,memory, set(target_cells))
+                    if len(reshape[0]) == 0:
+                        print("cannot sweep from this position")
+                        min_y = min(ameoba_cells[:,1])
+                        min_ind = np.where(ameoba_cells[:,1]==min_y)
+                        top = ameoba_cells[min_ind]
+                        corner = min(ameoba_cells[:,0]) + 1
+                        initialize = 0
+                        mem_corner = f'{corner:b}'
+                        while len(mem_corner) < 8:
+                            mem_corner = '0' + mem_corner
+                        mem = mem_corner
+                        memory = int(mem,2)
+                        loop = True
 
-        #target_cells = self._get_target_cells(size, ameoba_cells)
 
         memory = int(mem,2)
-        #print(target_cells)
         return self._reshape(state, memory, set(target_cells))
+
 
 
 class BucketAttack(Strategy):
