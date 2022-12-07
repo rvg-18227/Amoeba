@@ -292,14 +292,16 @@ class Player:
 
         return expand_cells
 
-    def check_connect(self, amoeba_map, cell):
+    def check_connect(self, amoeba_map, cell, first_col=False, last_col=False):
         if amoeba_map[cell[0], cell[1]-1] != 0:
             return False
 
-        if amoeba_map[cell[0]-1, cell[1]+1] == 0 and amoeba_map[cell[0]-1, cell[1]] != 0:
+        if not first_col and amoeba_map[cell[0]-1, cell[1]+1] == 0 and amoeba_map[cell[0]-1, cell[1]] != 0:
             return False
-        if amoeba_map[cell[0]+1, cell[1]+1] == 0 and amoeba_map[cell[0]+1, cell[1]] != 0:
+        if not last_col and  amoeba_map[cell[0]+1, cell[1]+1] == 0 and amoeba_map[cell[0]+1, cell[1]] != 0:
             return False
+        if first_col or last_col:
+            return True
         # if amoeba_map[cell[0]-1, cell[1]-1] == 0 and amoeba_map[cell[0]-1, cell[1]] != 0:
         #     return False
         # if amoeba_map[cell[0]+1, cell[1]-1] == 0 and amoeba_map[cell[0]+1, cell[1]] != 0:
@@ -307,10 +309,12 @@ class Player:
         if amoeba_map[cell[0]-1, cell[1]] == 0 and amoeba_map[cell[0]+1, cell[1]] == 0 and amoeba_map[cell[0], cell[1]-1] != 0:
             return False
 
+        # if amoeba_map[cell[0], cell[1]-1] == 0 and amoeba_map[cell[0], cell[1]+1] == 0 and amoeba_map[cell[0]-1, cell[1]]+amoeba_map[cell[0]+1, cell[1]] > 1:
+        #     return False
         return True
 
     def organize_retract(self, amoeba_map, periphery, min_num_per_col=2):
-        amoeba_map =amoeba_map.copy()
+        amoeba_map = amoeba_map.copy()
         amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
         amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
         top_side = np.min(amoeba_loc[:, 1])
@@ -336,7 +340,7 @@ class Player:
                 if num_column > min_num_per_col:
                     cell = (col%100, row%100)
                     if cell in periphery:
-                        if col in (left_side, right_side) or self.check_connect(amoeba_map, cell):
+                        if self.check_connect(amoeba_map, cell, first_col=(left_side==col), last_col=(right_side==col)):
                             retract_list.append(cell)
                             #self.logger.info(f'cell retract: {cell}')
                             cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
@@ -346,7 +350,7 @@ class Player:
 
         return retract_list
 
-    def check_neighbors(self, amoeba_map, cell, count=0):
+    def check_neighbors(self, amoeba_map, cell):
         num_neighbors = amoeba_map[cell[0]-1, cell[1]]+amoeba_map[cell[0]+1, cell[1]]+amoeba_map[cell[0], cell[1]-1]+amoeba_map[cell[0], cell[1]+1]
         return (num_neighbors <= 1)
 
