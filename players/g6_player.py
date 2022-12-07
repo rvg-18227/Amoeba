@@ -94,7 +94,7 @@ class Player:
         self.logger.info(f'----------------Turn {info}-----------------')
         self.current_size = current_percept.current_size
 
-        print()
+        print(info, self.current_size*self.metabolism)
 
         info_binary  = format(info, '04b')
         
@@ -109,6 +109,19 @@ class Player:
             stage = 4
         else:
             stage = 3
+
+        amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
+        width = amoeba_loc[:, 0].max() - amoeba_loc[:, 0].min()
+
+        if stage == 3:
+            # if size*m < 6
+                # if size not enough 
+                    # stage = 0
+                # else 
+                    # check width; if not enoggh
+                        # stage = 0
+            # 
+            pass
         
         if stage == 0:
             print('reorganize')
@@ -124,9 +137,8 @@ class Player:
             print('organize')
             retract_list, expand_list = self.init_organize(
                 amoeba_map, current_percept.periphery, current_percept.bacteria)
-            amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
             # if amoeba_loc[:, 1].max() - amoeba_loc[:, 1].min() <= 3 \
-            if amoeba_loc.shape[0] / (amoeba_loc[:, 0].max() - amoeba_loc[:, 0].min()) <= 3 \
+            if amoeba_loc.shape[0] / width <= 3 \
                 or min(len(retract_list), len(expand_list)) == 0:
             #if min(len(retract_list), len(expand_list)) == 0:
                 info = 1
@@ -162,7 +174,6 @@ class Player:
         
             if len(retract_list) == 0:
                 info = -1
-                # i need some info here on whther the resulting shape has backbone thickness more than 1
             else:
                 info = 99
                 
