@@ -128,7 +128,7 @@ class Player:
                 info = 1
                 stage = 2
             else:
-                info = 0
+                info = -1
 
         if stage == 2:
             print('forward')
@@ -292,7 +292,8 @@ class Player:
             # priorize columns that's about to disconnect
             for i in range(columns.shape[0]):
                 cell = (columns[i], row)
-                if amoeba_map[cell[0], cell[1]+1] == 0 or amoeba_map[cell[0]-1, cell[1]]+amoeba_map[cell[0]+1, cell[1]] == 0:
+                if amoeba_map[cell[0], cell[1]+1] == 0 \
+                    or amoeba_map[cell[0]-1, cell[1]]+amoeba_map[cell[0]+1, cell[1]] == 0:
                     priorize_columns.append(columns[i])
             priorize_columns = sorted(priorize_columns, reverse=True) 
 
