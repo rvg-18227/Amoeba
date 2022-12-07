@@ -123,17 +123,13 @@ class Player:
         else:
             stage = 3
         
-        if self.current_size > 300:
-            stage = min(info, 2)
-
+        # if self.current_size > 200:
+        #     stage = min(info, 2)
+        #     info = -1
 
         if stage == 3:
-            if int(self.current_size*self.metabolism) < 6:
-                if self.current_size < 25:
-                    stage = 0
-                else:
-                    if width < 8:
-                        stage = 0
+            if math.ceil(self.current_size*self.metabolism) < 6 or self.current_size < 25 or width < 8:
+                stage = 0
         
         # if stage == 2 and self.box_shape(amoeba_loc, width, height):
         #     stage = 0
@@ -170,9 +166,9 @@ class Player:
            # bottom_side = np.max(amoeba_loc[:, 1])
 
             expand_list = self.box_to_sweeper_expand(
-                    amoeba_map, int(self.current_size*self.metabolism))
+                    amoeba_map, math.ceil(self.current_size*self.metabolism))
             retract_list = self.box_to_sweeper_retract(
-                    amoeba_map, current_percept.periphery, int(self.current_size*self.metabolism))
+                    amoeba_map, current_percept.periphery, math.ceil(self.current_size*self.metabolism))
             if (len(retract_list) == 0 or len(expand_list) == 0):
                 stage = 4
 
@@ -190,7 +186,7 @@ class Player:
                 info = 254
                 
             
-        mini = min(int(self.current_size*self.metabolism), len(retract_list), len(expand_list))
+        mini = min(math.ceil(self.current_size*self.metabolism), len(retract_list), len(expand_list))
         
         self.logger.info(f'retract: {retract_list[:mini]}')
         self.logger.info(f'expand: {expand_list[:mini]}')
