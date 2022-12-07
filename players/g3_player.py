@@ -141,7 +141,7 @@ class Player:
         return out
     
     # Find shape given size of anoemba, in the form of a list of offsets from center
-    def get_desired_shape(self, shape=3):        
+    def get_desired_shape(self, shape=0):        
         if shape == 0:
             offsets = {(0,0), (0,1), (0,-1), (1,1), (1,-1)}
             total_cells = self.current_size-5
@@ -450,13 +450,15 @@ class Player:
         self.bacteria = current_percept.bacteria
         self.movable_cells = set(current_percept.movable_cells)
         self.num_available_moves = int(np.ceil(self.metabolism * self.current_size))
+        goal_percentage = self.current_size/self.goal_size
+        bacteria_eaten = self.current_size-self.goal_size/4
+
 
         # cur_ameoba_points = self.map_to_coords(self.amoeba_map)
         # desired_ameoba_points = self.offset_to_absolute(desired_shape_offsets, self.static_center)
 
         # potential_retracts = list(self.periphery.intersection((cur_ameoba_points.difference(desired_ameoba_points))))
 
-        
 
         # if self.turn < 50:
         #     center_point = self.get_center_point(current_percept, 0)
@@ -478,6 +480,9 @@ class Player:
         # move amoeba: x_cord is info_L7_int because initial info_L7_int val is 0, indicating initialization/building phase
         init_phase = info_L7_int == 0
         x_cord = info_L7_int - 1
+
+        if x_cord == 0:
+            print(goal_percentage)
 
         # move under these 2 conditions
         # 1: end of initialization phase
