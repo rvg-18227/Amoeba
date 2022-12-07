@@ -92,7 +92,7 @@ class Player:
 
         num_bac = len(last_percept.bacteria)
         num_peri = width * 4 - 4
-        if num_bac / num_peri < 0.04:
+        if num_bac / num_peri < 0.06:
             info += 1
 
         # print('shape', amoeba_loc.shape[0], width, height)
@@ -216,12 +216,11 @@ class Player:
                 
             
         mini = min(math.ceil(self.current_size*self.metabolism), len(retract_list), len(expand_list))
-        
+
         self.logger.info(f'retract: {retract_list[:mini]}')
         self.logger.info(f'expand: {expand_list[:mini]}')
 
         self.drawer.draw(current_percept, retract_list[:mini], expand_list[:mini])
-        #print(retract_list[:mini], expand_list[:mini], info+1)
         return retract_list[:mini], expand_list[:mini], ((info+1) << 1) + sparse
 
     def box_shape(self, amoeba_loc, height, width):
