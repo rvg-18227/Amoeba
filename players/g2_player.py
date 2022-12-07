@@ -509,7 +509,7 @@ class Player:
             prev_backbone_col = curr_backbone_col
             new_backbone_col = (prev_backbone_col + 1) % 100
             vertical_shift = VERTICAL_SHIFT_LIST[new_backbone_col]
-            next_comb, next_comb = self.generate_comb_formation(
+            next_comb, next_bridge = self.generate_comb_formation(
                 self.current_size,
                 vertical_shift,
                 new_backbone_col,
