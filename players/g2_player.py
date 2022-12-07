@@ -210,8 +210,7 @@ class Player:
         center_y=CENTER_Y,
         comb_idx=0,
     ) -> Tuple[npt.NDArray, npt.NDArray]:
-        """Generate a comb formation of a given size, returning a tuple of the formation map and the bridge map
-        """
+        """Generate a comb formation of a given size, returning a tuple of the formation map and the bridge map"""
 
         comb_formation = Formation()
         bridge_formation = Formation()
@@ -232,17 +231,15 @@ class Player:
             # Bridge between the two combs
             for i in range(100):
                 if size - cells_used > 0:
-                    bridge_formation.add_cell((comb_0_center_x - i) % constants.map_dim, center_y)
+                    bridge_formation.add_cell(
+                        (comb_0_center_x - i) % constants.map_dim, center_y
+                    )
                     cells_used += 1
-            
+
             # Generate the second comb
             if size - cells_used > 0:
                 second_comb, second_bridge = self.generate_comb_formation(
-                    size - cells_used,
-                    tooth_offset,
-                    comb_1_center_x,
-                    center_y,
-                    1
+                    size - cells_used, tooth_offset, comb_1_center_x, center_y, 1
                 )
                 comb_formation.merge_formation(second_comb)
                 bridge_formation.merge_formation(second_bridge)
@@ -255,23 +252,39 @@ class Player:
             comb_formation.add_cell(comb_0_center_x, center_y + i)
             comb_formation.add_cell(comb_0_center_x, center_y - i)
             # second layer of backbone
-            comb_formation.add_cell(comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y + i)
-            comb_formation.add_cell(comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y - i)
+            comb_formation.add_cell(
+                comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y + i
+            )
+            comb_formation.add_cell(
+                comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y - i
+            )
         for i in range(
             1,
             round(min((teeth_size * (TEETH_GAP + 1)) / 2, backbone_size / 2) + 0.1),
             TEETH_GAP + 1,
         ):
-            comb_formation.add_cell(comb_0_center_x + (1 if comb_idx == 0 else -1), center_y + tooth_offset + i)
-            comb_formation.add_cell(comb_0_center_x + (1 if comb_idx == 0 else -1), center_y + tooth_offset - i)   
+            comb_formation.add_cell(
+                comb_0_center_x + (1 if comb_idx == 0 else -1),
+                center_y + tooth_offset + i,
+            )
+            comb_formation.add_cell(
+                comb_0_center_x + (1 if comb_idx == 0 else -1),
+                center_y + tooth_offset - i,
+            )
 
         # If we build a second comb, build up additional cells in the center
         if backbone_size == 99 and comb_idx == 0:
-            cells_remaining = size - np.count_nonzero(comb_formation.map) - np.count_nonzero(bridge_formation.map)
+            cells_remaining = (
+                size
+                - np.count_nonzero(comb_formation.map)
+                - np.count_nonzero(bridge_formation.map)
+            )
             bridge_offset = 1
             while cells_remaining > 0 and bridge_offset < 99:
                 for i in range(100):
-                    y_offset = bridge_offset if bridge_offset <= 49 else 50 - bridge_offset
+                    y_offset = (
+                        bridge_offset if bridge_offset <= 49 else 50 - bridge_offset
+                    )
                     x_position = (comb_0_center_x - i) % constants.map_dim
                     if comb_formation.get_cell(x_position, center_y + y_offset) == 0:
                         bridge_formation.add_cell(x_position, center_y + y_offset)
@@ -478,7 +491,9 @@ class Player:
         memory_fields = read_memory(info)
         if not memory_fields[MemoryFields.Initialized]:
             initial_x = 0 if self.current_size < 36 else CENTER_X + 3
-            initial_comb, initial_bridge = self.generate_comb_formation(self.current_size, center_x=initial_x)
+            initial_comb, initial_bridge = self.generate_comb_formation(
+                self.current_size, center_x=initial_x
+            )
             retracts, moves = self.get_morph_moves(initial_comb + initial_bridge)
             if len(moves) == 0:
                 info = change_memory_field(info, MemoryFields.Initialized, True)
