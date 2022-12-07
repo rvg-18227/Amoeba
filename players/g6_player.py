@@ -94,22 +94,22 @@ class Player:
         self.logger.info(f'----------------Turn {info}-----------------')
         self.current_size = current_percept.current_size
 
-        print(info, self.current_size / self.metabolism)
-
         info_binary  = format(info, '04b')
         
         split, split_row = self.split_amoeba(current_percept.amoeba_map)
         amoeba_map = self.concat_map(current_percept.amoeba_map, split, split_row)
         self.logger.info(f'split_row (exclusive): {split_row}')
 
+        amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
+        width = amoeba_loc[:, 0].max() - amoeba_loc[:, 0].min()
+
+        print(info, self.current_size / self.metabolism)
 
         if self.current_size / self.metabolism < 1000:
             forward_length = 30
-        elif self.current_size / self.metabolism < 2000:
+        elif self.current_size / self.metabolism < 1500:
             forward_length = 50
-        elif self.current_size / self.metabolism < 3000:
-            forward_length = 60
-        elif self.current_size / self.metabolism < 4000:
+        elif self.current_size / self.metabolism < 2000:
             forward_length = 70
         else:
             forward_length = 100
@@ -122,8 +122,6 @@ class Player:
         else:
             stage = 3
 
-        amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
-        width = amoeba_loc[:, 0].max() - amoeba_loc[:, 0].min()
 
         if stage == 3:
             if int(self.current_size*self.metabolism) < 6:
@@ -148,7 +146,6 @@ class Player:
             retract_list, expand_list = self.init_organize(
                 amoeba_map, current_percept.periphery, current_percept.bacteria)
             if amoeba_loc.shape[0] / width <= 3 or min(len(retract_list), len(expand_list)) == 0:
-            #if min(len(retract_list), len(expand_list)) == 0:
                 info = 1
                 stage = 2
             else:
