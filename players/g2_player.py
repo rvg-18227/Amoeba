@@ -8,11 +8,10 @@ from typing import List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
+from scipy.spatial import KDTree
 
 import constants
 from amoeba_state import AmoebaState
-
-turn = 0
 
 
 # ---------------------------------------------------------------------------- #
@@ -25,13 +24,10 @@ CENTER_Y = constants.map_dim // 2
 COMB_SEPARATION_DIST = 4
 TEETH_GAP = 1
 
-VERTICAL_SHIFT_PERIOD = 6
-VERTICAL_SHIFT_LIST = (
-    (
-        [0 for i in range(VERTICAL_SHIFT_PERIOD)]
-        + [1 for i in range(VERTICAL_SHIFT_PERIOD)]
-    )
-    * (round(np.ceil(100 / (VERTICAL_SHIFT_PERIOD * 2))))
+TEETH_SHIFT_PERIOD = 6
+TEETH_SHIFT_LIST = (
+    ([0 for i in range(TEETH_SHIFT_PERIOD)] + [1 for i in range(TEETH_SHIFT_PERIOD)])
+    * (round(np.ceil(100 / (TEETH_SHIFT_PERIOD * 2))))
 )[:100]
 
 # ---------------------------------------------------------------------------- #
@@ -66,11 +62,10 @@ def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[], title="") 
                 map[y, x] = 1
 
     plt.rcParams["figure.figsize"] = (10, 10)
-    plt.pcolormesh(map, edgecolors="k", linewidth=1)
+    plt.pcolormesh(map, edgecolors="k", linewidth=0.1)
     ax = plt.gca()
     ax.set_aspect("equal")
     plt.title(title)
-    # plt.savefig(f"debug/{turn}.png")
     plt.show()
 
 
@@ -80,8 +75,7 @@ def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[], title="") 
 
 
 class MemoryFields(Enum):
-    Initialized = 0
-    Translating = 1
+    VerticalInvert = 0
 
 
 def read_memory(memory: int) -> dict[MemoryFields, bool]:
@@ -97,33 +91,6 @@ def change_memory_field(memory: int, field: MemoryFields, value: bool) -> int:
     mask = 1 << field.value
     # Unset the bit, then or in the new bit
     return (memory & ~mask) | ((bit << field.value) & mask)
-
-
-if __name__ == "__main__":
-    memory = 0
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == False
-    assert fields[MemoryFields.Translating] == False
-
-    memory = change_memory_field(memory, MemoryFields.Initialized, True)
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == True
-    assert fields[MemoryFields.Translating] == False
-
-    memory = change_memory_field(memory, MemoryFields.Translating, True)
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == True
-    assert fields[MemoryFields.Translating] == True
-
-    memory = change_memory_field(memory, MemoryFields.Translating, False)
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == True
-    assert fields[MemoryFields.Translating] == False
-
-    memory = change_memory_field(memory, MemoryFields.Initialized, False)
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == False
-    assert fields[MemoryFields.Translating] == False
 
 
 # ---------------------------------------------------------------------------- #
@@ -298,7 +265,7 @@ class Player:
         return comb_formation.map, bridge_formation.map
 
     def get_morph_moves(
-        self, desired_amoeba: npt.NDArray
+        self, desired_amoeba: npt.NDArray, center_y=CENTER_Y
     ) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
         """Function which takes a starting amoeba state and a desired amoeba state and generates a set of retracts and extends
         to morph the amoeba shape towards the desired shape.
@@ -307,17 +274,21 @@ class Player:
         current_points = map_to_coords(self.amoeba_map)
         desired_points = map_to_coords(desired_amoeba)
 
+        # Sort retracts based on distance from formation. Reduces straggling branches lagging behind formation.
+        kdtree = KDTree(desired_points)
         potential_retracts = [
             p
             for p in list(set(current_points).difference(set(desired_points)))
             if p in self.retractable_cells
         ]
+        potential_retracts.sort(reverse=True, key=lambda p: kdtree.query([p], k=1)[0])
+
         potential_extends = [
             p
             for p in list(set(desired_points).difference(set(current_points)))
             if p in self.extendable_cells
         ]
-        potential_extends.sort(key=lambda p: p[1])
+        # potential_extends.sort(key=lambda p: p[1])
 
         # show_amoeba_map(desired_amoeba, title="Desired Amoeba")
         # show_amoeba_map(self.amoeba_map, potential_retracts, potential_extends, title="Current Amoeba, Potential Retracts and Extends")
@@ -332,7 +303,7 @@ class Player:
                 break
 
             matching_retracts = list(potential_retracts)
-            matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))
+            # matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))  # Replaced with Global sorting
 
             for i in range(len(matching_retracts)):
                 retract = matching_retracts[i]
@@ -345,7 +316,8 @@ class Player:
                     potential_extends.remove(potential_extend)
                     break
                 check_calls += 1
-        # print(f"Check calls: {check_calls} / {self.current_size}")
+
+        print(f"Check calls: {check_calls} / {self.current_size}")
 
         # If we have moves remaining, try and get closer to the desired formation
         # if len(extends) < self.num_available_moves and len(potential_retracts):
@@ -366,6 +338,42 @@ class Player:
         #                 extends.append(matching_extends[0])
         #                 unused_extends.remove(matching_extends[0])
         #                 break
+
+        # If we have moves remaining, 'store' the remaining extends and retracts in the center of the amoeba
+        if (
+            len(retracts) < self.num_available_moves
+            and len(potential_retracts) > 0
+            and len(extends) > 0
+        ):
+            potential_extends = [
+                p
+                for p in self.extendable_cells
+                if p not in retracts and p not in extends
+            ]
+            potential_extends.sort(key=lambda p: np.absolute(center_y - p[1]))
+            potential_retracts.sort(
+                key=lambda p: np.absolute(center_y - p[1]), reverse=True
+            )
+
+            # show_amoeba_map(self.amoeba_map, retracts, extends, "Planned")
+            # show_amoeba_map(self.amoeba_map, potential_retracts, potential_extends, "Possible Remaining")
+
+            for potential_extend in potential_extends:
+                for potential_retract in potential_retracts:
+                    if np.absolute(center_y - potential_extend[1]) < np.absolute(
+                        center_y - potential_retract[1]
+                    ) and self.check_move(
+                        retracts + [potential_retract], extends + [potential_extend]
+                    ):
+                        retracts.append(potential_retract)
+                        extends.append(potential_extend)
+                        potential_retracts.remove(potential_retract)
+                        break
+                if (
+                    len(retracts) >= self.num_available_moves
+                    or len(potential_retracts) <= 0
+                ):
+                    break
 
         # show_amoeba_map(self.amoeba_map, retracts, extends, title="Current Amoeba, Selected Retracts and Extends")
         return retracts, extends
@@ -465,6 +473,15 @@ class Player:
             np.ceil(self.metabolism * current_percept.current_size)
         )
 
+    def check_and_initialize_memory(self, memory: int) -> int:
+        if (
+            memory == 0
+            and self.current_size == self.goal_size / 4
+            and self.amoeba_map[50][50]
+        ):
+            return (CENTER_X if self.current_size < 36 else CENTER_X + 3) << 1
+        return memory
+
     def move(
         self, last_percept: AmoebaState, current_percept: AmoebaState, info: int
     ) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]], int]:
@@ -480,52 +497,73 @@ class Player:
                 2. A list of positions the retracted cells have moved to
                 3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
-        global turn
-        turn += 1
-
         self.store_current_percept(current_percept)
 
         retracts = []
         moves = []
 
+        info = self.check_and_initialize_memory(info)
+
+        # Extract backbone column from memory
+        curr_backbone_col = info >> 1
+
+        # Alternate vertical translation direction if necessary
         memory_fields = read_memory(info)
-        if not memory_fields[MemoryFields.Initialized]:
-            initial_x = 0 if self.current_size < 36 else CENTER_X + 3
-            initial_comb, initial_bridge = self.generate_comb_formation(
-                self.current_size, center_x=initial_x
+        if curr_backbone_col == 50:
+            info = change_memory_field(
+                info,
+                MemoryFields.VerticalInvert,
+                not memory_fields[MemoryFields.VerticalInvert],
             )
-            retracts, moves = self.get_morph_moves(initial_comb + initial_bridge)
+            memory_fields = read_memory(info)
+
+        teeth_shift = TEETH_SHIFT_LIST[curr_backbone_col]
+        curr_backbone_row = (
+            curr_backbone_col
+            if not memory_fields[MemoryFields.VerticalInvert]
+            else constants.map_dim - curr_backbone_col
+        )
+        next_comb, next_bridge = self.generate_comb_formation(
+            self.current_size,
+            teeth_shift,
+            curr_backbone_col,
+            CENTER_Y
+            # curr_backbone_row,
+        )
+        # Check if current comb formation is filled
+        comb_mask = self.amoeba_map[next_comb.nonzero()]
+        settled = (sum(comb_mask) / len(comb_mask)) > 0.9
+        if not settled:
+            retracts, moves = self.get_morph_moves(
+                next_comb + next_bridge, 
+                CENTER_Y
+                # curr_backbone_row
+            )
+
+            # Actually, we have no more moves to make
             if len(moves) == 0:
-                info = change_memory_field(info, MemoryFields.Initialized, True)
-                info = (initial_x << 1) | info
-                memory_fields = read_memory(info)
+                settled = True
 
-        if memory_fields[MemoryFields.Initialized]:
-            # Extract backbone column from memory
-            curr_backbone_col = info >> 1
-            vertical_shift = VERTICAL_SHIFT_LIST[curr_backbone_col]
+        if settled:
+            # When we "settle" into the target backbone column, advance the backbone column by 1
+            prev_backbone_col = curr_backbone_col
+            prev_backbone_row = curr_backbone_row
+            new_backbone_col = (prev_backbone_col + 1) % 100
+            teeth_shift = TEETH_SHIFT_LIST[new_backbone_col]
             next_comb, next_bridge = self.generate_comb_formation(
-                self.current_size, vertical_shift, curr_backbone_col, CENTER_Y
+                self.current_size,
+                teeth_shift,
+                prev_backbone_col,
+                CENTER_Y
+                # prev_backbone_row,
             )
-            # Check if current comb formation is filled
-            comb_mask = self.amoeba_map[next_comb.nonzero()]
-            settled = (sum(comb_mask) / len(comb_mask)) > 0.7
-            if not settled:
-                retracts, moves = self.get_morph_moves(next_comb + next_bridge)
-
-                # Actually, we have no more moves to make
-                if len(moves) == 0:
-                    settled = True
-
-            if settled:
-                # When we "settle" into the target backbone column, advance the backbone column by 1
-                prev_backbone_col = curr_backbone_col
-                new_backbone_col = (prev_backbone_col + 1) % 100
-                vertical_shift = VERTICAL_SHIFT_LIST[new_backbone_col]
-                next_comb, next_comb = self.generate_comb_formation(
-                    self.current_size, vertical_shift, new_backbone_col, CENTER_Y
-                )
-                retracts, moves = self.get_morph_moves(next_comb + next_bridge)
-                info = new_backbone_col << 1 | 1
+            retracts, moves = self.get_morph_moves(
+                next_comb + next_bridge, 
+                CENTER_Y
+                # curr_backbone_row
+            )
+            info = new_backbone_col << 1 | int(
+                memory_fields[MemoryFields.VerticalInvert]
+            )
 
         return retracts, moves, info
