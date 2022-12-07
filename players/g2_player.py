@@ -8,6 +8,7 @@ from typing import List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
+from scipy.spatial import KDTree
 
 import constants
 from amoeba_state import AmoebaState
@@ -276,11 +277,15 @@ class Player:
         current_points = map_to_coords(self.amoeba_map)
         desired_points = map_to_coords(desired_amoeba)
 
+        # Sort retracts based on distance from formation. Reduces straggling branches lagging behind formation.
+        kdtree = KDTree(desired_points)
         potential_retracts = [
             p
             for p in list(set(current_points).difference(set(desired_points)))
             if p in self.retractable_cells
         ]
+        potential_retracts.sort(reverse=True, key=lambda p: kdtree.query([p], k=1)[0])
+
         potential_extends = [
             p
             for p in list(set(desired_points).difference(set(current_points)))
@@ -301,7 +306,7 @@ class Player:
                 break
 
             matching_retracts = list(potential_retracts)
-            matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))
+            # matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))  # Replaced with Global sorting
 
             for i in range(len(matching_retracts)):
                 retract = matching_retracts[i]
@@ -314,6 +319,7 @@ class Player:
                     potential_extends.remove(potential_extend)
                     break
                 check_calls += 1
+
         print(f"Check calls: {check_calls} / {self.current_size}")
 
         # If we have moves remaining, try and get closer to the desired formation
