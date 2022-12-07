@@ -114,14 +114,13 @@ class Player:
         width = amoeba_loc[:, 0].max() - amoeba_loc[:, 0].min()
 
         if stage == 3:
-            # if size*m < 6
-                # if size not enough 
-                    # stage = 0
-                # else 
-                    # check width; if not enoggh
-                        # stage = 0
-            # 
-            pass
+            if int(self.current_size*self.metabolism) < 6:
+                if self.current_size < 25:
+                    stage = 0
+                else:
+                    if width < 8:
+                        stage = 0
+            #
         
         if stage == 0:
             print('reorganize')
