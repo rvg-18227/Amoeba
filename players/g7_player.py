@@ -118,7 +118,7 @@ def decode_info(info: int) -> Tuple[int, int]:
 #                               Main Player Class                              #
 # ---------------------------------------------------------------------------- #
 
-TOOTH_SPACING = 2
+TOOTH_SPACING = 1
 SHIFTING_FREQUENCY = 6
 
 class Player:
@@ -175,7 +175,7 @@ class Player:
         
         return formation
 
-    # Copied from Group 2, slightly modified
+    # Copied from Group 2 and adjusted to our functionalities
     def get_morph_moves(self, desired_amoeba: npt.NDArray) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
         """ Function which takes a starting amoeba state and a desired amoeba state and generates a set of retracts and extends
             to morph the amoeba shape towards the desired shape.
@@ -236,7 +236,7 @@ class Player:
 
         return retracts, extends
 
-    # Copied from the simulator and modified
+    # Borrowed from the simulator and adjusted to our functionalities
     def check_move(self, retracts: List[Tuple[int, int]], extends: List[Tuple[int, int]]) -> bool:
         if not set(retracts).issubset(set(self.retractable_cells)):
             return False
@@ -281,7 +281,7 @@ class Player:
 
         return (amoeba == check).all()
 
-    # Copied from Group 2
+    # Borrowed from Group 2
     def store_current_percept(self, current_percept: AmoebaState) -> None:
         self.current_size = current_percept.current_size
         self.amoeba_map = current_percept.amoeba_map
