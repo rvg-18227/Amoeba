@@ -122,7 +122,9 @@ class Player:
             print('organize')
             retract_list, expand_list = self.init_organize(
                 amoeba_map, current_percept.periphery, current_percept.bacteria)
-            if min(len(retract_list), len(expand_list)) == 0:
+            amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
+            if amoeba_loc[:, 1].max() - amoeba_loc[:, 1].min() <= 3 \
+                or min(len(retract_list), len(expand_list)) == 0:
                 info = 1
                 stage = 2
             else:
