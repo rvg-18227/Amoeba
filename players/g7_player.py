@@ -3,6 +3,8 @@ import numpy.typing as npt
 import logging
 from typing import Tuple, List
 from amoeba_state import AmoebaState
+import pstats
+import cProfile
 
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
@@ -302,6 +304,12 @@ class Player:
 
         retract = []
         move = []
+        info_str = bin(info)[2:].zfill(8)
+
+        # set to none to show that we don't store info across turns
+        self.move_teeth, self.x_position = None, None
+
+        self.move_teeth, self.x_position = int(info_str[0:1], 2), int(info_str[1:8], 2)
         move_teeth, x_position = self.move_teeth, self.x_position
 
         if self.is_square(current_percept):
@@ -332,7 +340,9 @@ class Player:
                 else:
                     self.move_teeth = 1
         
-        info = 0
+        move_teeth_binary = bin(self.move_teeth)[2:].zfill(1)
+        x_position_binary = bin(self.x_position)[2:].zfill(7)
+        info = int(move_teeth_binary + x_position_binary, 2)
 
         return retract, move, info
 
