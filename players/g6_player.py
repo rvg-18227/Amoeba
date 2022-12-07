@@ -83,7 +83,6 @@ class Player:
         amoeba_loc = np.stack(np.where(last_percept.amoeba_map == 1)).T.astype(int)
         width = amoeba_loc[:, 0].max() - amoeba_loc[:, 0].min() + 1
         height = amoeba_loc[:, 1].max() - amoeba_loc[:, 1].min() + 1
-        print(amoeba_loc.shape[0], width, height)
         
         if amoeba_loc.shape[0] != width * height:
             return info
@@ -92,6 +91,10 @@ class Player:
         num_peri = width * 4 - 4
         if num_bac / num_peri < 0.05:
             info += 1
+
+        # print('shape', amoeba_loc.shape[0], width, height)
+        # print('dense', num_bac, num_peri)
+        # print('sparse', info)
 
         return info
 
@@ -114,7 +117,6 @@ class Player:
         info = self.check_density(last_percept, info, threshold=0.05)
         sparse = info & 1
         info = info >> 1
-        print(sparse, info)
         
         split, split_row = self.split_amoeba(current_percept.amoeba_map)
         amoeba_map = self.concat_map(current_percept.amoeba_map, split, split_row)
@@ -143,9 +145,9 @@ class Player:
         else:
             stage = 3
         
-        # if self.current_size > 200:
-        #     stage = min(info, 2)
-        #     info = -1
+        if self.current_size > 200 and not sparse:
+            stage = 0
+            info = -1
 
         if stage == 3:
             if math.ceil(self.current_size*self.metabolism) < 6 or width < 7:
