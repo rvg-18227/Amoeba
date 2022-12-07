@@ -45,6 +45,7 @@ class Player:
         self.metabolism = metabolism
         self.goal_size = goal_size
         self.current_size = goal_size / 4
+        self.shape = 0
 
         self.amoeba_map = None
         self.periphery = None
@@ -148,7 +149,31 @@ class Player:
             i = 1
             j = 2
             while total_cells > 0:
-                if total_cells < 6:
+                if j == 51:
+                    n = math.ceil(math.sqrt(total_cells))
+                    x = -1
+                    if n % 2 == 0:
+                        n+=1
+                    print(n, (n-1)/2)
+                    while total_cells > 0:
+                        if (x, 0) not in offsets:
+                            offsets.add((x, 0))
+                            total_cells -= 1
+                        if total_cells > 0:
+                            for i in range(int((n-1)/2)):
+                                if total_cells > 1:
+                                    if (x, i) not in offsets:
+                                        offsets.add((x, i))
+                                        total_cells -=1
+                                    if (x, -i) not in offsets:
+                                        offsets.add((x, -i))
+                                        total_cells -=1
+                                else:
+                                    if (x, i) not in offsets:
+                                        offsets.add((x, i))
+                                        total_cells -=1
+                        x-=1
+                elif total_cells < 6:
                     if total_cells > 1:
                         # If possible add evenly
                         offsets.update({(i,j), (i,-j)})
@@ -452,7 +477,8 @@ class Player:
         self.num_available_moves = int(np.ceil(self.metabolism * self.current_size))
         goal_percentage = self.current_size/self.goal_size
         bacteria_eaten = self.current_size-self.goal_size/4
-
+        average_size =math.ceil((self.current_size+self.goal_size/4)/2)
+        average_mouth = min(math.ceil((average_size-5)/3)+1, 100)
 
         # cur_ameoba_points = self.map_to_coords(self.amoeba_map)
         # desired_ameoba_points = self.offset_to_absolute(desired_shape_offsets, self.static_center)
@@ -471,7 +497,7 @@ class Player:
 
 
         ### GET DESIRED OFFSETS FOR CURRENT MORPH ###
-        desired_shape_offsets = self.get_desired_shape()
+        desired_shape_offsets = self.get_desired_shape(0)
         #print(desired_shape_offsets)
         #exit(1)
 
@@ -481,11 +507,20 @@ class Player:
         init_phase = info_L7_int == 0
         x_cord = info_L7_int - 1
 
+        if x_cord <= 50:
+            total_distance = 50+x_cord
+        else:
+            total_distance = x_cord-50
+
+        current_density_est = bacteria_eaten/(average_mouth*total_distance)
+
         if x_cord == 0:
             print(goal_percentage)
 
         # move under these 2 conditions
         # 1: end of initialization phase
+        print(init_phase)
+        print(len(desired_shape_offsets), self.current_size)
         if init_phase:
             x_cord = 50
 
