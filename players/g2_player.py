@@ -299,26 +299,72 @@ class Player:
         # Loop through potential extends, searching for a matching retract
         retracts = []
         extends = []
+        error_ext = []
+        error_ret = []
+
         check_calls = 0
-        for potential_extend in [p for p in potential_extends]:
+        skip_n = int(0.1 * len(potential_extends))  # Scales with size of amoeba
+        if skip_n < 1:
+            skip_n = 1
+        count = 0
+        for potential_extend, potential_retract in zip(potential_extends, potential_retracts):
             # Ensure we only move as much as possible given our current metabolism
             if len(extends) >= self.num_available_moves:
                 break
 
-            matching_retracts = list(potential_retracts)
-            # matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))  # Replaced with Global sorting
+            extends.append(potential_extend)
+            retracts.append(potential_extend)
 
-            for i in range(len(matching_retracts)):
-                retract = matching_retracts[i]
-                # Matching retract found, add the extend and retract to our lists
-                if self.check_move(retracts + [retract], extends + [potential_extend]):
+            # Check if the last N calls are okay
+            count += 1
+            if count % skip_n == 0:
+                while not self.check_move(retracts, extends):
+                    # remove elements one-by-one till it works
                     check_calls += 1
-                    retracts.append(retract)
-                    potential_retracts.remove(retract)
-                    extends.append(potential_extend)
-                    potential_extends.remove(potential_extend)
+                    error_ext.append(extends.pop())
+                    error_ret.append(retracts.pop())
+
+        # For the left-over error causing retract/extends, try again with a thorough search
+        # TODO - Could ignore these if small enough
+        leftover_extends = list(set(potential_extends) - set(extends))
+        leftover_retracts = list(set(potential_retracts) - set(retracts))
+        leftover_extends.extend(error_ext)
+        leftover_retracts.extend(error_ret)
+        if leftover_extends and leftover_retracts:
+            for pot_ext in leftover_extends:
+                # Ensure we only move as much as possible given our current metabolism
+                if len(extends) >= self.num_available_moves:
                     break
-                check_calls += 1
+
+                for ret in leftover_retracts:
+                    if self.check_move(retracts + [ret], extends + [pot_ext]):
+                        check_calls += 1
+                        break
+                retracts.append(ret)
+                extends.append(pot_ext)
+                leftover_retracts.remove(ret)
+                break
+
+        # for potential_extend in [p for p in potential_extends]:
+        #     # Ensure we only move as much as possible given our current metabolism
+        #     if len(extends) >= self.num_available_moves:
+        #         break
+        #
+        #     matching_retracts = list(potential_retracts)
+        #     # matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))  # Replaced with Global sorting
+        #
+        #     skip_n = 10
+        #     for i in range(len(matching_retracts)):
+        #         retract = matching_retracts[i]
+        #         # Matching retract found, add the extend and retract to our lists
+        #         if self.check_move(retracts + [retract], extends + [potential_extend]):
+        #             check_calls += 1
+        #             retracts.append(retract)
+        #             potential_retracts.remove(retract)
+        #             extends.append(potential_extend)
+        #             potential_extends.remove(potential_extend)
+        #             break
+        #         check_calls += 1
 
         print(f"Check calls: {check_calls} / {self.current_size}")
 
