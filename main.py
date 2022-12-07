@@ -24,7 +24,6 @@ if __name__ == '__main__':
     parser.add_argument("--player", "-p", default="d", help="Specifying player")
     parser.add_argument("--vid_name", "-v", default="game", help="Naming the video file")
     parser.add_argument("--no_vid", "-nv", action="store_true", help="Stops generating video of the session")
-    parser.add_argument("--batch_mode", action="store_true", help="For running games via scripts")
     args = parser.parse_args()
 
     if args.disable_logging:
