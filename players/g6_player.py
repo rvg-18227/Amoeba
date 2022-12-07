@@ -154,8 +154,8 @@ class Player:
             stage = 0
             info = -1
 
-        if stage == 2:
-            stage = 0
+        # if stage == 2:
+        #     stage = 0
 
         if stage == 3:
             if math.ceil(self.current_size*self.metabolism) < 3 or width < 6:
