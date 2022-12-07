@@ -102,15 +102,16 @@ class Player:
 
         amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
         width = amoeba_loc[:, 0].max() - amoeba_loc[:, 0].min()
+        height = amoeba_loc[:, 1].max() - amoeba_loc[:, 1].min()
 
         print(info, self.current_size / self.metabolism)
 
         if self.current_size / self.metabolism < 1000:
-            forward_length = 30
-        elif self.current_size / self.metabolism < 1500:
             forward_length = 50
         elif self.current_size / self.metabolism < 2000:
             forward_length = 70
+        elif self.current_size / self.metabolism < 3000:
+            forward_length = 90
         else:
             forward_length = 100
 
@@ -134,6 +135,9 @@ class Player:
                     if width < 8:
                         stage = 0
         
+        # if stage == 2 and self.box_shape(amoeba_loc, width, height):
+        #     stage = 0
+
         if stage == 0:
             print('reorganize')
             retract_list, expand_list = self.reorganize(
@@ -194,6 +198,9 @@ class Player:
         self.drawer.draw(current_percept, retract_list[:mini], expand_list[:mini])
         #print(retract_list[:mini], expand_list[:mini], info+1)
         return retract_list[:mini], expand_list[:mini], info+1
+
+    def box_shape(self, amoeba_loc, height, width):
+        return (amoeba_loc.shape[0] > (height * width * 2/3))
 
     def concat_map(self, amoeba_map, split, split_row):
         amoeba_map = np.concatenate([amoeba_map, amoeba_map], axis=1)
