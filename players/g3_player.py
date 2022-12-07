@@ -11,7 +11,7 @@ import numpy.typing as npt
 import math
 
 MAP_LENGTH = 100
-LOW_DENSITY = .1
+LOW_DENSITY = .03
 class Player:
     def __init__(self, rng: np.random.Generator, logger: logging.Logger, metabolism: float, goal_size: int,
                  precomp_dir: str) -> None:
@@ -600,8 +600,12 @@ class Player:
 
         current_density_est = bacteria_eaten/(average_mouth*total_distance)
 
-        if x_cord == 50 and current_density_est < LOW_DENSITY:
+        if x_cord == 45 and current_density_est < LOW_DENSITY and info_first_bit == "0" and not init_phase:
             info_first_bit = "1"
+            init_phase = True
+        elif x_cord == 50 and info_first_bit == "1" and not init_phase:
+            info_first_bit = "0"
+            init_phase = True
             
         # elif x_cord == 50 and info_first_bit == "1" and current_density_est < LOW_DENSITY:
         #     info_first_bit = "0"
