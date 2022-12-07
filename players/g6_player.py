@@ -10,6 +10,9 @@ EXTEND_COLOR = (np.random.rand(1,1,3) * 255).astype(int)
 RETRACT_COLOR = (np.random.rand(1,1,3) * 255).astype(int)
 AMOEABA_COLOR = (np.random.rand(1,1,3) * 255).astype(int)
 
+
+term_num = 0 # debugging purposes
+
 class Drawer:
     def __init__(self):
         self.base = np.zeros((100, 100, 3))
@@ -112,6 +115,8 @@ class Player:
                     3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
         self.logger.info(f'----------------Turn {info}-----------------')
+        global term_num
+        term_num += 1
         self.current_size = current_percept.current_size
 
         info = self.check_density(last_percept, info, threshold=0.05)
@@ -145,7 +150,7 @@ class Player:
         else:
             stage = 3
         
-        if self.current_size > 200 and not sparse:
+        if self.current_size > 200 and (not sparse) and stage != 3 and stage != 4:
             stage = 0
             info = -1
 
@@ -200,6 +205,8 @@ class Player:
             #col_one = self.find_first_tentacle(amoeba_map)
             #print(col_one)
             print('close_in')
+            # if term_num >= 354:
+            #     print("bugs")
             retract_list, expand_list = self.close_in(amoeba_map)
         
             if len(retract_list) == 0:
