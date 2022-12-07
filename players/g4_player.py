@@ -748,27 +748,24 @@ class BucketAttack(Strategy):
         #  Decode Memory
         # ----------------
         mem = f'{memory:b}'.rjust(8, '0')
-        old_xmax = int(mem[:7], 2)
+        prev_arm_xval = (
+            int(mem[:7], 2) if self._reach_border(state) else
+            self._get_xmax(state)
+        )
         shifted = int(mem[-1])
 
         # ---------------
         #  State Update
         # ---------------
         # rotation counter & shifted
-        rotation = (old_xmax + 1) % self.shift_n
+        rotation = (prev_arm_xval + 1) % self.shift_n
         if self.shift_enabled and rotation == 0:
             shifted = shifted ^ 1
 
-        # arm_xval
-        if not self._reach_border(state):
-            xmax = self._get_xmax(state)
-        else:
-            xmax = old_xmax + 1
-
-        if not self._in_shape(xmax % 100, state):
-            arm_xval = (xmax - 1) % 100
-        else:
-            arm_xval = xmax % 100
+        # arm_xval: if we are in shape, advance arm_xval
+        # otherwise, use prev_arm_xval to keep getting into shape
+        in_shape = self._in_shape(prev_arm_xval % 100, state)
+        arm_xval = (prev_arm_xval + int(in_shape)) % 100
 
         # ----------------
         #  Update Memory
