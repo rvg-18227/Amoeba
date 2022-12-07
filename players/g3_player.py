@@ -142,7 +142,7 @@ class Player:
         return out
     
     # Find shape given size of anoemba, in the form of a list of offsets from center
-    def get_desired_shape(self, shape=0):        
+    def get_desired_shape(self, shape=5):        
         if shape == 0:
             offsets = {(0,0), (0,1), (0,-1), (1,1), (1,-1)}
             total_cells = self.current_size-5
@@ -438,6 +438,69 @@ class Player:
 
             offsets = set([(cord[1], cord[0]) for cord in list(offsets)])
 
+        elif shape == 5:
+            # new_v_center = [[0,0], [0,1], [0,-1], [1,1], [1,-1], [1,2], [1,-2], [2,2], [2,-2], [3,2], [3,-2], [3,3], [3,-3], [4,3], [4,-3], [5,3], [5,-3], [5,4], [5,-4], [5,5], [5,-5], [5,6], [5,-6]]
+
+            new_v_center = [[0,0], [0,1], [0,-1], [1,1], [1,-1], [1,2], [1,-2], [2,2], [2,-2], [3,2], [3,-2], [3,3], [3,-3], [4,3], [4,-3], [5,3], [5,-3], [5,4], [5,-4], [6,4], [6,-4], [7,4], [7,-4]]
+            new_v_top = [[0,0], [0,1], [1,1], [1,2], [2,2], [3,2], [3,3], [4,3], [5,3], [5,4], [6,4], [7,4]]
+            new_v_bottom = [[0,0], [0,-1], [1,-1], [1,-2], [2,-2], [3,-2], [3,-3], [4,-3], [5,-3], [5,-4], [6,-4], [7,-4]]
+
+            v_stor_center = [[0,0], [0,1], [0,-1], [1,2], [1,-2], [3,3], [3,-3], [5,4], [5,-4]]
+            v_stor_top = [[0,0], [0,1], [1,2], [3,3], [5,4]]
+            v_stor_bottom = [[0,0], [0,-1], [1,-2], [3,-3], [5,-4]]
+
+            cur_size = self.current_size
+
+            offsets = new_v_center[:cur_size]
+
+            while min(239, cur_size) > len(offsets):
+                top_offset = np.array([6,5]) * (int((len(offsets) - len(new_v_center)) / (len(new_v_center) + 1)) + 1)
+                bottom_offset = np.array([6,-5]) * (int((len(offsets) - len(new_v_center)) / (len(new_v_center) + 1)) + 1)
+
+                top = []
+
+                if (cur_size - len(offsets))//2 > 0:
+                    top = new_v_top[:(cur_size - len(offsets))//2] + top_offset
+                bottom = new_v_bottom[:(cur_size - len(offsets) + 1)//2] + bottom_offset
+
+                offsets.extend(top)
+                offsets.extend(bottom)
+
+            storage_size = cur_size - 239
+            storage_offsets = []
+            layer = 1
+            displacement = 0
+
+            while storage_size - len(storage_offsets) > 0:
+                if displacement == 0:
+                    storage_offsets.extend(list(v_stor_center[:storage_size] + np.array([-1 * layer, 0])))
+                    displacement += 1
+                    continue
+
+                top_offset = (np.array([6,5]) * displacement) + [-1 * layer, 0]
+                bottom_offset = (np.array([6,-5]) * displacement) + [-1 * layer, 0]
+
+                if top_offset[1] >= 50:
+                    layer += 1
+                    displacement = 0
+                    continue
+
+                displacement += 1
+
+                top_stor = []
+
+                if (storage_size - len(storage_offsets))//2 > 0:
+                    top_stor = v_stor_top[:(storage_size - len(storage_offsets))//2] + top_offset
+                bottom_stor = v_stor_bottom[:(storage_size - len(storage_offsets) + 1)//2] + bottom_offset
+
+                storage_offsets.extend(top_stor)
+                storage_offsets.extend(bottom_stor)
+
+            if len(storage_offsets) > 0:
+                offsets.extend(storage_offsets)
+
+            offsets = set([(cord[0], cord[1]) for cord in list(offsets)])
+
         return offsets
 
     def get_center_point(self, current_percept, info) -> int:
@@ -543,7 +606,7 @@ class Player:
 
 
         ### GET DESIRED OFFSETS FOR CURRENT MORPH ###
-        desired_shape_offsets = self.get_desired_shape(0)
+        desired_shape_offsets = self.get_desired_shape(5)
 
         ### INCREMENT CENTER POINT PHASE ###
         # move amoeba: x_cord is info_L7_int because initial info_L7_int val is 0, indicating initialization/building phase
