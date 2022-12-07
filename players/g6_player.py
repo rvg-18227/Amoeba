@@ -248,7 +248,17 @@ class Player:
 
         return expand_cells
 
+    def check_connect(self, amoeba_map, cell):
+        if amoeba_map[cell[0]-1, cell[1]+1] == 0 and amoeba_map[cell[0]-1, cell[1]] != 0:
+            return False
+        if amoeba_map[cell[0]+1, cell[1]+1] == 0 and amoeba_map[cell[0]+1, cell[1]] != 0:
+            return False
+        if amoeba_map[cell[0]-1, cell[1]] == 0 and amoeba_map[cell[0]+1, cell[1]] == 0 and amoeba_map[cell[0], cell[1]-1] != 0:
+            return False
+        return True
+
     def organize_retract(self, amoeba_map, periphery, min_num_per_col=2):
+        amoeba_map =amoeba_map.copy()
         amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
         amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
         top_side = np.min(amoeba_loc[:, 1])
@@ -280,6 +290,7 @@ class Player:
                             cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
                             #self.logger.info(f'cell idx : {np.where(cell_idx==True)[0]}')
                             amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx==True)[0], axis=0)
+                            amoeba_map[col, row] = 0
 
         return retract_list
 
@@ -300,25 +311,6 @@ class Player:
             row_array = np.where(amoeba_loc[:, 1] == row)[0]
             row_cells = amoeba_loc[row_array]
             columns = np.sort(row_cells[:, 0])
-
-            # priorize_columns = []
-            # # priorize columns that's about to disconnect
-            # for i in range(columns.shape[0]):
-            #     cell = (columns[i], row)
-            #     if (amoeba_map[cell[0], cell[1]+1]+amoeba_map[cell[0], cell[1]-1] == 0) \
-            #         or (amoeba_map[cell[0]-1, cell[1]]+amoeba_map[cell[0]+1, cell[1]]+amoeba_map[cell[0], cell[1]-1] == 0):
-            #         priorize_columns.append(columns[i])
-            # priorize_columns = sorted(priorize_columns, reverse=True) 
-
-            # for col in priorize_columns:
-            #     if row > bottom_side - 4: # do not retract bottom 3 rows
-            #         continue
-            #     cell = (col%100, row%100)
-            #     if (col%100, row%100) in periphery:
-            #         retract_list.append(cell)
-            #         cell_idx = (amoeba_loc[:, 0] == cell[0]) * (amoeba_loc[:, 1] == cell[1])
-            #         amoeba_loc = np.delete(amoeba_loc, np.where(cell_idx==True)[0], axis=0)
-            #         amoeba_map[col, row] = 0
 
             if row > bottom_side - 4: # do not retract bottom 3 rows
                 continue
@@ -371,13 +363,6 @@ class Player:
             expand_cells.append(tuple(cell%100))
 
         return expand_cells[:10]
-
-    def check_connect(self, amoeba_map, cell):
-        if amoeba_map[cell[0]-1, cell[1]+1] == 0 and amoeba_map[cell[0]-1, cell[1]] != 0:
-            return False
-        if amoeba_map[cell[0]+1, cell[1]+1] == 0 and amoeba_map[cell[0]+1, cell[1]] != 0:
-            return False
-        return True
             
 
     def organize_expand(self, amoeba_map, movable):
