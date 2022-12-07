@@ -529,7 +529,9 @@ class Player:
         settled = (sum(comb_mask) / len(comb_mask)) > 0.9
         if not settled:
             retracts, moves = self.get_morph_moves(
-                next_comb + next_bridge, curr_backbone_row
+                next_comb + next_bridge, 
+                CENTER_Y
+                # curr_backbone_row
             )
 
             # Actually, we have no more moves to make
@@ -550,7 +552,9 @@ class Player:
                 # prev_backbone_row,
             )
             retracts, moves = self.get_morph_moves(
-                next_comb + next_bridge, curr_backbone_row
+                next_comb + next_bridge, 
+                CENTER_Y
+                # curr_backbone_row
             )
             info = new_backbone_col << 1 | int(
                 memory_fields[MemoryFields.VerticalInvert]
