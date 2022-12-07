@@ -121,6 +121,9 @@ class Player:
             stage = 4
         else:
             stage = 3
+        
+        if self.current_size > 300:
+            stage = min(info, 2)
 
         amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
         width = amoeba_loc[:, 0].max() - amoeba_loc[:, 0].min()
