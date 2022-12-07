@@ -347,34 +347,38 @@ class Player:
                     error_ext.append(extends.pop())
                     error_ret.append(retracts.pop())
 
+        while not self.check_move(retracts, extends):
+            # remove elements one-by-one till it works
+            check_calls += 1
+            error_ext.append(extends.pop())
+            error_ret.append(retracts.pop())
+
         # Shorten the original lists for later use
         potential_extends = list(set(potential_extends) - set(extends))
         potential_retracts = list(set(potential_retracts) - set(retracts))
 
         # For the left-over error causing retract/extends, try again with a thorough search
-        # TODO - Could ignore these if small enough
-        leftover_extends = potential_extends + error_ext
-        leftover_retracts = potential_retracts + error_ret
-
-        if leftover_extends and leftover_retracts:
-            for pot_ext in leftover_extends:
+        if potential_extends and potential_retracts:
+            for pot_ext in potential_extends:
                 # Ensure we only move as much as possible given our current metabolism
                 if len(extends) >= self.num_available_moves:
                     break
 
-                for pot_ret in leftover_retracts:
+                for pot_ret in potential_retracts:
                     if self.check_move(retracts + [pot_ret], extends + [pot_ext]):
                         check_calls += 1
+                        retracts.append(pot_ret)
+                        extends.append(pot_ext)
+
+                        try:
+                            potential_extends.remove(pot_ext)
+                        except ValueError:
+                            pass
+                        try:
+                            potential_retracts.remove(pot_ret)
+                        except ValueError:
+                            pass
                         break
-                retracts.append(pot_ret)
-                extends.append(pot_ext)
-                leftover_retracts.remove(pot_ret)
-                try:
-                    potential_extends.remove(pot_ext)
-                    potential_retracts.remove(pot_ret)
-                except ValueError:
-                    pass
-                break
 
         # If we have moves remaining, 'store' the remaining extends and retracts in the center of the amoeba
         if (
@@ -412,17 +416,11 @@ class Player:
                         potential_retracts.remove(potential_retract)
                         break
 
-                if (
-                    len(retracts) >= self.num_available_moves
-                    or len(potential_retracts) <= 0
-                ):
-                    break
-
         # show_amoeba_map(self.amoeba_map, retracts, extends, title="Current Amoeba, Selected Retracts and Extends")
         print(f"Check calls: {check_calls} / {self.current_size}")
 
-        retracts = list(set(retracts))
-        extends = list(set(extends))
+        # retracts = list(set(retracts))
+        # extends = list(set(extends))
         return retracts, extends
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
