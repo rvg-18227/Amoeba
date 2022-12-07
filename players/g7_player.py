@@ -3,16 +3,10 @@ import numpy.typing as npt
 import logging
 from typing import Tuple, List
 from amoeba_state import AmoebaState
-import pstats
-import cProfile
 
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
 # ---------------------------------------------------------------------------- #
-
-# Copied from Group 2
-def map_to_coords(amoeba_map: npt.NDArray) -> list[Tuple[int, int]]:
-    return list(map(tuple, np.transpose(amoeba_map.nonzero()).tolist()))
 
 def binary_search(list, goal):
     mid = len(list) // 2
@@ -186,9 +180,9 @@ class Player:
         """ Function which takes a starting amoeba state and a desired amoeba state and generates a set of retracts and extends
             to morph the amoeba shape towards the desired shape.
         """
-
-        current_points = map_to_coords(self.amoeba_map)
-        desired_points = map_to_coords(desired_amoeba)
+        
+        current_points = list(map(tuple, np.transpose(self.amoeba_map.nonzero()).tolist()))
+        desired_points = list(map(tuple, np.transpose(desired_amoeba.nonzero()).tolist()))
 
         potential_retracts = [p for p in list(set(current_points).difference(set(desired_points))) if
                               (p in self.retractable_cells) and not any([neighbor in self.bacteria_cells for neighbor in get_neighbors(p)])]
@@ -359,8 +353,9 @@ class Player:
 
         return out
 
-    def bounds(self, current_percept):
+    def is_square(self, current_percept):
         min_x, max_x, min_y, max_y = 100, -1, 100, -1
+
         for y, x in current_percept.periphery:
             if y < min_y:
                 min_y = y
@@ -371,10 +366,6 @@ class Player:
             elif x > max_x:
                 max_x = x
 
-        return min_x, max_x, min_y, max_y
-
-    def is_square(self, current_percept):
-        min_x, max_x, min_y, max_y = self.bounds(current_percept)
         len_x = max_x - min_x + 1
         len_y = max_y - min_y + 1
 
