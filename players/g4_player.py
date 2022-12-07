@@ -216,20 +216,24 @@ def retract_k(
     if check_move(top_k, possible_moves[:_k], state):
         return top_k
 
-    # slow path: use binary search to find the first prefix that passes
-    # check_move. With a maximum ameoba size of 10,000, the number of
-    # invocations to check_move is capped at around 14 ~ log_2(10,000)
-    lo, hi = 0, _k
-    while lo <= hi:
-        mid = math.floor((lo + hi) / 2)
-        prefix = [ cell for cell, _ in sorted_choices[:mid] ]
+    # slow path:
+    # further possible optimizations if performance becomes a bottleneck again:
+    # 1. binary search to find the longest prefix of sorted_choices we can retract
+    # 2. best effort search for up to k retractable cells:
+    #    pessimistically terminate search when we fail @m check_moves in a roll
+    retract, i = [], 0
+    while len(retract) < k and i < len(sorted_choices):
+        cell, _ = sorted_choices[i]
+        _retract = retract + [cell]
+        _moves = possible_moves[:len(_retract)]
 
-        if check_move(prefix, possible_moves[:mid], state):
-            return prefix
-        else:
-            hi = mid - 1
+        # only add a cell to retract if it doesn't cause separation
+        if check_move(_retract, _moves, state):
+            retract.append(cell)
 
-    return []
+        i += 1
+
+    return retract
 
 def check_move(
     retract: list[cell],
@@ -607,7 +611,7 @@ class BucketAttack(Strategy):
 
         return targets
 
-    def _get_target_cells(self, size: int, cog: cell, xmax: int) -> list[cell]:
+    def _get_target_cells(self, size: int, cog: cell, x_arm: int) -> list[cell]:
         """Returns the cells of the target shape by centering vertically on
         the y-value of Ameoba's center of gravity and placing the bucket arms
         on the column of Ameoba's rightmost cell.
@@ -637,14 +641,14 @@ class BucketAttack(Strategy):
         )
 
         wall_cells = (
-            [ ( xmax % 100,       y % 100 ) for y in inner_wall_cell_ys ] +
-            [ ( (xmax - 1) % 100, y % 100 ) for y in outer_wall_cell_ys ]
+            [ ( (x_arm - 1) % 100,       y % 100 ) for y in inner_wall_cell_ys ] +
+            [ ( (x_arm - 2) % 100, y % 100 ) for y in outer_wall_cell_ys ]
         )
-        arm_cells = [ ( (xmax + 1) % 100, y % 100 ) for y in arm_cell_ys ]
+        arm_cells = [ ( x_arm % 100, y % 100 ) for y in arm_cell_ys ]
 
         return wall_cells + arm_cells
 
-    def _get_rectangle_target(self, size: int, cog: cell, xmax: int) -> list[cell]:
+    def _get_rectangle_target(self, size: int, cog: cell, x_arm: int) -> list[cell]:
         _, y_cog = cog
         wall_length, orphans=int(size/4),size%4
         upper=y_cog+wall_length
@@ -661,8 +665,8 @@ class BucketAttack(Strategy):
             lower
         )
         wall_cells = (
-                [(xmax % 100, y % 100) for y in inner_wall_cell_ys] +
-                [((xmax + 1) % 100, y % 100) for y in outer_wall_cell_ys]
+                [((x_arm - 1) % 100, y % 100) for y in inner_wall_cell_ys] +
+                [(x_arm % 100, y % 100) for y in outer_wall_cell_ys]
         )
         return wall_cells
 
@@ -729,7 +733,7 @@ class BucketAttack(Strategy):
         """
         arms_got = len(np.where(curr_state.amoeba_map[xmax,:] == State.ameoba.value)[0])
 
-        if not self._reach_border:
+        if not self._reach_border(curr_state):
             arms_expected = 1 + math.floor((curr_state.current_size - 3) / self.bucket_cost)
         else:
             arms_expected = 2 * ((constants.map_dim / 2 - 1) // (self.bucket_width + 1) + 1)
@@ -952,27 +956,24 @@ class BucketXAttack(BucketAttack):
         #  Decode Memory
         # ----------------
         mem = f'{memory:b}'.rjust(8, '0')
-        old_xmax = int(mem[:7], 2)
+        prev_arm_xval = (
+            int(mem[:7], 2) if self._reach_border(state) else
+            self._get_xmax(state)
+        )
         shifted = int(mem[-1])
 
         # ---------------
         #  State Update
         # ---------------
         # rotation counter & shifted
-        rotation = (old_xmax + 1) % self.shift_n
+        rotation = (prev_arm_xval + 1) % self.shift_n
         if self.shift_enabled and rotation == 0:
             shifted = shifted ^ 1
 
-        # arm_xval
-        if not self._reach_border(state):
-            xmax = self._get_xmax(state)
-        else:
-            xmax = old_xmax + 1
-
-        if not self._in_shape(xmax % 100, state):
-            arm_xval = (xmax - 1) % 100
-        else:
-            arm_xval = xmax % 100
+        # arm_xval: if we are in shape, advance arm_xval
+        # otherwise, use prev_arm_xval to keep getting into shape
+        in_shape = self._in_shape(prev_arm_xval % 100, state)
+        arm_xval = (prev_arm_xval + int(in_shape)) % 100
 
         # ----------------
         #  Update Memory
@@ -1019,8 +1020,8 @@ class BucketXAttack(BucketAttack):
 BUCKET_WIDTH = 2
 SHIFT_CYCLE  = 16
 
-X_BUCKET_WIDTH = 1
-X_SHIFT_CYCLE  = -1
+X_BUCKET_WIDTH = 2
+X_SHIFT_CYCLE  = 16
 V_SIZE = 400
 
 
@@ -1096,7 +1097,7 @@ class Player:
 
         # TODO: dynamically select a strategy, possible factors:
         # current_size, metabolism, etc
-        strategy = "bucket_attack"
+        strategy = "bucketX_attack"
 
         return self.strategies[strategy].move(last_percept, current_percept, info)
 
