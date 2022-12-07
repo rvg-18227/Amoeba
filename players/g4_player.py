@@ -289,6 +289,27 @@ def check_move(
 
     return (amoeba == check).all()
 
+def is_square(current_percept: AmoebaState):
+    # adapted from G5
+    def bounds(current_percept: AmoebaState):
+        min_x, max_x, min_y, max_y = 100, -1, 100, -1
+        for y, x in current_percept.periphery:
+            if y < min_y:
+                min_y = y
+            elif y > max_y:
+                max_y = y
+            if x < min_x:
+                min_x = x
+            elif x > max_x:
+                max_x = x
+
+        return min_x, max_x, min_y, max_y
+
+    min_x, max_x, min_y, max_y = bounds(current_percept)
+    len_x = max_x - min_x + 1
+    len_y = max_y - min_y + 1
+
+    return len_x == len_y and len_x * len_y == current_percept.current_size
 
 #------------------------------------------------------------------------------
 #  Movement Strategy
@@ -707,7 +728,7 @@ class BucketAttack(Strategy):
 
         return abs(upper_bound - lower_bound) >= 98
 
-    def _in_shape(self, arm_xval: int, curr_state: AmoebaState) -> bool:
+    def _in_shape(self, arm_xval: int, cog: cell, curr_state: AmoebaState) -> bool:
         """Returns a bool indicating if our bucket arms are in shape.
 
         In our implementation, *no memory bit* is needed to store information
@@ -724,19 +745,20 @@ class BucketAttack(Strategy):
         that we don't risk moving and not able to eat any bacteria along the
         way.
         """
-        got = 0
-        for x in [arm_xval - 2, arm_xval - 1, arm_xval]:
-            got += len(np.where(curr_state.amoeba_map[x % 100,:] == State.ameoba.value)[0])
-
         if not self._reach_border(curr_state):
-            expect = curr_state.current_size
+            size = curr_state.current_size
         else:
-            expect = (
+            size = (
                 2 * ((constants.map_dim / 2 - 1) // (self.bucket_width + 1) + 1) +
                 2 * constants.map_dim
             )
 
-        return got >= expect
+        target_shape = self._get_target_cells(size, cog, arm_xval)
+        for target in target_shape:
+            if curr_state.amoeba_map[target] == State.empty.value:
+                return False
+
+        return True
 
     def move(
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
@@ -745,12 +767,14 @@ class BucketAttack(Strategy):
         # ----------------
         #  Decode Memory
         # ----------------
-        mem = f'{memory:b}'.rjust(8, '0')
-        prev_arm_xval = (
-            int(mem[:7], 2) if self._reach_border(state) else
-            self._get_xmax(state)
-        )
-        shifted = int(mem[-1])
+        if is_square(state):
+            print("start config")
+            curr_arm_xval = self._get_xmax(state)
+            shifted = 0
+        else:
+            mem = f'{memory:b}'.rjust(8, '0')
+            curr_arm_xval = int(mem[:7], 2)
+            shifted = int(mem[-1])
 
         # ---------------
         #  State Update
@@ -758,10 +782,11 @@ class BucketAttack(Strategy):
 
         # arm_xval: if we are in shape, advance arm_xval
         # otherwise, use prev_arm_xval to keep getting into shape
-        in_shape = self._in_shape(prev_arm_xval % 100, state)
-        arm_xval = (prev_arm_xval + int(in_shape)) % 100
+        curr_cog = (50, 49) if shifted else (50, 50)
+        in_shape = self._in_shape(curr_arm_xval % 100, curr_cog, state)
+        next_arm_xval = (curr_arm_xval + int(in_shape)) % 100
 
-        shift = in_shape and (arm_xval % self.shift_n)
+        shift = in_shape and (next_arm_xval % self.shift_n == 0)
         if self.shift_enabled and shift:
             # we are in shape and prepared to march forward with
             # the x-value of the bucket arm @arm_xval
@@ -775,15 +800,12 @@ class BucketAttack(Strategy):
             shifted = shifted ^ 1
 
         # TODO: maybe not always moving horizontally?
-        if shifted:
-            cog = (50, 49)
-        else:
-            cog  = (50, 50)
+        next_cog = (50, 49) if shifted else (50, 50)
 
         # ----------------
         #  Update Memory
         # ----------------
-        arm_xval_bin = '{0:07b}'.format(arm_xval)
+        arm_xval_bin = '{0:07b}'.format(next_arm_xval)
         shifted_bin  = '{0:01b}'.format(shifted)
         memory = int(arm_xval_bin + shifted_bin, 2)
 
@@ -792,13 +814,13 @@ class BucketAttack(Strategy):
         # ----------------------------------
         size = state.current_size
 
-        target_cells = self._get_target_cells(size, cog, arm_xval)
+        target_cells = self._get_target_cells(size, next_cog, next_arm_xval)
         retract, extend, memory = self._reshape(state, memory, set(target_cells))
 
         if len(retract) > 0:
             return retract, extend, memory
         else:
-            target_cells = self._get_rectangle_target(size, cog, arm_xval)
+            target_cells = self._get_rectangle_target(size, next_cog, next_arm_xval)
             return self._reshape(state, memory, set(target_cells))
 
 
@@ -959,12 +981,13 @@ class BucketXAttack(BucketAttack):
         # ----------------
         #  Decode Memory
         # ----------------
-        mem = f'{memory:b}'.rjust(8, '0')
-        prev_arm_xval = (
-            int(mem[:7], 2) if self._reach_border(state) else
-            self._get_xmax(state)
-        )
-        shifted = int(mem[-1])
+        if is_square(state):
+            curr_arm_xval = self._get_xmax(state)
+            shifted = 0
+        else:
+            mem = f'{memory:b}'.rjust(8, '0')
+            curr_arm_xval = int(mem[:7], 2)
+            shifted = int(mem[-1])
 
         # ---------------
         #  State Update
@@ -972,10 +995,11 @@ class BucketXAttack(BucketAttack):
 
         # arm_xval: if we are in shape, advance arm_xval
         # otherwise, use prev_arm_xval to keep getting into shape
-        in_shape = self._in_shape(prev_arm_xval % 100, state)
-        arm_xval = (prev_arm_xval + int(in_shape)) % 100
+        curr_cog = (50, 49) if shifted else (50, 50)
+        in_shape = self._in_shape(curr_arm_xval % 100, curr_cog, state)
+        next_arm_xval = (curr_arm_xval + int(in_shape)) % 100
 
-        shift = in_shape and (arm_xval % self.shift_n)
+        shift = in_shape and (next_arm_xval % self.shift_n == 0)
         if self.shift_enabled and shift:
             # we are in shape and prepared to march forward with
             # the x-value of the bucket arm @arm_xval
@@ -987,17 +1011,16 @@ class BucketXAttack(BucketAttack):
             # teeth position will change again, causing our comb to shift
             # up and down in a never-ending loop.
             shifted = shifted ^ 1
+            print("-----------shift---------------")
+        print("curr_arm_xval:", curr_arm_xval, "next_arm_xval:", next_arm_xval)
 
         # TODO: maybe not always moving horizontally?
-        if shifted:
-            cog = (50, 49)
-        else:
-            cog  = (50, 50)
+        next_cog = (50, 49) if shifted else (50, 50)
 
         # ----------------
         #  Update Memory
         # ----------------
-        arm_xval_bin = '{0:07b}'.format(arm_xval)
+        arm_xval_bin = '{0:07b}'.format(next_arm_xval)
         shifted_bin  = '{0:01b}'.format(shifted)
         memory = int(arm_xval_bin + shifted_bin, 2)
 
@@ -1010,9 +1033,9 @@ class BucketXAttack(BucketAttack):
         size = state.current_size
 
         if self._reach_border(state):
-            target_cells = self._get_bridge_V_target_cells(size, cog, arm_xval)
+            target_cells = self._get_bridge_V_target_cells(size, next_cog, next_arm_xval)
         else:
-            target_cells = self._get_target_cells(size, cog, arm_xval)
+            target_cells = self._get_target_cells(size, next_cog, next_arm_xval)
 
         # ----------------------------------
         #  compute moves: retract & extend
@@ -1023,7 +1046,7 @@ class BucketXAttack(BucketAttack):
         if len(retract) > 0:
             return retract, extend, memory
         else:
-            target_cells = self._get_rectangle_target(size, cog, arm_xval)
+            target_cells = self._get_rectangle_target(size, next_cog, next_arm_xval)
             return self._reshape(state, memory, set(target_cells))
 
 
@@ -1111,6 +1134,7 @@ class Player:
 
         # TODO: dynamically select a strategy, possible factors:
         # current_size, metabolism, etc
+        # strategy = "bucketX_attack"
         strategy = "bucketX_attack"
 
         return self.strategies[strategy].move(last_percept, current_percept, info)
