@@ -189,7 +189,7 @@ class Player:
         if size < 2:
             return comb_formation.map, bridge_formation.map
 
-        teeth_size = min((size // ((TEETH_GAP + 1) * 2 + 1)), 49)
+        teeth_size = min(round(size / ((TEETH_GAP + 1) * 2 + 1)), 49)
         backbone_size = min((size - teeth_size) // 2, 99)
         cells_used = backbone_size * 2 + teeth_size
 
