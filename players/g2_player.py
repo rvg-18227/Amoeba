@@ -29,9 +29,11 @@ TEETH_SHIFT_LIST = (
     * (round(np.ceil(100 / (TEETH_SHIFT_PERIOD * 2))))
 )[:100]
 
-PERCENT_MATCH_BEFORE_MOVE = 0.9
+PERCENT_MATCH_BEFORE_MOVE = 0.7
 
 VERTICAL_FLIP_SIZE_THRESHOLD = 100
+
+ONE_WIDE_BACKBONE = False
 
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
@@ -191,9 +193,14 @@ class Player:
 
         if size < 2:
             return comb_formation.map, bridge_formation.map
-
-        teeth_size = min(round(size / ((TEETH_GAP + 1) * 2 + 1)), 49)
-        backbone_size = min((size - teeth_size) // 2, 99)
+        
+        ONE_WIDE_BACKBONE = True if size < 36 else ONE_WIDE_BACKBONE
+        if not ONE_WIDE_BACKBONE:
+            teeth_size = min(round(size / ((TEETH_GAP + 1) * 2 + 1)), 49)
+            backbone_size = min((size - teeth_size) // 2, 99)
+        else:
+            teeth_size = min(round(size / ((TEETH_GAP + 1) + 1)), 49)
+            backbone_size = min((size - teeth_size), 99)
         cells_used = backbone_size * 2 + teeth_size
 
         # If we have hit our max size, form an additional comb and connect it via a bridge
@@ -244,14 +251,15 @@ class Player:
             comb_formation.add_cell(comb_0_center_x, center_y + i)
             comb_formation.add_cell(comb_0_center_x, center_y - i)
             # second layer of backbone
-            if comb_formation.cells < size:
-                comb_formation.add_cell(
-                    comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y + i
-                )
-            if comb_formation.cells < size:
-                comb_formation.add_cell(
-                    comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y - i
-                )
+            if not ONE_WIDE_BACKBONE:
+                if comb_formation.cells < size:
+                    comb_formation.add_cell(
+                        comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y + i
+                    )
+                if comb_formation.cells < size:
+                    comb_formation.add_cell(
+                        comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y - i
+                    )
 
         # If we build a second comb, build up additional cells in the center
         if backbone_size == 99 and comb_idx == 0:
