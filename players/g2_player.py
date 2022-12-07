@@ -2,6 +2,7 @@ import logging
 import math
 import os
 import pickle
+import time
 from enum import Enum
 from typing import List, Tuple
 
@@ -71,8 +72,8 @@ def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[], title="") 
     ax = plt.gca()
     ax.set_aspect("equal")
     plt.title(title)
-    plt.show()
-
+    # plt.show()
+    plt.savefig(f"formation_map/{time.time() * 1000}.png")
 
 # ---------------------------------------------------------------------------- #
 #                                Memory Bit Mask                               #
@@ -193,9 +194,9 @@ class Player:
 
         if size < 2:
             return comb_formation.map, bridge_formation.map
-        
-        ONE_WIDE_BACKBONE = True if size < 36 else ONE_WIDE_BACKBONE
-        if not ONE_WIDE_BACKBONE:
+
+        one_wide_backbone = True if size < 36 else ONE_WIDE_BACKBONE
+        if not one_wide_backbone:
             teeth_size = min(round(size / ((TEETH_GAP + 1) * 2 + 1)), 49)
             backbone_size = min((size - teeth_size) // 2, 99)
         else:
@@ -251,7 +252,7 @@ class Player:
             comb_formation.add_cell(comb_0_center_x, center_y + i)
             comb_formation.add_cell(comb_0_center_x, center_y - i)
             # second layer of backbone
-            if not ONE_WIDE_BACKBONE:
+            if not one_wide_backbone:
                 if comb_formation.cells < size:
                     comb_formation.add_cell(
                         comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y + i
@@ -284,6 +285,7 @@ class Player:
 
         # show_amoeba_map(comb_formation.map, title="Generated Comb Formation")
         # show_amoeba_map(bridge_formation.map, title="Generated Bridge Formation")
+        # show_amoeba_map(comb_formation.map + bridge_formation.map, title="Generated Formation")
         return comb_formation.map, bridge_formation.map
 
     def get_morph_moves(
