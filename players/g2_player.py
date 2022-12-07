@@ -345,48 +345,7 @@ class Player:
                 leftover_retracts.remove(ret)
                 break
 
-        # for potential_extend in [p for p in potential_extends]:
-        #     # Ensure we only move as much as possible given our current metabolism
-        #     if len(extends) >= self.num_available_moves:
-        #         break
-        #
-        #     matching_retracts = list(potential_retracts)
-        #     # matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))  # Replaced with Global sorting
-        #
-        #     skip_n = 10
-        #     for i in range(len(matching_retracts)):
-        #         retract = matching_retracts[i]
-        #         # Matching retract found, add the extend and retract to our lists
-        #         if self.check_move(retracts + [retract], extends + [potential_extend]):
-        #             check_calls += 1
-        #             retracts.append(retract)
-        #             potential_retracts.remove(retract)
-        #             extends.append(potential_extend)
-        #             potential_extends.remove(potential_extend)
-        #             break
-        #         check_calls += 1
-
         print(f"Check calls: {check_calls} / {self.current_size}")
-
-        # If we have moves remaining, try and get closer to the desired formation
-        # if len(extends) < self.num_available_moves and len(potential_retracts):
-        #     desired_extends = [p for p in list(set(desired_points).difference(set(current_points))) if p not in self.extendable_cells]
-        #     unused_extends = [p for p in self.extendable_cells if p not in extends]
-
-        #     for potential_retract in [p for p in potential_retracts]:
-        #         for desired_extend in desired_extends:
-        #             curr_dist = math.dist(potential_retract, desired_extend)
-
-        #             matching_extends = [p for p in unused_extends if self.check_move(retracts + [potential_retract], extends + [p])]
-        #             matching_extends.sort(key=lambda p: math.dist(p, desired_extend))
-
-        #             if len(matching_extends) and  math.dist(potential_retract, matching_extends[0]) < curr_dist:
-        #                 # show_amoeba_map(self.amoeba_map, [potential_retract], [matching_extends[0]])
-        #                 retracts.append(potential_retract)
-        #                 potential_retracts.remove(potential_retract)
-        #                 extends.append(matching_extends[0])
-        #                 unused_extends.remove(matching_extends[0])
-        #                 break
 
         # If we have moves remaining, 'store' the remaining extends and retracts in the center of the amoeba
         if (
