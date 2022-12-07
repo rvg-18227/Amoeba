@@ -502,18 +502,6 @@ class Player:
             offsets = set([(cord[0], cord[1]) for cord in list(offsets)])
 
         return offsets
-
-    def get_center_point(self, current_percept, info) -> int:
-        if info: # initialized
-            min_x = 100
-            for x, y in self.periphery:
-                if y == 50:
-                    min_x = min(min_x, x)
-            
-            return (min_x, 50) # 51?
-        else:
-            return (50, 50) # 51, 51? need to check later
-
     
     def map_to_coords(self, amoeba_map: npt.NDArray) -> set[Tuple[int, int]]:
         # borrowed from group 2
@@ -557,7 +545,7 @@ class Player:
         
         return retracts, extends
     
-    def reset_center(self, info_first_bit, new_coord): # returns [_, y]
+    def reset_center(self, info_first_bit, new_coord): 
         if info_first_bit == "0":
             return [new_coord, 50]
         elif info_first_bit == "1":
@@ -588,15 +576,6 @@ class Player:
         bacteria_eaten = self.current_size-self.goal_size/4
         average_size =math.ceil((self.current_size+self.goal_size/4)/2)
         average_mouth = min(math.ceil((average_size-5)/3)+1, 100)
-
-        # cur_ameoba_points = self.map_to_coords(self.amoeba_map)
-        # desired_ameoba_points = self.offset_to_absolute(desired_shape_offsets, self.static_center)
-
-        # potential_retracts = list(self.periphery.intersection((cur_ameoba_points.difference(desired_ameoba_points))))
-
-
-        # if self.turn < 50:
-        #     center_point = self.get_center_point(current_percept, 0)
         
         ### PARSE INFO BYTE ###
         info_bin = format(info, '08b')
@@ -633,8 +612,6 @@ class Player:
 
         # move under these 2 conditions
         # 1: end of initialization phase
-        #print(init_phase)
-        #print(len(desired_shape_offsets), self.current_size)
         new_center = self.reset_center(info_first_bit, x_cord)
         if init_phase:
             x_cord = 50
