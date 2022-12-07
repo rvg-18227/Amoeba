@@ -2,17 +2,17 @@ import logging
 import math
 import os
 import pickle
+import time
 from enum import Enum
 from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
+from scipy.spatial import KDTree
 
 import constants
 from amoeba_state import AmoebaState
-
-turn = 0
 
 
 # ---------------------------------------------------------------------------- #
@@ -22,17 +22,30 @@ turn = 0
 CENTER_X = constants.map_dim // 2
 CENTER_Y = constants.map_dim // 2
 
-COMB_SEPARATION_DIST = 4
-TEETH_GAP = 3
+# TEETH_GAP = 1
+# TEETH_SHIFT_PERIOD = 6
 
-VERTICAL_SHIFT_PERIOD = 2
-VERTICAL_SHIFT_LIST = (
-    (
-        [0 for i in range(VERTICAL_SHIFT_PERIOD)]
-        + [1 for i in range(VERTICAL_SHIFT_PERIOD)]
-    )
-    * (round(np.ceil(100 / (VERTICAL_SHIFT_PERIOD * 2))))
-)[:100]
+# TEETH_SHIFT_LIST = (
+#     ([0 for i in range(TEETH_SHIFT_PERIOD)] + [1 for i in range(TEETH_SHIFT_PERIOD)])
+#     * (round(np.ceil(100 / (TEETH_SHIFT_PERIOD * 2))))
+# )[:100]
+
+# PERCENT_MATCH_BEFORE_MOVE = 0.7
+
+VERTICAL_FLIP_SIZE_THRESHOLD = 100
+
+# ONE_WIDE_BACKBONE = False
+
+
+class PlayerParameters:
+    def __init__(self, formation_threshold, teeth_gap, teeth_shift, one_wide_backbone):
+        self.formation_threshold = formation_threshold
+        self.teeth_gap = teeth_gap
+        self.teeth_shift = teeth_shift
+        self.one_wide_backbone = one_wide_backbone
+
+default_params = PlayerParameters(0.7, 1, 6, False)
+
 
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
@@ -66,13 +79,12 @@ def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[], title="") 
                 map[y, x] = 1
 
     plt.rcParams["figure.figsize"] = (10, 10)
-    plt.pcolormesh(map, edgecolors="k", linewidth=1)
+    plt.pcolormesh(map, edgecolors="k", linewidth=0.1)
     ax = plt.gca()
     ax.set_aspect("equal")
     plt.title(title)
-    # plt.savefig(f"debug/{turn}.png")
-    plt.show()
-
+    # plt.show()
+    plt.savefig(f"formation_map/{time.time() * 1000}.png")
 
 # ---------------------------------------------------------------------------- #
 #                                Memory Bit Mask                               #
@@ -80,8 +92,7 @@ def show_amoeba_map(amoeba_map: npt.NDArray, retracts=[], extends=[], title="") 
 
 
 class MemoryFields(Enum):
-    Initialized = 0
-    Translating = 1
+    VerticalInvert = 0
 
 
 def read_memory(memory: int) -> dict[MemoryFields, bool]:
@@ -99,33 +110,6 @@ def change_memory_field(memory: int, field: MemoryFields, value: bool) -> int:
     return (memory & ~mask) | ((bit << field.value) & mask)
 
 
-if __name__ == "__main__":
-    memory = 0
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == False
-    assert fields[MemoryFields.Translating] == False
-
-    memory = change_memory_field(memory, MemoryFields.Initialized, True)
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == True
-    assert fields[MemoryFields.Translating] == False
-
-    memory = change_memory_field(memory, MemoryFields.Translating, True)
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == True
-    assert fields[MemoryFields.Translating] == True
-
-    memory = change_memory_field(memory, MemoryFields.Translating, False)
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == True
-    assert fields[MemoryFields.Translating] == False
-
-    memory = change_memory_field(memory, MemoryFields.Initialized, False)
-    fields = read_memory(memory)
-    assert fields[MemoryFields.Initialized] == False
-    assert fields[MemoryFields.Translating] == False
-
-
 # ---------------------------------------------------------------------------- #
 #                               Formation Class                                #
 # ---------------------------------------------------------------------------- #
@@ -138,15 +122,18 @@ class Formation:
             if initial_formation
             else np.zeros((constants.map_dim, constants.map_dim), dtype=np.int8)
         )
+        self.cells = np.count_nonzero(self.map)
 
     def add_cell(self, x, y) -> None:
         self.map[x % constants.map_dim, y % constants.map_dim] = 1
-        
+        self.cells += 1
+
     def get_cell(self, x, y) -> int:
         return self.map[x % constants.map_dim, y % constants.map_dim]
 
     def merge_formation(self, formation_map: npt.NDArray):
         self.map = np.logical_or(self.map, formation_map)
+        self.cells = np.count_nonzero(self.map)
 
 
 # ---------------------------------------------------------------------------- #
@@ -162,6 +149,7 @@ class Player:
         metabolism: float,
         goal_size: int,
         precomp_dir: str,
+        params: PlayerParameters = default_params
     ) -> None:
         """Initialise the player with the basic amoeba information
 
@@ -193,6 +181,7 @@ class Player:
         self.metabolism = metabolism
         self.goal_size = goal_size
         self.current_size = goal_size / 4
+        self.params = params
 
         # Class accessible percept variables, written at the start of each turn
         self.current_size: int = None
@@ -203,80 +192,122 @@ class Player:
         self.num_available_moves: int = None
 
     def generate_comb_formation(
-        self, size: int, tooth_offset=0, center_x=CENTER_X, center_y=CENTER_Y, comb_idx=0
-    ) -> npt.NDArray:
-        formation = Formation()
+        self,
+        size: int,
+        tooth_offset=0,
+        center_x=CENTER_X,
+        center_y=CENTER_Y,
+        comb_idx=0,
+    ) -> Tuple[npt.NDArray, npt.NDArray]:
+        """Generate a comb formation of a given size, returning a tuple of the formation map and the bridge map"""
+
+        comb_formation = Formation()
+        bridge_formation = Formation()
         comb_0_center_x = center_x
 
         if size < 2:
-            return formation.map
+            return comb_formation.map, bridge_formation.map
 
-        teeth_size = min((size // ((TEETH_GAP + 1) * 2 + 1)), 49)
-        backbone_size = min((size - teeth_size) // 2, 99)
+        # one_wide_backbone = True if size < 36 else ONE_WIDE_BACKBONE
+        one_wide_backbone = True if size < 36 else self.params.one_wide_backbone
+        if not one_wide_backbone:
+            # teeth_size = min(round(size / ((TEETH_GAP + 1) * 2 + 1)), 49)
+            teeth_size = min(round(size / ((self.params.teeth_gap + 1) * 2 + 1)), 49)
+            backbone_size = min((size - teeth_size) // 2, 99)
+        else:
+            # teeth_size = min(round(size / ((TEETH_GAP + 1) + 1)), 49)
+            teeth_size = min(round(size / ((self.params.teeth_gap + 1) + 1)), 49)
+            backbone_size = min((size - teeth_size), 99)
         cells_used = backbone_size * 2 + teeth_size
 
         # If we have hit our max size, form an additional comb and connect it via a bridge
         if backbone_size == 99 and comb_idx == 0:
-            center_x_offset = np.absolute(center_x - CENTER_X)
-
-            if size > cells_used * 2:
-                # Offset each comb to the left and right of the map center
-                comb_0_center_x = min(max(CENTER_X - center_x_offset, COMB_SEPARATION_DIST), 50)
-                comb_1_center_x = min(max(CENTER_X + center_x_offset + COMB_SEPARATION_DIST, CENTER_X + COMB_SEPARATION_DIST + 1), 100)
-            else:
-                comb_1_center_x = center_x + COMB_SEPARATION_DIST
-
-            # Generate the second comb
-            second_comb = self.generate_comb_formation(
-                size - cells_used,
-                tooth_offset,
-                comb_1_center_x % constants.map_dim,
-                center_y,
-                1
-            )
-            formation.merge_formation(second_comb)
+            comb_0_x_offset = center_x - CENTER_X
+            comb_1_center_x = CENTER_X - comb_0_x_offset
 
             # Bridge between the two combs
-            for i in range(comb_0_center_x, comb_1_center_x):
-                formation.add_cell(i, center_y)
+            for i in range(100):
+                if size - cells_used > 0:
+                    bridge_formation.add_cell(
+                        (comb_0_center_x - i) % constants.map_dim, center_y
+                    )
+                    cells_used += 1
+
+            # Generate the second comb
+            if size - cells_used > 0:
+                second_comb, second_bridge = self.generate_comb_formation(
+                    size - cells_used, tooth_offset, comb_1_center_x, center_y, 1
+                )
+                comb_formation.merge_formation(second_comb)
+                bridge_formation.merge_formation(second_bridge)
 
         # Build first comb formation
-        formation.add_cell(comb_0_center_x, center_y)
-        formation.add_cell(comb_0_center_x - 1, center_y)
-        for i in range(1, round((backbone_size - 1) / 2 + 0.1) + 1):
-            # first layer of backbone
-            formation.add_cell(comb_0_center_x, center_y + i)
-            formation.add_cell(comb_0_center_x, center_y - i)
-            # second layer of backbone
-            formation.add_cell(comb_0_center_x - 1, center_y + i)
-            formation.add_cell(comb_0_center_x - 1, center_y - i)
+        
+        # Add center cells
+        comb_formation.add_cell(comb_0_center_x, center_y)
+        comb_formation.add_cell(comb_0_center_x - 1, center_y)
+        
+        # Then prioritize adding teeth
         for i in range(
             1,
-            round(min((teeth_size * (TEETH_GAP + 1)) / 2, backbone_size / 2) + 0.1),
-            TEETH_GAP + 1,
+            # round(min((teeth_size * (TEETH_GAP + 1)) / 2, backbone_size / 2) + 0.1),
+            round(min((teeth_size * (self.params.teeth_gap + 1)) / 2, backbone_size / 2) + 0.1),
+            # TEETH_GAP + 1,
+            self.params.teeth_gap + 1,
         ):
-            formation.add_cell(comb_0_center_x + 1, center_y + tooth_offset + i)
-            formation.add_cell(comb_0_center_x + 1, center_y + tooth_offset - i)   
+            comb_formation.add_cell(
+                comb_0_center_x + (1 if comb_idx == 0 else -1),
+                center_y + tooth_offset + i,
+            )
+            comb_formation.add_cell(
+                comb_0_center_x + (1 if comb_idx == 0 else -1),
+                center_y + tooth_offset - i,
+            )
+            
+        # Then build the backbone (we may not have quite enough cells for this)
+        for i in range(1, round((backbone_size - 1) / 2 + 0.1) + 1):
+            # first layer of backbone
+            comb_formation.add_cell(comb_0_center_x, center_y + i)
+            comb_formation.add_cell(comb_0_center_x, center_y - i)
+            # second layer of backbone
+            if not one_wide_backbone:
+                if comb_formation.cells < size:
+                    comb_formation.add_cell(
+                        comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y + i
+                    )
+                if comb_formation.cells < size:
+                    comb_formation.add_cell(
+                        comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y - i
+                    )
 
         # If we build a second comb, build up additional cells in the center
         if backbone_size == 99 and comb_idx == 0:
-            cells_remaining = size - np.count_nonzero(formation.map)
+            cells_remaining = (
+                size
+                - np.count_nonzero(comb_formation.map)
+                - np.count_nonzero(bridge_formation.map)
+            )
             bridge_offset = 1
             while cells_remaining > 0 and bridge_offset < 99:
-                for i in range(comb_0_center_x, comb_1_center_x):
-                    offset = bridge_offset if bridge_offset <= 49 else 50 - bridge_offset
-                    if formation.get_cell(i, center_y + offset) == 0:
-                        formation.add_cell(i, center_y + offset)
+                for i in range(100):
+                    y_offset = (
+                        bridge_offset if bridge_offset <= 49 else 50 - bridge_offset
+                    )
+                    x_position = (comb_0_center_x - i) % constants.map_dim
+                    if comb_formation.get_cell(x_position, center_y + y_offset) == 0:
+                        bridge_formation.add_cell(x_position, center_y + y_offset)
                         cells_remaining -= 1
                         if cells_remaining <= 0:
                             break
                 bridge_offset += 1
-                
-        # show_amoeba_map(formation.map)
-        return formation.map
+
+        # show_amoeba_map(comb_formation.map, title="Generated Comb Formation")
+        # show_amoeba_map(bridge_formation.map, title="Generated Bridge Formation")
+        # show_amoeba_map(comb_formation.map + bridge_formation.map, title="Generated Formation")
+        return comb_formation.map, bridge_formation.map
 
     def get_morph_moves(
-        self, desired_amoeba: npt.NDArray
+        self, desired_amoeba: npt.NDArray, center_y=CENTER_Y
     ) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
         """Function which takes a starting amoeba state and a desired amoeba state and generates a set of retracts and extends
         to morph the amoeba shape towards the desired shape.
@@ -285,17 +316,21 @@ class Player:
         current_points = map_to_coords(self.amoeba_map)
         desired_points = map_to_coords(desired_amoeba)
 
+        # Sort retracts based on distance from formation. Reduces straggling branches lagging behind formation.
+        kdtree = KDTree(desired_points)
         potential_retracts = [
             p
             for p in list(set(current_points).difference(set(desired_points)))
             if p in self.retractable_cells
         ]
+        potential_retracts.sort(reverse=True, key=lambda p: kdtree.query([p], k=1)[0])
+
         potential_extends = [
             p
             for p in list(set(desired_points).difference(set(current_points)))
             if p in self.extendable_cells
         ]
-        potential_extends.sort(key=lambda p: p[1])
+        # potential_extends.sort(key=lambda p: p[1])
 
         # show_amoeba_map(desired_amoeba, title="Desired Amoeba")
         # show_amoeba_map(self.amoeba_map, potential_retracts, potential_extends, title="Current Amoeba, Potential Retracts and Extends")
@@ -303,49 +338,107 @@ class Player:
         # Loop through potential extends, searching for a matching retract
         retracts = []
         extends = []
+        error_ext = []
+        error_ret = []
+
         check_calls = 0
-        for potential_extend in [p for p in potential_extends]:
+        SKIP_PER = 0.25
+        skip_n = int(SKIP_PER * min(len(potential_extends), len(potential_retracts)))  # Scales with size of amoeba
+        skip_n = min(skip_n, 200)  # Cap it at 200
+        if skip_n < 1:
+            skip_n = 1
+        count = 0
+        for potential_extend, potential_retract in zip(potential_extends, potential_retracts):
             # Ensure we only move as much as possible given our current metabolism
             if len(extends) >= self.num_available_moves:
                 break
 
-            matching_retracts = list(potential_retracts)
-            matching_retracts.sort(key=lambda p: math.dist(p, potential_extend))
+            extends.append(potential_extend)
+            retracts.append(potential_retract)
 
-            for i in range(len(matching_retracts)):
-                retract = matching_retracts[i]
-                # Matching retract found, add the extend and retract to our lists
-                if self.check_move(retracts + [retract], extends + [potential_extend]):
+            # Check if the last N calls are okay
+            count += 1
+            if count % skip_n == 0:
+                while not self.check_move(retracts, extends):
+                    # remove elements one-by-one till it works
                     check_calls += 1
-                    retracts.append(retract)
-                    potential_retracts.remove(retract)
-                    extends.append(potential_extend)
-                    potential_extends.remove(potential_extend)
+                    error_ext.append(extends.pop())
+                    error_ret.append(retracts.pop())
+
+        while not self.check_move(retracts, extends):
+            # remove elements one-by-one till it works
+            check_calls += 1
+            error_ext.append(extends.pop())
+            error_ret.append(retracts.pop())
+
+        # Shorten the original lists for later use
+        potential_extends = list(set(potential_extends) - set(extends))
+        potential_retracts = list(set(potential_retracts) - set(retracts))
+
+        # For the left-over error causing retract/extends, try again with a thorough search
+        if potential_extends and potential_retracts:
+            for pot_ext in potential_extends:
+                # Ensure we only move as much as possible given our current metabolism
+                if len(extends) >= self.num_available_moves:
                     break
-                check_calls += 1
-        # print(f"Check calls: {check_calls} / {self.current_size}")
 
-        # If we have moves remaining, try and get closer to the desired formation
-        # if len(extends) < self.num_available_moves and len(potential_retracts):
-        #     desired_extends = [p for p in list(set(desired_points).difference(set(current_points))) if p not in self.extendable_cells]
-        #     unused_extends = [p for p in self.extendable_cells if p not in extends]
+                for pot_ret in potential_retracts:
+                    if self.check_move(retracts + [pot_ret], extends + [pot_ext]):
+                        check_calls += 1
+                        retracts.append(pot_ret)
+                        extends.append(pot_ext)
 
-        #     for potential_retract in [p for p in potential_retracts]:
-        #         for desired_extend in desired_extends:
-        #             curr_dist = math.dist(potential_retract, desired_extend)
+                        try:
+                            potential_extends.remove(pot_ext)
+                        except ValueError:
+                            pass
+                        try:
+                            potential_retracts.remove(pot_ret)
+                        except ValueError:
+                            pass
+                        break
 
-        #             matching_extends = [p for p in unused_extends if self.check_move(retracts + [potential_retract], extends + [p])]
-        #             matching_extends.sort(key=lambda p: math.dist(p, desired_extend))
+        # If we have moves remaining, 'store' the remaining extends and retracts in the center of the amoeba
+        if (
+            len(retracts) < self.num_available_moves
+            and len(potential_retracts) > 0
+            and len(extends) > 0
+            and self.current_size > 16
+        ):
+            potential_extends = [
+                p
+                for p in self.extendable_cells
+                if p not in retracts and p not in extends
+            ]
+            potential_extends.sort(key=lambda p: np.absolute(center_y - p[1]))
+            potential_retracts.sort(
+                key=lambda p: np.absolute(center_y - p[1]), reverse=True
+            )
 
-        #             if len(matching_extends) and  math.dist(potential_retract, matching_extends[0]) < curr_dist:
-        #                 # show_amoeba_map(self.amoeba_map, [potential_retract], [matching_extends[0]])
-        #                 retracts.append(potential_retract)
-        #                 potential_retracts.remove(potential_retract)
-        #                 extends.append(matching_extends[0])
-        #                 unused_extends.remove(matching_extends[0])
-        #                 break
+            # show_amoeba_map(self.amoeba_map, retracts, extends, "Planned")
+            # show_amoeba_map(self.amoeba_map, potential_retracts, potential_extends, "Possible Remaining")
+
+            for potential_extend in potential_extends:
+                if len(extends) >= self.num_available_moves:
+                    break
+
+                for potential_retract in potential_retracts:
+                    if np.absolute(center_y - potential_extend[1]) < np.absolute(
+                        center_y - potential_retract[1]
+                    ) and self.check_move(
+                        retracts + [potential_retract], extends + [potential_extend]
+                    ):
+                        check_calls += 1
+                        retracts.append(potential_retract)
+                        extends.append(potential_extend)
+                        potential_retracts.remove(potential_retract)
+                        break
 
         # show_amoeba_map(self.amoeba_map, retracts, extends, title="Current Amoeba, Selected Retracts and Extends")
+        print(f"Check calls: {check_calls} / {self.current_size}")
+
+        # retracts = list(set(retracts))
+        # extends = list(set(extends))
         return retracts, extends
 
     def find_movable_cells(self, retract, periphery, amoeba_map, bacteria, mini):
@@ -443,6 +536,17 @@ class Player:
             np.ceil(self.metabolism * current_percept.current_size)
         )
 
+        self.amoeba_map = np.bitwise_or(self.amoeba_map, coords_to_map(self.bacteria_cells))
+
+    def check_and_initialize_memory(self, memory: int) -> int:
+        if (
+            memory == 0
+            and self.current_size == self.goal_size / 4
+            and self.amoeba_map[50][50]
+        ):
+            return (CENTER_X + 1 if self.current_size < 36 else CENTER_X + 3) << 1
+        return memory
+
     def move(
         self, last_percept: AmoebaState, current_percept: AmoebaState, info: int
     ) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]], int]:
@@ -458,49 +562,101 @@ class Player:
                 2. A list of positions the retracted cells have moved to
                 3. A byte of information (values range from 0 to 255) that the amoeba can use
         """
-        global turn
-        turn += 1
-
         self.store_current_percept(current_percept)
-        
+
         retracts = []
         moves = []
 
+        info = self.check_and_initialize_memory(info)
+
+        # Extract backbone column from memory
+        curr_backbone_col = info >> 1
+
+        # Alternate vertical translation direction if necessary
         memory_fields = read_memory(info)
-        if not memory_fields[MemoryFields.Initialized]:
+
+        TEETH_SHIFT_LIST = (
+                               ([0 for i in range(self.params.teeth_shift)] + [1 for i in range(self.params.teeth_shift)])
+                               * (round(np.ceil(100 / (self.params.teeth_shift * 2))))
+                           )[:100]
+        teeth_shift = TEETH_SHIFT_LIST[curr_backbone_col]
+        curr_backbone_row = (
+            curr_backbone_col
+            if not memory_fields[MemoryFields.VerticalInvert]
+            else constants.map_dim - curr_backbone_col
+        )
+        next_comb, next_bridge = self.generate_comb_formation(
+            self.current_size,
+            teeth_shift,
+            curr_backbone_col,
+            CENTER_Y
+            # curr_backbone_row,
+        )
+        if memory_fields[MemoryFields.VerticalInvert] and self.current_size < VERTICAL_FLIP_SIZE_THRESHOLD:
+            next_comb = np.rot90(next_comb)
+            next_bridge = np.rot90(next_bridge)
+            
+        # Check if current comb formation is filled
+        comb_mask = self.amoeba_map[next_comb.nonzero()]
+        # settled = (sum(comb_mask) / len(comb_mask)) > PERCENT_MATCH_BEFORE_MOVE
+        settled = (sum(comb_mask) / len(comb_mask)) > self.params.formation_threshold
+        if not settled:
             retracts, moves = self.get_morph_moves(
-                self.generate_comb_formation(self.current_size, 0)
+                next_comb + next_bridge, 
+                CENTER_Y
+                # curr_backbone_row
             )
+
+            # Actually, we have no more moves to make
             if len(moves) == 0:
-                info = change_memory_field(info, MemoryFields.Initialized, True)
-                info = (50 << 1) | info
-                memory_fields = read_memory(info)
+                settled = True
 
-        if memory_fields[MemoryFields.Initialized]:
-            # Extract backbone column from memory
-            curr_backbone_col = info >> 1
-            vertical_shift = VERTICAL_SHIFT_LIST[curr_backbone_col]
-            next_comb = self.generate_comb_formation(
-                self.current_size, vertical_shift, curr_backbone_col, CENTER_Y
+        if settled:
+            # When we "settle" into the target backbone column, advance the backbone column by 1
+            prev_backbone_col = curr_backbone_col
+            prev_backbone_row = curr_backbone_row
+            new_backbone_col = (prev_backbone_col + 1) % 100
+            new_backbone_row = (
+                new_backbone_col
+                if not memory_fields[MemoryFields.VerticalInvert]
+                else constants.map_dim - new_backbone_col
             )
-            # Check if current comb formation is filled
-            settled = self.amoeba_map[next_comb].all()
-            if not settled:
-                retracts, moves = self.get_morph_moves(next_comb)
-               
-                # Actually, we have no more moves to make 
-                if len(moves) == 0:
-                   settled = True
+            TEETH_SHIFT_LIST = (
+                                   ([0 for i in range(self.params.teeth_shift)] + [1 for i in
+                                                                                   range(self.params.teeth_shift)])
+                                   * (round(np.ceil(100 / (self.params.teeth_shift * 2))))
+                               )[:100]
+            teeth_shift = TEETH_SHIFT_LIST[new_backbone_col]
+            next_comb, next_bridge = self.generate_comb_formation(
+                self.current_size,
+                teeth_shift,
+                prev_backbone_col,
+                CENTER_Y
+                # new_backbone_row,
+            )
+            
+            if memory_fields[MemoryFields.VerticalInvert] and VERTICAL_FLIP_SIZE_THRESHOLD:
+                next_comb = np.rot90(next_comb)
+                next_bridge = np.rot90(next_bridge)
+            
+            retracts, moves = self.get_morph_moves(
+                next_comb + next_bridge, 
+                CENTER_Y
+                # curr_backbone_row
+            )
 
-            if settled:
-                # When we "settle" into the target backbone column, advance the backbone column by 1
-                prev_backbone_col = curr_backbone_col
-                new_backbone_col = (prev_backbone_col + 1) % 100
-                vertical_shift = VERTICAL_SHIFT_LIST[new_backbone_col]
-                next_comb = self.generate_comb_formation(
-                    self.current_size, vertical_shift, prev_backbone_col, CENTER_Y
+            if curr_backbone_col == 50:
+                info = change_memory_field(
+                    info,
+                    MemoryFields.VerticalInvert,
+                    not memory_fields[MemoryFields.VerticalInvert] if self.current_size < VERTICAL_FLIP_SIZE_THRESHOLD else 0,
                 )
-                retracts, moves = self.get_morph_moves(next_comb)
-                info = new_backbone_col << 1 | 1
+                memory_fields = read_memory(info)   
+
+            info = new_backbone_col << 1 | int(
+                memory_fields[MemoryFields.VerticalInvert]
+            )
+
+        # show_amoeba_map(self.amoeba_map, retracts, moves, "Current Amoeba, Retracts, and Extends")
 
         return retracts, moves, info
