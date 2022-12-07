@@ -10,4 +10,13 @@ render/
 .vscode/
 .venv/
 results.log
-
+test_game.py
+tests.txt
+test_file.txt
+batch1.txt
+amoeba_game_test.py
+main_test.py
+results.txt
+results1.txt
+results2.txt
+results3.txt
