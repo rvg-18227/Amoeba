@@ -731,6 +731,7 @@ class Player:
         # TODO
         # Pass in location of the opposing column
         target_column = self.find_first_tentacle(amoeba_map, start_row)
+        target_column = np.where(np.sum(amoeba_map, axis=1) != 0)[0][0]
         # TODO
         # check height of the tenticle, if exceed max meta, shrink it
         extract = []
