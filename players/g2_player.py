@@ -21,14 +21,17 @@ from amoeba_state import AmoebaState
 CENTER_X = constants.map_dim // 2
 CENTER_Y = constants.map_dim // 2
 
-COMB_SEPARATION_DIST = 4
 TEETH_GAP = 1
-
 TEETH_SHIFT_PERIOD = 6
+
 TEETH_SHIFT_LIST = (
     ([0 for i in range(TEETH_SHIFT_PERIOD)] + [1 for i in range(TEETH_SHIFT_PERIOD)])
     * (round(np.ceil(100 / (TEETH_SHIFT_PERIOD * 2))))
 )[:100]
+
+PERCENT_MATCH_BEFORE_MOVE = 0.9
+
+VERTICAL_FLIP_SIZE_THRESHOLD = 100
 
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
@@ -473,13 +476,15 @@ class Player:
             np.ceil(self.metabolism * current_percept.current_size)
         )
 
+        self.amoeba_map = np.bitwise_or(self.amoeba_map, coords_to_map(self.bacteria_cells))
+
     def check_and_initialize_memory(self, memory: int) -> int:
         if (
             memory == 0
             and self.current_size == self.goal_size / 4
             and self.amoeba_map[50][50]
         ):
-            return (CENTER_X if self.current_size < 36 else CENTER_X + 3) << 1
+            return (CENTER_X + 1 if self.current_size < 36 else CENTER_X + 3) << 1
         return memory
 
     def move(
@@ -509,13 +514,6 @@ class Player:
 
         # Alternate vertical translation direction if necessary
         memory_fields = read_memory(info)
-        if curr_backbone_col == 50:
-            info = change_memory_field(
-                info,
-                MemoryFields.VerticalInvert,
-                not memory_fields[MemoryFields.VerticalInvert],
-            )
-            memory_fields = read_memory(info)
 
         teeth_shift = TEETH_SHIFT_LIST[curr_backbone_col]
         curr_backbone_row = (
@@ -530,9 +528,13 @@ class Player:
             CENTER_Y
             # curr_backbone_row,
         )
+        if memory_fields[MemoryFields.VerticalInvert] and self.current_size < VERTICAL_FLIP_SIZE_THRESHOLD:
+            next_comb = np.rot90(next_comb)
+            next_bridge = np.rot90(next_bridge)
+            
         # Check if current comb formation is filled
         comb_mask = self.amoeba_map[next_comb.nonzero()]
-        settled = (sum(comb_mask) / len(comb_mask)) > 0.9
+        settled = (sum(comb_mask) / len(comb_mask)) > PERCENT_MATCH_BEFORE_MOVE
         if not settled:
             retracts, moves = self.get_morph_moves(
                 next_comb + next_bridge, 
@@ -549,19 +551,38 @@ class Player:
             prev_backbone_col = curr_backbone_col
             prev_backbone_row = curr_backbone_row
             new_backbone_col = (prev_backbone_col + 1) % 100
+            new_backbone_row = (
+                new_backbone_col
+                if not memory_fields[MemoryFields.VerticalInvert]
+                else constants.map_dim - new_backbone_col
+            )
             teeth_shift = TEETH_SHIFT_LIST[new_backbone_col]
             next_comb, next_bridge = self.generate_comb_formation(
                 self.current_size,
                 teeth_shift,
                 prev_backbone_col,
                 CENTER_Y
-                # prev_backbone_row,
+                # new_backbone_row,
             )
+            
+            if memory_fields[MemoryFields.VerticalInvert] and VERTICAL_FLIP_SIZE_THRESHOLD:
+                next_comb = np.rot90(next_comb)
+                next_bridge = np.rot90(next_bridge)
+            
             retracts, moves = self.get_morph_moves(
                 next_comb + next_bridge, 
                 CENTER_Y
                 # curr_backbone_row
             )
+
+            if curr_backbone_col == 50:
+                info = change_memory_field(
+                    info,
+                    MemoryFields.VerticalInvert,
+                    not memory_fields[MemoryFields.VerticalInvert] if self.current_size < VERTICAL_FLIP_SIZE_THRESHOLD else 0,
+                )
+                memory_fields = read_memory(info)   
+
             info = new_backbone_col << 1 | int(
                 memory_fields[MemoryFields.VerticalInvert]
             )
