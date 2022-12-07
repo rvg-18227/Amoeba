@@ -337,12 +337,7 @@ class Strategy(ABC):
         #    unoccupied by our Ameoba
         
         retractable_cells = set(curr_state.periphery) - target
-        occupiable_cells = find_movable_cells(
-            # list(retractable_cells),
-            [],
-            curr_state.periphery, curr_state.amoeba_map, curr_state.bacteria
-        ) 
-
+        occupiable_cells = curr_state.movable_cells
         ameoba_cells = list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value)))
         unoccupied_target_cells = target - set(ameoba_cells)
         to_occupy = set(occupiable_cells).intersection(unoccupied_target_cells)
