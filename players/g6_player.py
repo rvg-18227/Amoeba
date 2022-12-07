@@ -24,19 +24,19 @@ class Drawer:
         self.save()
     
     def _draw_extend(self, coord):
-        x = np.array(coord)[:, 0]
-        y = np.array(coord)[:, 1]
+        x = np.array(coord)[:, 0] % 100
+        y = np.array(coord)[:, 1] % 100
         self.base[x, y] = EXTEND_COLOR
     
     def _draw_retract(self, coord):
-        x = np.array(coord)[:, 0]
-        y = np.array(coord)[:, 1]
+        x = np.array(coord)[:, 0] % 100
+        y = np.array(coord)[:, 1] % 100
         self.base[x, y] = RETRACT_COLOR
     
     def _draw_amoeba(self, current_percept):
         coord = np.stack(np.where(current_percept.amoeba_map != 0), axis= 1)
-        x = np.array(coord)[:, 0]
-        y = np.array(coord)[:, 1]
+        x = np.array(coord)[:, 0] % 100
+        y = np.array(coord)[:, 1] % 100
         self.base[x, y] = AMOEABA_COLOR
     
     def clear_graph(self):
