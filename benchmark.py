@@ -201,32 +201,15 @@ if __name__ == "__main__":
     player = args.player
     max_turns = args.max_turns
     sizes = [3, 5, 8, 15, 25]
-    metabolism = [0.05, 0.1, 0.25, 0.4, 1.0]
-    densities = [0.01, 0.05, 0.1, 0.2]
-    seeds = np.random.randint(0, high=sys.maxsize, size=3)
+    metabolism = [1.0, 0.4, 0.25, 0.1, 0.05]
+    densities = [0.2, 0.1, 0.05, 0.01]
+    seeds = np.random.randint(0, high=sys.maxsize, size=1)
 
     opts = [
         (player, *opt)
         for opt in product(sizes, metabolism, densities, seeds)
+        if opt[0] * opt[1] > 1
     ]
-
-    out = []
-    for opt in opts:
-        print(
-            "running p={}, A={}, density={:.2f}, metabolism={:.2f}, seed={}"
-            .format(*opt)
-        )
-        config = create_config(*opt, max_turns)
-
-        ok, turns, ts = run(config)
-        print("{} - {} turns in {:.2f} second(s)".format(
-            "ok" if ok else "failed",
-            turns,
-            ts
-        ))
-
-        run_result = [*opt, ok, turns, ts]
-        out.append(run_result)
 
     print("\n---\nresults:\n")
     print(
@@ -234,10 +217,19 @@ if __name__ == "__main__":
         ("player", "A", "density", "metabolism", "seed", "ok", "turns", "time")
     )
 
-    for res in out:
+    out = []
+    for opt in opts:
+        config = create_config(*opt, max_turns)
+
+        ok, turns, ts = run(config)
+
+        run_result = [*opt, ok, turns, ts]
+        out.append(run_result)
+
         print(
             "%-8d %-3d %-9.2f %-12.2f %-22d %-10r %-7d %-6.2f" %
-            tuple(res)
+            tuple(run_result)
         )
+
     with open(args.out, "wb") as f:
         pickle.dump(out, f)

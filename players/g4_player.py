@@ -22,7 +22,7 @@ import constants
 
 debug_png_dir = "render/debug"
 debug = 0
-debug_since = 50
+debug_since = 500
 turns = 0
 
 if debug:
@@ -565,6 +565,10 @@ class BucketAttack(Strategy):
         # derived statistics
         self.wall_cost = self.bucket_width + 1
         self.bucket_cost = 2 * self.wall_cost + 1 # 1 is cost of bucket arm
+        self.max_comb_size = (
+            2 * ((constants.map_dim // 2 - 1) // (self.bucket_width + 1) + 1) +
+            2 * constants.map_dim
+        )
 
     def _spread_vertically(
         self,
@@ -745,14 +749,7 @@ class BucketAttack(Strategy):
         that we don't risk moving and not able to eat any bacteria along the
         way.
         """
-        if not self._reach_border(curr_state):
-            size = curr_state.current_size
-        else:
-            size = (
-                2 * ((constants.map_dim / 2 - 1) // (self.bucket_width + 1) + 1) +
-                2 * constants.map_dim
-            )
-
+        size = min(curr_state.current_size, self.max_comb_size)
         target_shape = self._get_target_cells(size, cog, arm_xval)
         for target in target_shape:
             if curr_state.amoeba_map[target] == State.empty.value:
@@ -981,7 +978,8 @@ class BucketXAttack(BucketAttack):
         # ----------------
         #  Decode Memory
         # ----------------
-        if is_square(state):
+        print(prev_state.current_size, state.current_size)
+        if is_square(prev_state) and memory == 0:
             curr_arm_xval = self._get_xmax(state)
             shifted = 0
         else:
@@ -1032,9 +1030,12 @@ class BucketXAttack(BucketAttack):
 
         size = state.current_size
 
-        if self._reach_border(state):
+        print("reached border:", self._reach_border(state))
+        if self._reach_border(state) and size > self.max_comb_size:
+            print("phase: form x bucket")
             target_cells = self._get_bridge_V_target_cells(size, next_cog, next_arm_xval)
         else:
+            print("phase: form comb")
             target_cells = self._get_target_cells(size, next_cog, next_arm_xval)
 
         # ----------------------------------
