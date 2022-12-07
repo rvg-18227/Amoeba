@@ -230,27 +230,23 @@ class AmoebaGame:
         try:
             while self.turns != self.max_turns:
                 self.turns += 1
-                try:
-                    self.play_turn()
-                    print("Turn {} complete".format(self.turns))
-                except TimeoutException as e:
-                    print("Timeout Error. Turn {}".format(self.turns))
-                    break
-                except Exception as e:
-                    print("Turn {} error.\n{}".format(self.turns, e))
-
+                self.play_turn()
+                print("Turn {} complete".format(self.turns))
                 if self.amoeba_size >= self.goal_size:
+                    print(f"Goal size achieved!\n\nTurns taken: {self.turns}\nFinal size: {self.amoeba_size}\n"
+                          f"Goal size: {self.goal_size}")
                     self.goal_reached = True
                     self.game_end = self.turns
-                    print("Goal size achieved!\n\nTurns taken: {}\nFinal size: {}\nGoal size: {}".format(self.turns,
-                                                                                                         self.amoeba_size,
-                                                                                                         self.goal_size))
                     break
             if self.use_timeout:
                 signal.alarm(0)  # Clear alarm
         except TimeoutException:
             self.logger.error(
                 "Game Timeout {} since {:.3f}s reached.".format(self.player_name, constants.timeout))
+            print(f"Timeout Error")
+            self.game_end = self.turns
+        except Exception as e:
+            print("Turn {} error.\n{}".format(self.turns, e))
 
         if not self.goal_reached:
             print("Goal size not achieved...\n\nFinal size: {}\nGoal size: {}".format(self.amoeba_size, self.goal_size))
