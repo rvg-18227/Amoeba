@@ -154,7 +154,7 @@ class Player:
                     x = -1
                     if n % 2 == 0:
                         n+=1
-                    #print(n, (n-1)/2)
+                    # print(n, (n-1)/2)
                     while total_cells > 0:
                         if (x, 0) not in offsets:
                             offsets.add((x, 0))
@@ -398,6 +398,46 @@ class Player:
                 step += 1
                 total_cells-=1
         
+        elif shape == 4:
+            # cur_size = self.current_size
+            # eleven_wide_center = [[0,0], [1,0], [-1,0], [1,1], [-1,1], [2,1], [-2,1], [2,2], [-2,2], [2,3], [-2,3], [3,3], [-3,3], [3,4], [-3,4], [3,5], [-3,5], [4,5], [-4,5], [4,6], [-4,6], [4,7], [-4,7], [5,7], [-5,7], [5,8], [-5,8], [5,9], [-5,9], [6,9], [-6,9], [6,10], [-6,10], [6,11], [-6,11]]
+            # eleven_wide_bottom = [[0,0], [0,-1], [0,-2], [1,-2], [1,-3], [1,-4], [2,-4], [2,-5], [2,-6], [3,-6], [3,-7], [3,-8], [4,-8], [4,-9], [4,-10], [5,-10], [5,-11], [6,-11], [7,-11], [7,-10], [8,-10], [8,-9], [8,-8], [9,-8], [9,-7], [9,-6], [10,-6], [10,-5], [10,-4], [11,-4], [11,-3], [11,-2], [12,-2], [12,-1], [12,0]]
+            # eleven_wide_top    = [[-12, 0], [-12, -1], [-12, -2], [-11, -2], [-11, -3], [-11, -4], [-10, -4], [-10, -5], [-10, -6], [-9, -6], [-9, -7], [-9, -8], [-8, -8], [-8, -9], [-8, -10], [-7, -10], [-7, -11], [-6, -11], [-5, -11], [-5, -10], [-4, -10], [-4, -9], [-4, -8], [-3, -8], [-3, -7], [-3, -6], [-2, -6], [-2, -5], [-2, -4], [-1, -4], [-1, -3], [-1, -2], [0, -2], [0, -1], [0, 0]]
+
+            # offsets = eleven_wide_center[:cur_size]
+            # cur_size -= len(offsets)
+
+            # while cur_size > len(offsets):
+            #     temp = []
+            #     temp.extend(eleven_wide_top[:(cur_size)//2])
+            #     temp.extend(eleven_wide_bottom[:(cur_size + 1)//2])
+            #     offsets.extend(temp)
+            
+            # offsets = set(offsets)
+
+            cur_size = self.current_size
+            eleven_wide_center = [[0,0], [1,0], [-1,0], [1,1], [-1,1], [2,1], [-2,1], [2,2], [-2,2], [2,3], [-2,3], [3,3], [-3,3], [3,4], [-3,4], [3,5], [-3,5], [4,5], [-4,5], [4,6], [-4,6], [4,7], [-4,7], [5,7], [-5,7], [5,8], [-5,8], [5,9], [-5,9], [6,9], [-6,9], [6,10], [-6,10], [6,11], [-6,11]]
+            eleven_wide_bottom = np.array([[0,0], [0,-1], [0,-2], [1,-2], [1,-3], [1,-4], [2,-4], [2,-5], [2,-6], [3,-6], [3,-7], [3,-8], [4,-8], [4,-9], [4,-10], [5,-10], [5,-11], [6,-11], [7,-11], [7,-10], [8,-10], [8,-9], [8,-8], [9,-8], [9,-7], [9,-6], [10,-6], [10,-5], [10,-4], [11,-4], [11,-3], [11,-2], [12,-2], [12,-1], [12,0]])
+            eleven_wide_top    = np.array([[0, 0], [0, -1], [0, -2], [-1, -2], [-1, -3], [-1, -4], [-2, -4], [-2, -5], [-2, -6], [-3, -6], [-3, -7], [-3, -8], [-4, -8], [-4, -9], [-4, -10], [-5, -10], [-5, -11], [-6, -11], [-7, -11], [-7, -10], [-8, -10], [-8, -9], [-8, -8], [-9, -8], [-9, -7], [-9, -6], [-10, -6], [-10, -5], [-10, -4], [-11, -4], [-11, -3], [-11, -2], [-12, -2], [-12, -1], [-12, 0]])
+
+            offsets = eleven_wide_center[:cur_size]
+
+
+            while cur_size > len(offsets):
+                temp = []
+                center_offset_bottom = np.array([6, 8]) + (np.array([12, -3]) * int(((len(offsets) / 35) - 1) / 2))
+                bottom = eleven_wide_bottom[:(cur_size - len(offsets) + 1)//2] + center_offset_bottom
+                temp.extend(bottom)
+
+                center_offset_top = center_offset_bottom
+                center_offset_top[0] *= -1
+                top = eleven_wide_top[:(cur_size - len(offsets))//2] + center_offset_top
+                temp.extend(top)
+
+                offsets.extend(temp)
+
+            offsets = set([(cord[1], cord[0]) for cord in list(offsets)])
+
         return offsets
 
     def get_center_point(self, current_percept, info) -> int:
@@ -504,8 +544,6 @@ class Player:
 
         ### GET DESIRED OFFSETS FOR CURRENT MORPH ###
         desired_shape_offsets = self.get_desired_shape(0)
-
-        ### NEED TO REFACTOR CODE TO FLIP X AND Y
 
         ### INCREMENT CENTER POINT PHASE ###
         # move amoeba: x_cord is info_L7_int because initial info_L7_int val is 0, indicating initialization/building phase
