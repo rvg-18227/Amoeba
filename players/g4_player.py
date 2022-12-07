@@ -338,12 +338,12 @@ class Strategy(ABC):
         
         retractable_cells = set(curr_state.periphery) - target
         occupiable_cells = find_movable_cells(
-            list(retractable_cells),
+            # list(retractable_cells),
+            [],
             curr_state.periphery, curr_state.amoeba_map, curr_state.bacteria
         ) 
 
         ameoba_cells = list(zip(*np.where(curr_state.amoeba_map == State.ameoba.value)))
-        #print(ameoba_cells)
         unoccupied_target_cells = target - set(ameoba_cells)
         to_occupy = set(occupiable_cells).intersection(unoccupied_target_cells)
 
@@ -712,30 +712,36 @@ class BucketAttack(Strategy):
 
         return abs(upper_bound - lower_bound) >= 98
 
-    def _in_shape(self, xmax: int, curr_state: AmoebaState) -> bool:
+    def _in_shape(self, arm_xval: int, curr_state: AmoebaState) -> bool:
         """Returns a bool indicating if our bucket arms are in shape.
 
         In our implementation, *no memory bit* is needed to store information
         of whether we have gotten into "comb" shape or not, all thanks to
         this function/heuristic.
 
-        If we have an expected number of bucket arms, it's safe for us to
-        keep marching forward, since having bucket arms in formation would
-        allow us to keep capturing bacteria on our way while adjusting
-        formation.
+        If we have an expected number of bucket arms + walls, it's safe for us
+        to keep marching forward, since having bucket arms in formation would
+        allow us to keep capturing bacteria on our way while adjusting formation.
+        Having enough wall cells is important to allow ameoba to be able to shift
+        to the next position.
 
-        Otherwise, we need to wait for the bucket arms to get into shape, so
+        Otherwise, we need to wait for the ameoba to get into shape, so
         that we don't risk moving and not able to eat any bacteria along the
         way.
         """
-        arms_got = len(np.where(curr_state.amoeba_map[xmax,:] == State.ameoba.value)[0])
+        got = 0
+        for x in [arm_xval - 2, arm_xval - 1, arm_xval]:
+            got += len(np.where(curr_state.amoeba_map[x % 100,:] == State.ameoba.value)[0])
 
         if not self._reach_border(curr_state):
-            arms_expected = 1 + math.floor((curr_state.current_size - 3) / self.bucket_cost)
+            expect = curr_state.current_size
         else:
-            arms_expected = 2 * ((constants.map_dim / 2 - 1) // (self.bucket_width + 1) + 1)
+            expect = (
+                2 * ((constants.map_dim / 2 - 1) // (self.bucket_width + 1) + 1) +
+                2 * constants.map_dim
+            )
 
-        return arms_got >= arms_expected
+        return got >= expect
 
     def move(
         self, prev_state: AmoebaState, state: AmoebaState, memory: int
@@ -754,15 +760,30 @@ class BucketAttack(Strategy):
         # ---------------
         #  State Update
         # ---------------
-        # rotation counter & shifted
-        rotation = (prev_arm_xval + 1) % self.shift_n
-        if self.shift_enabled and rotation == 0:
-            shifted = shifted ^ 1
 
         # arm_xval: if we are in shape, advance arm_xval
         # otherwise, use prev_arm_xval to keep getting into shape
         in_shape = self._in_shape(prev_arm_xval % 100, state)
         arm_xval = (prev_arm_xval + int(in_shape)) % 100
+
+        shift = in_shape and (arm_xval % self.shift_n)
+        if self.shift_enabled and shift:
+            # we are in shape and prepared to march forward with
+            # the x-value of the bucket arm @arm_xval
+            # if arm_xval is a multiple of `self.shift_n`, we change the
+            # y_cog of our comb, to shift the teeth. 
+            #
+            # The in shape condition is important here. Otherwise, if we
+            # can't get in shape in a single turn, at the next turn, the
+            # teeth position will change again, causing our comb to shift
+            # up and down in a never-ending loop.
+            shifted = shifted ^ 1
+
+        # TODO: maybe not always moving horizontally?
+        if shifted:
+            cog = (50, 49)
+        else:
+            cog  = (50, 50)
 
         # ----------------
         #  Update Memory
@@ -771,17 +792,11 @@ class BucketAttack(Strategy):
         shifted_bin  = '{0:01b}'.format(shifted)
         memory = int(arm_xval_bin + shifted_bin, 2)
 
-
-        size = state.current_size
-        # TODO: maybe not always moving horizontally?
-        if shifted:
-            cog = (50, 49)
-        else:
-            cog  = (50, 50)
-
         # ----------------------------------
         #  compute moves: retract & extend
         # ----------------------------------
+        size = state.current_size
+
         target_cells = self._get_target_cells(size, cog, arm_xval)
         retract, extend, memory = self._reshape(state, memory, set(target_cells))
 
@@ -959,15 +974,30 @@ class BucketXAttack(BucketAttack):
         # ---------------
         #  State Update
         # ---------------
-        # rotation counter & shifted
-        rotation = (prev_arm_xval + 1) % self.shift_n
-        if self.shift_enabled and rotation == 0:
-            shifted = shifted ^ 1
 
         # arm_xval: if we are in shape, advance arm_xval
         # otherwise, use prev_arm_xval to keep getting into shape
         in_shape = self._in_shape(prev_arm_xval % 100, state)
         arm_xval = (prev_arm_xval + int(in_shape)) % 100
+
+        shift = in_shape and (arm_xval % self.shift_n)
+        if self.shift_enabled and shift:
+            # we are in shape and prepared to march forward with
+            # the x-value of the bucket arm @arm_xval
+            # if arm_xval is a multiple of `self.shift_n`, we change the
+            # y_cog of our comb, to shift the teeth. 
+            #
+            # The in shape condition is important here. Otherwise, if we
+            # can't get in shape in a single turn, at the next turn, the
+            # teeth position will change again, causing our comb to shift
+            # up and down in a never-ending loop.
+            shifted = shifted ^ 1
+
+        # TODO: maybe not always moving horizontally?
+        if shifted:
+            cog = (50, 49)
+        else:
+            cog  = (50, 50)
 
         # ----------------
         #  Update Memory
@@ -976,19 +1006,14 @@ class BucketXAttack(BucketAttack):
         shifted_bin  = '{0:01b}'.format(shifted)
         memory = int(arm_xval_bin + shifted_bin, 2)
 
-
-        size = state.current_size
-        # TODO: maybe not always moving horizontally?
-        if shifted:
-            cog = (50, 49)
-        else:
-            cog  = (50, 50)
-
         # -----------------------
         #  compute target shape
         # -----------------------
         # TODO: if reach boder, return comb+1cell each step as the bridge + Vshape
         # need about 290 cells to reach border
+
+        size = state.current_size
+
         if self._reach_border(state):
             target_cells = self._get_bridge_V_target_cells(size, cog, arm_xval)
         else:
