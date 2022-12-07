@@ -23,13 +23,13 @@ CENTER_Y = constants.map_dim // 2
 COMB_SEPARATION_DIST = 4
 TEETH_GAP = 1
 
-VERTICAL_SHIFT_PERIOD = 6
-VERTICAL_SHIFT_LIST = (
+TEETH_SHIFT_PERIOD = 6
+TEETH_SHIFT_LIST = (
     (
-        [0 for i in range(VERTICAL_SHIFT_PERIOD)]
-        + [1 for i in range(VERTICAL_SHIFT_PERIOD)]
+        [0 for i in range(TEETH_SHIFT_PERIOD)]
+        + [1 for i in range(TEETH_SHIFT_PERIOD)]
     )
-    * (round(np.ceil(100 / (VERTICAL_SHIFT_PERIOD * 2))))
+    * (round(np.ceil(100 / (TEETH_SHIFT_PERIOD * 2))))
 )[:100]
 
 # ---------------------------------------------------------------------------- #
@@ -500,11 +500,11 @@ class Player:
             )
             memory_fields = read_memory(info)
 
-        vertical_shift = VERTICAL_SHIFT_LIST[curr_backbone_col]
+        teeth_shift = TEETH_SHIFT_LIST[curr_backbone_col]
         curr_backbone_row = curr_backbone_col if not memory_fields[MemoryFields.VerticalInvert] else constants.map_dim - curr_backbone_col 
         next_comb, next_bridge = self.generate_comb_formation(
             self.current_size,
-            vertical_shift,
+            teeth_shift,
             curr_backbone_col,
             CENTER_Y
             # curr_backbone_row,
@@ -524,10 +524,10 @@ class Player:
             prev_backbone_col = curr_backbone_col
             prev_backbone_row = curr_backbone_row
             new_backbone_col = (prev_backbone_col + 1) % 100
-            vertical_shift = VERTICAL_SHIFT_LIST[new_backbone_col]
+            teeth_shift = TEETH_SHIFT_LIST[new_backbone_col]
             next_comb, next_bridge = self.generate_comb_formation(
                 self.current_size,
-                vertical_shift,
+                teeth_shift,
                 prev_backbone_col,
                 CENTER_Y
                 # prev_backbone_row,
