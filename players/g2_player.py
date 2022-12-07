@@ -108,15 +108,18 @@ class Formation:
             if initial_formation
             else np.zeros((constants.map_dim, constants.map_dim), dtype=np.int8)
         )
+        self.cells = np.count_nonzero(self.map)
 
     def add_cell(self, x, y) -> None:
         self.map[x % constants.map_dim, y % constants.map_dim] = 1
+        self.cells += 1
 
     def get_cell(self, x, y) -> int:
         return self.map[x % constants.map_dim, y % constants.map_dim]
 
     def merge_formation(self, formation_map: npt.NDArray):
         self.map = np.logical_or(self.map, formation_map)
+        self.cells = np.count_nonzero(self.map)
 
 
 # ---------------------------------------------------------------------------- #
@@ -215,19 +218,12 @@ class Player:
                 bridge_formation.merge_formation(second_bridge)
 
         # Build first comb formation
+        
+        # Add center cells
         comb_formation.add_cell(comb_0_center_x, center_y)
         comb_formation.add_cell(comb_0_center_x - 1, center_y)
-        for i in range(1, round((backbone_size - 1) / 2 + 0.1) + 1):
-            # first layer of backbone
-            comb_formation.add_cell(comb_0_center_x, center_y + i)
-            comb_formation.add_cell(comb_0_center_x, center_y - i)
-            # second layer of backbone
-            comb_formation.add_cell(
-                comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y + i
-            )
-            comb_formation.add_cell(
-                comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y - i
-            )
+        
+        # Then prioritize adding teeth
         for i in range(
             1,
             round(min((teeth_size * (TEETH_GAP + 1)) / 2, backbone_size / 2) + 0.1),
@@ -241,6 +237,21 @@ class Player:
                 comb_0_center_x + (1 if comb_idx == 0 else -1),
                 center_y + tooth_offset - i,
             )
+            
+        # Then build the backbone (we may not have quite enough cells for this)
+        for i in range(1, round((backbone_size - 1) / 2 + 0.1) + 1):
+            # first layer of backbone
+            comb_formation.add_cell(comb_0_center_x, center_y + i)
+            comb_formation.add_cell(comb_0_center_x, center_y - i)
+            # second layer of backbone
+            if comb_formation.cells < size:
+                comb_formation.add_cell(
+                    comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y + i
+                )
+            if comb_formation.cells < size:
+                comb_formation.add_cell(
+                    comb_0_center_x + (-1 if comb_idx == 0 else 1), center_y - i
+                )
 
         # If we build a second comb, build up additional cells in the center
         if backbone_size == 99 and comb_idx == 0:
@@ -263,8 +274,8 @@ class Player:
                             break
                 bridge_offset += 1
 
-        # show_amoeba_map(comb_formation.map)
-        # show_amoeba_map(bridge_formation.map)
+        # show_amoeba_map(comb_formation.map, title="Generated Comb Formation")
+        # show_amoeba_map(bridge_formation.map, title="Generated Bridge Formation")
         return comb_formation.map, bridge_formation.map
 
     def get_morph_moves(
@@ -347,6 +358,7 @@ class Player:
             len(retracts) < self.num_available_moves
             and len(potential_retracts) > 0
             and len(extends) > 0
+            and self.current_size > 16
         ):
             potential_extends = [
                 p
@@ -586,5 +598,7 @@ class Player:
             info = new_backbone_col << 1 | int(
                 memory_fields[MemoryFields.VerticalInvert]
             )
+
+        # show_amoeba_map(self.amoeba_map, retracts, moves, "Current Amoeba, Retracts, and Extends")
 
         return retracts, moves, info
