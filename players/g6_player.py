@@ -149,8 +149,8 @@ class Player:
 
         if stage == 4:
             # Close in
-            col_one = self.find_first_tentacle(amoeba_map)
-            print(col_one)
+            #col_one = self.find_first_tentacle(amoeba_map)
+            #print(col_one)
             print('close_in')
             retract_list, expand_list = self.close_in(amoeba_map)
         
@@ -499,7 +499,7 @@ class Player:
         print("expand", expand_cells)
         return expand_cells
 
-    def find_first_tentacle(self, amoeba_map):
+    def find_first_tentacle(self, amoeba_map, start_row):
         # amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
         # amoeba_loc = amoeba_loc[amoeba_loc[:, 1].argsort()]
         # top_side = np.min(amoeba_loc[:, 1])
@@ -523,8 +523,8 @@ class Player:
         # tentacle_one = row_cells[1]
         # col_one = tentacle_one[0]
 
-        sum_amoeba = np.sum(amoeba_map, axis=1)
-        ind = np.argpartition(sum_amoeba, -3)[-3:]
+        sum_amoeba = np.sum(amoeba_map[:, start_row:], axis=1)
+        ind = np.argsort(sum_amoeba)[-3]
         col_one = np.min(ind)
         return col_one
 
@@ -641,12 +641,8 @@ class Player:
                 return False
         return True
     
-    def find_last_row(self, array, start):
-        for i in range(100):
-            if (array[start - i] == 1) and (array[start - i - 1] == 0):
-                return start - i
-        # wrap around somehow
-        return None
+    def find_last_row(self, array):
+        return array.argmax() - 1
     
     def find_start_row(self, amoeba_map):
         amoeba_loc = np.stack(np.where(amoeba_map == 1)).T.astype(int)
@@ -686,7 +682,7 @@ class Player:
         # move right most cell to the adjacent left location
         # TODO
         # Pass in location of the opposing column
-        target_column = self.find_first_tentacle(amoeba_map)
+        target_column = self.find_first_tentacle(amoeba_map, start_row)
         # TODO
         # check height of the tenticle, if exceed max meta, shrink it
         extract = []
@@ -700,6 +696,7 @@ class Player:
                 continue
             row_reverse = amoeba_map[:, i][::-1]
             right_most_cell = len(row_reverse) - np.argmax(row_reverse) - 1
+            
             for j in range(right_most_cell, -1, -1):
                 curr_cell = amoeba_map[(j)%100, i]
                 next_cell = amoeba_map[(j-1)%100, i]
@@ -707,18 +704,31 @@ class Player:
                     extract.append((right_most_cell, i % 100))
                     extend.append((j-1, i % 100))
                     break
-        #check for excess column
-        if int(i - start_row) > math.ceil(self.current_size * self.metabolism):
-            # not enough cells to move all column
-            # move the one on the top to the bottom first
-            excess_column = np.where(amoeba_map[:, i - 1] == 1)[0]
-            if not (len(excess_column) == 1 and target_column == excess_column[0]):
+        # check for singular cell that arent on the target column
+        # put it in the back
+        if np.sum(amoeba_map[:, i-1]) == 1:
+            col = amoeba_map[:, i-1].argmax() 
+            if col != target_column:
                 new_extract = []
                 new_extend = []
-                for col in excess_column:
-                    last_row = self.find_last_row(amoeba_map[col, :], i-1)
-                    # move current cell to the bottom
-                    new_extract.append((col, i-1))
-                    new_extend.append((col, last_row + 1))
+                last_row = self.find_last_row(amoeba_map[col, :])
+                new_extract.append((col, i-1))
+                new_extend.append((col, last_row))
                 return new_extract, new_extend
+            
+
+        # #check for excess column
+        # if int(i - start_row) > math.ceil(self.current_size * self.metabolism):
+        #     # not enough cells to move all column
+        #     # move the one on the top to the bottom first
+        #     excess_column = np.where(amoeba_map[:, i - 1] == 1)[0]
+        #     if not (len(excess_column) == 1 and target_column == excess_column[0]):
+        #         new_extract = []
+        #         new_extend = []
+        #         for col in excess_column:
+        #             last_row = self.find_last_row(amoeba_map[col, :])
+        #             # move current cell to the bottom
+        #             new_extract.append((col, i-1))
+        #             new_extend.append((col, last_row + 1))
+        #         return new_extract, new_extend
         return extract, extend
