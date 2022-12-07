@@ -23,9 +23,9 @@ CENTER_X = constants.map_dim // 2
 CENTER_Y = constants.map_dim // 2
 
 COMB_SEPARATION_DIST = 4
-TEETH_GAP = 3
+TEETH_GAP = 1
 
-VERTICAL_SHIFT_PERIOD = 2
+VERTICAL_SHIFT_PERIOD = 6
 VERTICAL_SHIFT_LIST = (
     (
         [0 for i in range(VERTICAL_SHIFT_PERIOD)]
