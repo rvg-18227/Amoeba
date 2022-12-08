@@ -1,6 +1,7 @@
 *.mp4
 *.png
 *.pkl
+*.csv
 log/
 **/__pycache__/
 players/__pycache__/
