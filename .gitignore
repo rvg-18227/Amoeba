@@ -10,3 +10,7 @@ render/
 .vscode/
 .venv/
 results.log
+result.csv
+testing.py
+testing.sh
+amoeba_game_test.py
