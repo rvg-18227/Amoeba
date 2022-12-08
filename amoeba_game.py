@@ -82,6 +82,8 @@ class AmoebaGame:
 
         self.player = None
         self.player_name = None
+        self.player_time = constants.timeout
+        self.player_timeout = False
 
         self.metabolism = args.metabolism
         self.start_size = args.size
@@ -90,6 +92,7 @@ class AmoebaGame:
         self.goal_reached = False
         self.turns = 0
         self.max_turns = args.final
+        self.valid_moves = 0
         self.game_end = self.max_turns
         self.density = args.density
         self.bacteria = []
@@ -104,7 +107,7 @@ class AmoebaGame:
         self.play_game()
         self.end_time = time.time()
 
-        print("\nTime taken: {}\n".format(self.end_time - self.start_time))
+        print("\nTime taken: {}\nValid moves: {}\n".format(self.end_time - self.start_time, self.valid_moves))
 
         if self.use_vid:
             if not self.use_gui:
@@ -223,11 +226,25 @@ class AmoebaGame:
         self.bacteria_move()
         periphery, eatable_bacteria, movable_cells, amoeba = self.get_periphery_info(True)
         before_state = AmoebaState(self.amoeba_size, amoeba, periphery, eatable_bacteria, movable_cells)
-        returned_action = self.player.move(
-            last_percept=self.after_last_move,
-            current_percept=before_state,
-            info=self.player_byte
-        )
+        returned_action = None
+        if not self.player_timeout:
+            player_start = time.time()
+            try:
+                returned_action = self.player.move(
+                    last_percept=self.after_last_move,
+                    current_percept=before_state,
+                    info=self.player_byte
+                )
+            except Exception:
+                returned_action = None
+
+            player_time_taken = time.time() - player_start
+
+            self.player_time -= player_time_taken
+            if self.player_time <= 0:
+                self.player_timeout = True
+                returned_action = None
+
         self.eat_bacteria(eatable_bacteria)
         if self.check_action(returned_action):
             retract, move, self.player_byte = returned_action
@@ -235,6 +252,8 @@ class AmoebaGame:
                 print("Move Accepted!")
                 self.logger.debug("Received move from {}".format(self.player_name))
                 self.amoeba_move(retract, move)
+                if set(retract) != set(move):
+                    self.valid_moves += 1
             else:
                 print("Valid move, but causes separation, hence cancelled.")
                 self.logger.info("Invalid move from {} as it does not follow the rules".format(self.player_name))
